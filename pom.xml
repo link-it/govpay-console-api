@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gov4j.govpay</groupId>
+        <artifactId>govpay-bom</artifactId>
+        <version>1.1.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>it.govpay</groupId>
+    <artifactId>govpay-console-api</artifactId>
+    <version>1.0.0</version>
+    <packaging>${packaging.type}</packaging>
+
+    <name>GovPay Console API</name>
+    <description>API utilizzate dalla Console per il monitoraggio e configurazione di GovPay</description>
+
+    <properties>
+        <!-- Version overrides -->
+        <openapi.tool.codegen.version>7.10.0</openapi.tool.codegen.version>
+        <springdoc-openapi.version>2.8.15</springdoc-openapi.version>
+        <swagger-annotations.version>2.2.25</swagger-annotations.version>
+
+        <!-- govpay-common (not in BOM) -->
+        <govpay-common.version>1.1.2</govpay-common.version>
+
+        <!-- mime-util (not in BOM) -->
+        <mime-util.version>2.1.3</mime-util.version>
+
+        <!-- OWASP config -->
+        <owasp.falsePositives.dir>src/main/resources/owasp/falsePositives</owasp.falsePositives.dir>
+        <owasp>verify</owasp>
+        <owasp.plugin.autoUpdate>true</owasp.plugin.autoUpdate>
+        <owasp.plugin.failBuildOnCVSS>11</owasp.plugin.failBuildOnCVSS>
+
+        <!-- SonarCloud -->
+        <sonar.coverage.exclusions>**/test/**,**/*Test*.java</sonar.coverage.exclusions>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <profiles>
+        <profile>
+            <id>jar</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <packaging.type>jar</packaging.type>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.h2database</groupId>
+                    <artifactId>h2</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.oracle.database.jdbc</groupId>
+                    <artifactId>ojdbc11</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.mysql</groupId>
+                    <artifactId>mysql-connector-j</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.microsoft.sqlserver</groupId>
+                    <artifactId>mssql-jdbc</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>repackage</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <layout>ZIP</layout>
+                            <excludes>
+                                <exclude>
+                                    <groupId>org.projectlombok</groupId>
+                                    <artifactId>lombok</artifactId>
+                                </exclude>
+                                <exclude>
+                                    <groupId>org.postgresql</groupId>
+                                    <artifactId>postgresql</artifactId>
+                                </exclude>
+                                <exclude>
+                                    <groupId>com.h2database</groupId>
+                                    <artifactId>h2</artifactId>
+                                </exclude>
+                                <exclude>
+                                    <groupId>com.oracle.database.jdbc</groupId>
+                                    <artifactId>ojdbc11</artifactId>
+                                </exclude>
+                                <exclude>
+                                    <groupId>com.mysql</groupId>
+                                    <artifactId>mysql-connector-j</artifactId>
+                                </exclude>
+                                <exclude>
+                                    <groupId>com.microsoft.sqlserver</groupId>
+                                    <artifactId>mssql-jdbc</artifactId>
+                                </exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>war</id>
+            <properties>
+                <packaging.type>war</packaging.type>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-tomcat</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.h2database</groupId>
+                    <artifactId>h2</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
+    <dependencies>
+        <!-- Spring Boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Spring Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Spring Security -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Spring Security Test -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+			<groupId>eu.medsea.mimeutil</groupId>
+			<artifactId>mime-util</artifactId>
+			<version>${mime-util.version}</version>
+			<exclusions>
+				<exclusion>
+		          <groupId>*</groupId>
+		          <artifactId>*</artifactId>
+		        </exclusion>
+			</exclusions>
+		</dependency>
+
+        <!-- SpringDoc OpenAPI UI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+
+        <!-- Jackson Databind Nullable (required by OpenAPI Generator) -->
+        <dependency>
+            <groupId>org.openapitools</groupId>
+            <artifactId>jackson-databind-nullable</artifactId>
+        </dependency>
+
+        <!-- Swagger Annotations -->
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations</artifactId>
+        </dependency>
+
+        <!-- Jakarta Validation -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+
+        <!-- Jakarta Servlet -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Lombok (optional) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- GovPay Common -->
+        <dependency>
+            <groupId>org.gov4j.govpay</groupId>
+            <artifactId>govpay-common</artifactId>
+            <version>${govpay-common.version}</version>
+        </dependency>
+
+        <!-- FreeMarker Template Engine -->
+        <dependency>
+            <groupId>org.freemarker</groupId>
+            <artifactId>freemarker</artifactId>
+        </dependency>
+
+        <!-- JsonPath for JSON extraction -->
+        <dependency>
+            <groupId>com.jayway.jsonpath</groupId>
+            <artifactId>json-path</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>govpay-console-api</finalName>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- OpenAPI Generator Maven Plugin -->
+            <plugin>
+                <groupId>org.openapitools</groupId>
+                <artifactId>openapi-generator-maven-plugin</artifactId>
+                <version>${openapi.tool.codegen.version}</version>
+                <executions>
+                    <!-- Generazione API Console (server) -->
+                    <execution>
+                        <id>generate-console-api</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <inputSpec>${project.basedir}/src/main/resources/openapi/openapi.yaml</inputSpec>
+                            <generatorName>spring</generatorName>
+                            <apiPackage>it.govpay.console.api</apiPackage>
+                            <modelPackage>it.govpay.console.model</modelPackage>
+                            <invokerPackage>it.govpay.console</invokerPackage>
+                            <output>${project.build.directory}/generated-sources/openapi</output>
+                            <!-- Workaround dead-import: il generatore spring sintetizza un wrapper per i requestBody multi-content -->
+                            <!-- (es. application/json + multipart/form-data) e ne emette l'import senza generare la classe. -->
+                            <!-- Mappiamo il nome orfano su java.lang.Object per rendere risolvibile l'import. -->
+                            <importMappings>
+                                <importMapping>AddTracciatoPendenzeRequest=java.lang.Object</importMapping>
+                            </importMappings>
+                            <typeMappings>
+                                <typeMapping>AddTracciatoPendenzeRequest=java.lang.Object</typeMapping>
+                            </typeMappings>
+                            <schemaMappings>
+                                <schemaMapping>AddTracciatoPendenzeRequest=java.lang.Object</schemaMapping>
+                            </schemaMappings>
+                            <configOptions>
+                                <interfaceOnly>true</interfaceOnly>
+                                <useSpringBoot3>true</useSpringBoot3>
+                                <useJakartaEe>true</useJakartaEe>
+                                <useTags>true</useTags>
+                                <skipDefaultInterface>false</skipDefaultInterface>
+                                <openApiNullable>true</openApiNullable>
+                                <documentationProvider>springdoc</documentationProvider>
+                                <serializableModel>true</serializableModel>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                    <!-- Generazione Client GovPay Stampe API -->
+                    <execution>
+                        <id>generate-govpay-stampe-client</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <inputSpec>${project.basedir}/src/main/resources/openapi/govpay-stampe.yaml</inputSpec>
+                            <generatorName>java</generatorName>
+                            <apiPackage>it.govpay.stampe.client.api</apiPackage>
+                            <modelPackage>it.govpay.stampe.client.model</modelPackage>
+                            <invokerPackage>it.govpay.stampe.client</invokerPackage>
+                            <output>${project.build.directory}/generated-sources/govpay-stampe-client</output>
+                            <typeMappings>
+                                <typeMapping>File=byte[]</typeMapping>
+                            </typeMappings>
+                            <configOptions>
+                                <library>resttemplate</library>
+                                <useJakartaEe>true</useJakartaEe>
+                                <openApiNullable>true</openApiNullable>
+                                <serializableModel>true</serializableModel>
+                                <dateLibrary>java8</dateLibrary>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Add generated sources to compilation -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/openapi/src/main/java</source>
+                                <source>${project.build.directory}/generated-sources/govpay-stampe-client/src/main/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!-- JaCoCo Maven Plugin -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- OWASP Dependency-Check Plugin -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <configuration>
+                    <autoUpdate>${owasp.plugin.autoUpdate}</autoUpdate>
+                    <failBuildOnCVSS>${owasp.plugin.failBuildOnCVSS}</failBuildOnCVSS>
+                    <suppressionFiles>
+                        <suppressionFile>${owasp.falsePositives.dir}/CVE-2018-14335.xml</suppressionFile>
+                        <suppressionFile>${owasp.falsePositives.dir}/CVE-2026-22747.xml</suppressionFile>
+		    </suppressionFiles>
+                    <nvdApiKey>${nvdApiKey}</nvdApiKey>
+                    <ossIndexUsername>${ossIndexUsername}</ossIndexUsername>
+                    <ossIndexPassword>${ossIndexPassword}</ossIndexPassword>
+                    <dataDirectory>${dataDirectory}</dataDirectory>
+                    <formats>${owasp.format}</formats>
+                    <outputDirectory>${owasp.output.dir}</outputDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>${owasp}</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

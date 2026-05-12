@@ -1,0 +1,74 @@
+2026-05-12  Giuliano Pintori <pintori@link.it>
+
+	* [Build]
+	Configurato il pom.xml prendendo spunto da govpay-portal-api:
+	- Parent govpay-bom 1.1.4, packaging configurabile via profilo
+	  (jar attivo di default, war per il deploy su container esterno).
+	- finalName govpay-console-api, version iniziale 1.0.0.
+	- Profilo jar con esclusione dei driver JDBC dal repackage
+	  Spring Boot (postgresql, h2, ojdbc11, mysql-connector-j,
+	  mssql-jdbc) e profilo war con spring-boot-starter-tomcat e h2
+	  in scope provided.
+	- Plugin OpenAPI Generator (7.10.0) configurato per la
+	  generazione del server (spring, interfaceOnly, useSpringBoot3,
+	  useJakartaEe, springdoc, openApiNullable) e del client
+	  govpay-stampe (java/resttemplate).
+	- Plugin OWASP Dependency-Check con suppression file
+	  parametrizzabili e gestione NVD/OSS Index via property.
+	- JaCoCo prepare-agent + report in fase test.
+	- build-helper-maven-plugin per aggiungere alle sorgenti i
+	  generated-sources di OpenAPI e del client stampe.
+
+	* [Pipeline]
+	Aggiunte le GitHub Actions di validazione e rilascio
+	(.github/workflows) prendendo spunto da govpay-portal-api:
+	- maven.yml: build con JDK 21 Temurin, cache OWASP DB
+	  giornaliera, build war/jar separati, SonarCloud
+	  (link-it_govpay-console-api), license analysis con script
+	  analyze_licenses.py e license-exceptions.json, OSV scan
+	  reusable, SBOM CycloneDX, release su tag con asset WAR+JAR
+	  e ZIP aggregato dei report, build e push immagine Docker
+	  (linkitaly/govpay-console-api).
+	- refresh-owasp-db.yml: refresh notturno della cache del DB
+	  NVD per mantenere la pipeline principale veloce.
+	- osv-scanner.toml con la stessa baseline di portal-api.
+
+	* [Sorgenti]
+	Importati da govpay-portal-api e adattati al package
+	it.govpay.console:
+	- GovPayConsoleApplication (SpringBootServletInitializer con
+	  esclusione di JpaRepositoriesAutoConfiguration e
+	  UserDetailsServiceAutoConfiguration; @EnableJpaRepositories
+	  su it.govpay.console.repository; Jackson timeZone configurabile
+	  via console.time-zone).
+	- application.properties con configurazione Spring MVC,
+	  Jackson, SpringDoc e property govpay.console.cluster-id e
+	  console.time-zone (mantenuto govpay.stampe.logo.pagopa per
+	  il client stampe).
+	- META-INF/orm-{h2,hsql,mysql,oracle,postgres,sqlserver}.xml
+	  vuoti come baseline JPA.
+	- org.openspcoop2.utils.json.{JSONUtils,JsonPathExpressionEngine}
+	  come utility comuni.
+	- src/main/resources/owasp/falsePositives/{CVE-2018-14335,
+	  CVE-2026-22747}.xml.
+
+	* [API]
+	Aggiunto src/main/resources/openapi/openapi.yaml con la spec
+	GovPay Backoffice (v1.48.0). Configurato il generatore spring
+	con schemaMappings/importMappings/typeMappings di
+	AddTracciatoPendenzeRequest=java.lang.Object come workaround
+	per il dead-import emesso dal template OpenAPI Generator 7.10
+	sulle operazioni con requestBody multi-content
+	(application/json + multipart/form-data,
+	text/xml + multipart/form-data).
+
+	* [Test]
+	Aggiunto GovPayConsoleApplicationTest (JUnit 5, senza
+	@SpringBootTest) che esercita configure() e jsonCustomizer()
+	per produrre coverage minima sulla classe di bootstrap nel
+	report SonarCloud.
+
+	* [Doc]
+	README con logo GovPay, titolo "GovPay - Porta di accesso al
+	sistema pagoPA - Console API" e badge License GPLv3, Spring
+	Boot 3.5.9, Java 21.
