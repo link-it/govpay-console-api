@@ -299,18 +299,6 @@
                             <modelPackage>it.govpay.console.model</modelPackage>
                             <invokerPackage>it.govpay.console</invokerPackage>
                             <output>${project.build.directory}/generated-sources/openapi</output>
-                            <!-- Workaround dead-import: il generatore spring sintetizza un wrapper per i requestBody multi-content -->
-                            <!-- (es. application/json + multipart/form-data) e ne emette l'import senza generare la classe. -->
-                            <!-- Mappiamo il nome orfano su java.lang.Object per rendere risolvibile l'import. -->
-                            <importMappings>
-                                <importMapping>AddTracciatoPendenzeRequest=java.lang.Object</importMapping>
-                            </importMappings>
-                            <typeMappings>
-                                <typeMapping>AddTracciatoPendenzeRequest=java.lang.Object</typeMapping>
-                            </typeMappings>
-                            <schemaMappings>
-                                <schemaMapping>AddTracciatoPendenzeRequest=java.lang.Object</schemaMapping>
-                            </schemaMappings>
                             <configOptions>
                                 <interfaceOnly>true</interfaceOnly>
                                 <useSpringBoot3>true</useSpringBoot3>
