@@ -71,7 +71,7 @@ class SecurityIntegrationTest {
         utenza.setPrincipalOriginale(PRINCIPAL);
         utenza.setAbilitato(true);
         utenza.setAutorizzazioneDominiStar(false);
-        utenza.setAutorizzazioneTipiVersStar(false);
+        utenza.setAutorizzazioneTipiVersStar(true);
         utenza.setRuoli("AMMINISTRATORE,OPERATORE");
         utenza.setPassword(encoder.encode(PASSWORD));
         utenzaRepository.save(utenza);
@@ -144,7 +144,8 @@ class SecurityIntegrationTest {
         assertThat(corrente.idOperatore()).isNotNull();
         assertThat(corrente.nomeOperatore()).isEqualTo("Mario Rossi");
         assertThat(corrente.tuttiIDomini()).isFalse();
-        assertThat(corrente.idDominiVisibili()).hasSize(2);
+        assertThat(corrente.idDominiInteri()).hasSize(2);
+        assertThat(corrente.idUoVisibili()).isEmpty();
     }
 
     @Test

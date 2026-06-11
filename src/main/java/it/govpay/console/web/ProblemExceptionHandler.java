@@ -17,6 +17,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -60,6 +61,19 @@ public class ProblemExceptionHandler {
     public ResponseEntity<Problem> handleNotReadable(HttpMessageNotReadableException ex,
                                                      HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "Body della richiesta non leggibile.", request, null, ex);
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<Problem> handleBadRequest(BadRequestException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Problem> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                                      HttpServletRequest request) {
+        String detail = "Valore non valido per il parametro '" + ex.getName() + "': "
+                + (ex.getValue() != null ? ex.getValue() : "<null>");
+        return build(HttpStatus.BAD_REQUEST, detail, request, null, ex);
     }
 
     @ExceptionHandler({ NoResourceFoundException.class, NoHandlerFoundException.class, NotFoundException.class })

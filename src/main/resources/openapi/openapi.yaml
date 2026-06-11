@@ -15,9 +15,142 @@ info:
 servers:
   - url: /govpay/console-api
 
-tags: []
+tags:
+  - name: Pendenze
+    description: Pagamenti in attesa e spontanei.
 
-paths: {}
+paths:
+
+  /pendenze:
+    get:
+      tags:
+        - Pendenze
+      operationId: listPendenze
+      summary: Elenca le pendenze visibili all'operatore autenticato (paginate).
+      description: |
+        Filtri supportati in Fase 1 (Issue #9):
+        - `idPendenza` — partial match;
+        - `numeroAvviso` — match esatto, 18 cifre;
+        - `idDominio` — match esatto, 11 caratteri;
+        - `identificativoDebitore` — match esatto.
+
+        Tutti i filtri sono opzionali e ortogonali (AND). I filtri V1 non
+        ancora supportati (`idA2A`, `iuv`, `stato`, `tipoPendenza`, `dataDa`,
+        `dataA`, `direzione`, `divisione`, `idDebitore`, `mostraSpontaneiNonPagati`)
+        ritornano 400 problem+json.
+
+        ACL: il filtro per dominio dell'operatore corrente viene applicato
+        silenziosamente; un operatore senza visibilita' su alcun dominio riceve
+        una lista vuota (mai 403).
+
+        Quando `identificativoDebitore` e' valorizzato la richiesta viene
+        registrata in `gp_audit` (azione `PENDENZE_RICERCA_PER_DEBITORE`).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdPendenza'
+        - $ref: '#/components/parameters/NumeroAvviso'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/IdentificativoDebitore'
+      responses:
+        '200':
+          description: Lista paginata di pendenze.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PendenzaSummary'
+        '400':
+          description: Filtro non supportato, parametro malformato o `limit > 200`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /pendenze/{idA2A}/{idPendenza}:
+    get:
+      tags:
+        - Pendenze
+      operationId: getPendenza
+      summary: Dettaglio di una pendenza, comprensivo di voci embedded e _links condizionali.
+      description: |
+        Restituisce la pendenza identificata da `(idA2A, idPendenza)`. Le `voci`
+        sono sempre embedded inline (max 5).
+
+        `_links`:
+        - `informazioniDebitore` sempre presente;
+        - `avviso` presente solo se `numeroAvviso != null`;
+        - `ricevuta` presente solo se la pendenza ha almeno un pagamento riuscito
+          (stato in `PAGATA | PAGATA_PARZIALE | RICONCILIATA`).
+
+        `?expand=datiAllegati,proprieta` consente di includere sotto-tree
+        opt-in nel body. Valori sconosciuti causano 400.
+
+        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
+        viene restituito 404 (no leak di esistenza, mai 403).
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPendenza
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: expand
+          in: query
+          required: false
+          description: Sotto-tree opt-in (CSV) da espandere nel body.
+          style: form
+          explode: false
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              $ref: '#/components/schemas/PendenzaExpand'
+      responses:
+        '200':
+          description: Dettaglio pendenza.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pendenza'
+        '400':
+          description: Parametri non validi (es. valori di `expand` sconosciuti).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Pendenza non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
 components:
   schemas:
@@ -91,15 +224,422 @@ components:
       description: |
         Forma comune di tutte le risposte paginate.
         I consumer specializzano `results` via `allOf` con il proprio item type.
+        Due modalita' di paginazione mutuamente esclusive a livello di response:
+        - **offset** (default): `pagination` valorizzato (page/limit/hasNextPage + opzionali totalResults/totalPages se richiesto `total=true`);
+        - **cursor** (opt-in con `?cursor=`): `nextCursor` valorizzato con il cursore della pagina successiva.
+        L'esclusione mutua e' enforced dal controller (`?page` + `?cursor` => 400).
       required:
         - results
-        - pagination
       properties:
         results:
           type: array
           items: {}
         pagination:
           $ref: '#/components/schemas/Pagination'
+        nextCursor:
+          type: string
+          description: |
+            Cursore opaque base64 da rispedire come `?cursor=` per ottenere la
+            pagina successiva. Presente solo in modalita' cursor e se esistono altri risultati.
+
+    DominioRef:
+      type: object
+      required:
+        - idDominio
+        - ragioneSociale
+      properties:
+        idDominio:
+          type: string
+          description: Codice dominio (es. P.IVA 11 cifre).
+          example: "12345678901"
+        ragioneSociale:
+          type: string
+
+    TipoPendenzaRef:
+      type: object
+      required:
+        - idTipoPendenza
+        - descrizione
+      properties:
+        idTipoPendenza:
+          type: string
+          example: "TARI"
+        descrizione:
+          type: string
+
+    UnitaOperativaRef:
+      type: object
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+      properties:
+        idUnitaOperativa:
+          type: string
+        ragioneSociale:
+          type: string
+
+    TipoPendenza:
+      type: string
+      enum:
+        - DOVUTA
+        - SPONTANEA
+
+    StatoPendenza:
+      type: string
+      description: |
+        Stato della pendenza in V2.
+        Mapping rispetto agli stati V1:
+        - V1 `ESEGUITA` -> V2 `PAGATA`
+        - V1 `NON_ESEGUITA` -> V2 `NON_PAGATA`
+        - V1 `ESEGUITA_PARZIALE` -> V2 `PAGATA_PARZIALE`
+        - V1 `INCASSATA` -> V2 `RICONCILIATA`
+        - V1 `ANNULLATA`/`SCADUTA`/`ANOMALA` -> identici in V2.
+      enum:
+        - NON_PAGATA
+        - PAGATA
+        - PAGATA_PARZIALE
+        - ANNULLATA
+        - SCADUTA
+        - RICONCILIATA
+        - ANOMALA
+
+    StatoVocePendenza:
+      type: string
+      enum:
+        - NON_PAGATA
+        - PAGATA
+        - ANOMALA
+
+    StatoAvviso:
+      type: string
+      description: |
+        Stato dell'avviso di pagamento. Mapping V1 -> V2:
+        - `Pagato` -> `PAGATO`
+        - `Non pagato` -> `NON_PAGATO`
+        - `Scaduto` -> `SCADUTO`
+        - `Annullato` -> `ANNULLATO`
+      enum:
+        - PAGATO
+        - NON_PAGATO
+        - SCADUTO
+        - ANNULLATO
+
+    LinguaSecondaria:
+      type: string
+      description: Lingua secondaria per province bilingui. Default in italiano se assente.
+      enum:
+        - DE
+        - EN
+        - FR
+        - SL
+
+    PendenzaExpand:
+      type: string
+      description: Sotto-tree opt-in espandibile nel dettaglio pendenza via `?expand=`.
+      enum:
+        - datiAllegati
+        - proprieta
+
+    Link:
+      type: object
+      description: Hyperlink in stile HAL.
+      required:
+        - href
+      properties:
+        href:
+          type: string
+        type:
+          type: string
+
+    PendenzaLinks:
+      type: object
+      description: |
+        Collezione di hyperlink relativi alla pendenza. La chiave `informazioniDebitore`
+        e' sempre presente; `avviso`/`ricevuta` sono condizionali (vedi descrizione di `Pendenza`).
+        Lo schema accetta `additionalProperties` di tipo `Link` per consentire l'aggiunta
+        non-breaking di chiavi future (rpp, pagamenti, allegati, ...).
+      required:
+        - informazioniDebitore
+      properties:
+        informazioniDebitore:
+          $ref: '#/components/schemas/Link'
+        avviso:
+          $ref: '#/components/schemas/Link'
+        ricevuta:
+          $ref: '#/components/schemas/Link'
+      additionalProperties:
+        $ref: '#/components/schemas/Link'
+
+    VocePendenza:
+      type: object
+      description: Voce di una pendenza (embedded inline in `Pendenza`, max 5 per pendenza).
+      required:
+        - idVocePendenza
+        - indice
+        - importo
+        - stato
+      properties:
+        idVocePendenza:
+          type: string
+        indice:
+          type: integer
+          format: int32
+          minimum: 1
+        importo:
+          type: number
+          format: double
+        descrizione:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoVocePendenza'
+        descrizioneCausaleRPT:
+          type: string
+        contabilita:
+          type: string
+        datiAllegati:
+          type: string
+        metadata:
+          type: string
+
+    PendenzaSummary:
+      type: object
+      description: |
+        Proiezione leggera della pendenza, usata nelle liste paginate.
+      required:
+        - idA2A
+        - idPendenza
+        - stato
+        - tipo
+        - anomalo
+        - verificato
+        - dominio
+        - tipoPendenza
+        - importo
+        - importoPagato
+        - dataUltimoAggiornamento
+        - idDebitore
+      properties:
+        idA2A:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        idPendenza:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        stato:
+          $ref: '#/components/schemas/StatoPendenza'
+        tipo:
+          $ref: '#/components/schemas/TipoPendenza'
+        anomalo:
+          type: boolean
+        verificato:
+          type: boolean
+        dominio:
+          $ref: '#/components/schemas/DominioRef'
+        tipoPendenza:
+          $ref: '#/components/schemas/TipoPendenzaRef'
+        unitaOperativa:
+          allOf:
+            - $ref: '#/components/schemas/UnitaOperativaRef'
+          nullable: true
+          description: Null per pendenze non assegnate a una unita' operativa.
+        importo:
+          type: number
+          format: double
+        importoPagato:
+          type: number
+          format: double
+        dataScadenza:
+          type: string
+          format: date-time
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+        numeroAvviso:
+          type: string
+          pattern: '^[0-9]{18}$'
+        iuvAvviso:
+          type: string
+        causaleBreve:
+          type: string
+          maxLength: 80
+        idDebitore:
+          type: string
+          description: Solo CF/PIVA del soggetto pagatore. I dati anagrafici completi sono su `/informazioniDebitore`.
+
+    Pendenza:
+      description: |
+        Dettaglio canonico di una pendenza. Composizione: `PendenzaSummary` + dati
+        propri + `voci` embedded inline (max 5 items, sempre presente) + sub-tree
+        opt-in (`datiAllegati`, `proprieta`) + `_links` (con `informazioniDebitore`
+        sempre presente).
+        `soggettoPagatore` NON e' nel body: per i dati anagrafici/contatti del
+        debitore il client chiama `/informazioniDebitore`.
+      allOf:
+        - $ref: '#/components/schemas/PendenzaSummary'
+        - type: object
+          required:
+            - voci
+            - _links
+          properties:
+            descrizione:
+              type: string
+            tassonomia:
+              type: string
+            tassonomiaAvviso:
+              type: string
+            documento:
+              type: string
+            direzione:
+              type: string
+            divisione:
+              type: string
+            voci:
+              type: array
+              minItems: 1
+              maxItems: 5
+              items:
+                $ref: '#/components/schemas/VocePendenza'
+            datiAllegati:
+              type: string
+              description: Presente solo se richiesto via `?expand=datiAllegati`.
+            proprieta:
+              type: string
+              description: Presente solo se richiesto via `?expand=proprieta`.
+            _links:
+              $ref: '#/components/schemas/PendenzaLinks'
+
+    Avviso:
+      type: object
+      description: |
+        Metadati locali dell'avviso di pagamento associato a una pendenza
+        (variante `application/json` dell'endpoint `/avviso`).
+      required:
+        - idDominio
+        - numeroAvviso
+        - importo
+        - stato
+      properties:
+        idDominio:
+          type: string
+        numeroAvviso:
+          type: string
+          pattern: '^[0-9]{18}$'
+        importo:
+          type: number
+          format: double
+        descrizione:
+          type: string
+        dataValidita:
+          type: string
+          format: date-time
+        dataScadenza:
+          type: string
+          format: date-time
+        tassonomiaAvviso:
+          type: string
+        qrcode:
+          type: string
+        barcode:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoAvviso'
+
+    PspRef:
+      type: object
+      description: Identificativi minimi del Prestatore di Servizi di Pagamento (PSP).
+      required:
+        - idPsp
+      properties:
+        idPsp:
+          type: string
+        ragioneSociale:
+          type: string
+
+    Ricevuta:
+      type: object
+      description: |
+        Metadati locali della Ricevuta Telematica (RT) associata a una pendenza
+        (variante `application/json` dell'endpoint `/ricevuta`). Strategia "RT
+        principale": l'ultima riuscita ordinata per `dataPagamento DESC`.
+      required:
+        - iuv
+        - ccp
+        - idDominio
+        - dataPagamento
+        - importoTotalePagato
+      properties:
+        iuv:
+          type: string
+        ccp:
+          type: string
+        idDominio:
+          type: string
+        dataPagamento:
+          type: string
+          format: date-time
+        importoTotalePagato:
+          type: number
+          format: double
+        psp:
+          $ref: '#/components/schemas/PspRef'
+        riferimentoTransazione:
+          type: string
+        causale:
+          type: string
+        singoliVersamenti:
+          type: array
+          items:
+            type: object
+            properties:
+              iur:
+                type: string
+              importo:
+                type: number
+                format: double
+              causale:
+                type: string
+
+    Soggetto:
+      type: object
+      description: |
+        Anagrafica e contatti del soggetto pagatore (debitore). Esposto solo
+        attraverso `/informazioniDebitore` per minimizzare l'esposizione di dati
+        personali. Ogni 200 viene tracciato in `gp_audit`.
+      required:
+        - tipo
+        - identificativo
+        - anagrafica
+      properties:
+        tipo:
+          type: string
+          description: F = persona fisica, G = persona giuridica.
+          enum:
+            - F
+            - G
+        identificativo:
+          type: string
+          description: CF (16 char) o PIVA (11 cifre).
+        anagrafica:
+          type: string
+          description: Nome+cognome (F) o ragione sociale (G).
+        indirizzo:
+          type: string
+        civico:
+          type: string
+        cap:
+          type: string
+        localita:
+          type: string
+        provincia:
+          type: string
+        nazione:
+          type: string
+          description: Codice ISO 3166-1 alpha-2.
+        email:
+          type: string
+          format: email
+        cellulare:
+          type: string
 
   parameters:
 
@@ -146,4 +686,41 @@ components:
       schema:
         type: boolean
         default: false
+
+    IdPendenza:
+      name: idPendenza
+      in: query
+      required: false
+      description: Match parziale sull'identificativo pendenza.
+      schema:
+        type: string
+
+    NumeroAvviso:
+      name: numeroAvviso
+      in: query
+      required: false
+      description: Numero avviso pagoPA (18 cifre), match esatto.
+      schema:
+        type: string
+        pattern: '^[0-9]{18}$'
+
+    IdDominio:
+      name: idDominio
+      in: query
+      required: false
+      description: Codice dominio (11 caratteri), match esatto.
+      schema:
+        type: string
+        pattern: '^[0-9]{11}$'
+
+    IdentificativoDebitore:
+      name: identificativoDebitore
+      in: query
+      required: false
+      description: |
+        CF/PIVA del soggetto pagatore, match esatto. La presenza di questo
+        filtro determina la scrittura di una riga di audit GDPR
+        (`PENDENZE_RICERCA_PER_DEBITORE`) in `gp_audit`.
+      schema:
+        type: string
 

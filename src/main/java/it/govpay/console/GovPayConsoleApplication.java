@@ -1,5 +1,8 @@
 package it.govpay.console;
 
+import java.time.Clock;
+
+import org.openapitools.jackson.nullable.JsonNullableModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -32,6 +35,26 @@ public class GovPayConsoleApplication extends SpringBootServletInitializer {
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer jsonCustomizer() {
         return builder -> builder.timeZone(this.timeZone);
+    }
+
+    /**
+     * Registra il modulo per serializzare {@code JsonNullable} (generato dagli
+     * schemi OpenAPI con `nullable: true`) in modo trasparente: i campi
+     * "undefined" sono omessi, i campi {@code of(null)} sono serializzati come
+     * null espliciti, i campi {@code of(value)} come il loro valore.
+     */
+    @Bean
+    public JsonNullableModule jsonNullableModule() {
+        return new JsonNullableModule();
+    }
+
+    /**
+     * Clock di sistema, iniettato dove serve "now" (es. derivazione `SCADUTA`
+     * nello stato pendenza). Sostituibile nei test per fissare il tempo.
+     */
+    @Bean
+    public Clock clock() {
+        return Clock.systemDefaultZone();
     }
 
 }

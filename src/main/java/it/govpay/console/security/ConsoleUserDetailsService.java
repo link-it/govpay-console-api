@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -18,6 +20,8 @@ import it.govpay.console.repository.UtenzaRepository;
 
 @Service
 public class ConsoleUserDetailsService implements UserDetailsService {
+
+    private static final Logger log = LoggerFactory.getLogger(ConsoleUserDetailsService.class);
 
     private static final String ROLE_PREFIX = "ROLE_";
 
@@ -35,6 +39,7 @@ public class ConsoleUserDetailsService implements UserDetailsService {
         if (Boolean.FALSE.equals(utenza.getAbilitato())) {
             throw new UsernameNotFoundException("Utenza disabilitata: " + principal);
         }
+        log.debug("loadUserByUsername principal={} ruoli={}", principal, utenza.getRuoli());
         return User.builder()
                 .username(utenza.getPrincipal())
                 .password(utenza.getPassword() != null ? utenza.getPassword() : "")

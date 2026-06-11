@@ -41,6 +41,12 @@ public class Versamento {
     @Column(name = "stato_versamento", nullable = false, length = 35)
     private String statoVersamento;
 
+    @Column(name = "data_creazione", nullable = false)
+    private OffsetDateTime dataCreazione;
+
+    @Column(name = "data_validita")
+    private OffsetDateTime dataValidita;
+
     @Column(name = "data_scadenza")
     private OffsetDateTime dataScadenza;
 
@@ -101,6 +107,9 @@ public class Versamento {
     @Column(name = "anomalo", nullable = false)
     private Boolean anomalo;
 
+    @Column(name = "ack", nullable = false)
+    private Boolean ack;
+
     @Column(name = "divisione", length = 35)
     private String divisione;
 
@@ -134,6 +143,10 @@ public class Versamento {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_tipo_versamento", nullable = false)
     private TipoVersamento tipoVersamento;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "id_tipo_versamento_dominio", nullable = false)
+    private TipoVersamentoDominio tipoVersamentoDominio;
 
     @OneToMany(mappedBy = "versamento", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("indiceDati ASC")
@@ -169,6 +182,22 @@ public class Versamento {
 
     public void setStatoVersamento(String statoVersamento) {
         this.statoVersamento = statoVersamento;
+    }
+
+    public OffsetDateTime getDataCreazione() {
+        return dataCreazione;
+    }
+
+    public void setDataCreazione(OffsetDateTime dataCreazione) {
+        this.dataCreazione = dataCreazione;
+    }
+
+    public OffsetDateTime getDataValidita() {
+        return dataValidita;
+    }
+
+    public void setDataValidita(OffsetDateTime dataValidita) {
+        this.dataValidita = dataValidita;
     }
 
     public OffsetDateTime getDataScadenza() {
@@ -331,6 +360,14 @@ public class Versamento {
         this.anomalo = anomalo;
     }
 
+    public Boolean getAck() {
+        return ack;
+    }
+
+    public void setAck(Boolean ack) {
+        this.ack = ack;
+    }
+
     public String getDivisione() {
         return divisione;
     }
@@ -409,6 +446,14 @@ public class Versamento {
 
     public void setTipoVersamento(TipoVersamento tipoVersamento) {
         this.tipoVersamento = tipoVersamento;
+    }
+
+    public TipoVersamentoDominio getTipoVersamentoDominio() {
+        return tipoVersamentoDominio;
+    }
+
+    public void setTipoVersamentoDominio(TipoVersamentoDominio tipoVersamentoDominio) {
+        this.tipoVersamentoDominio = tipoVersamentoDominio;
     }
 
     public List<SingoloVersamento> getSingoliVersamenti() {

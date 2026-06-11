@@ -16,6 +16,7 @@ import it.govpay.console.entity.GpAudit;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.TipoVersamento;
+import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Versamento;
 
@@ -48,6 +49,11 @@ class EntityRepositorySmokeTest {
         tipoVersamento.setDescrizione("Tassa rifiuti");
         em.persist(tipoVersamento);
 
+        TipoVersamentoDominio tipoVersamentoDominio = new TipoVersamentoDominio();
+        tipoVersamentoDominio.setDominio(dominio);
+        tipoVersamentoDominio.setTipoVersamento(tipoVersamento);
+        em.persist(tipoVersamentoDominio);
+
         UnitaOperativa uo = new UnitaOperativa();
         uo.setCodUo("UO1");
         uo.setUoDenominazione("Ufficio Tributi");
@@ -58,16 +64,19 @@ class EntityRepositorySmokeTest {
         versamento.setCodVersamentoEnte("PEND-0001");
         versamento.setImportoTotale(123.45);
         versamento.setStatoVersamento("NON_ESEGUITO");
+        versamento.setDataCreazione(OffsetDateTime.now());
         versamento.setDataOraUltimoAggiornamento(OffsetDateTime.now());
         versamento.setDebitoreIdentificativo("RSSMRA80A01H501U");
         versamento.setDebitoreAnagrafica("Mario Rossi");
         versamento.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
         versamento.setImportoPagato(0.0);
         versamento.setAnomalo(false);
+        versamento.setAck(false);
         versamento.setTipo("DOVUTO");
         versamento.setDominio(dominio);
         versamento.setApplicazione(applicazione);
         versamento.setTipoVersamento(tipoVersamento);
+        versamento.setTipoVersamentoDominio(tipoVersamentoDominio);
         versamento.setUnitaOperativa(uo);
         em.persist(versamento);
 
