@@ -255,6 +255,12 @@
             <artifactId>json-path</artifactId>
         </dependency>
 
+        <!-- Apache Commons Codec: SHA-512 / MD5 Unix crypt per GovpayPasswordEncoder -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
