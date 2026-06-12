@@ -5,6 +5,7 @@ public record PendenzaListQuery(
         int limit,
         String sort,
         Boolean total,
+        String cursor,
         String idPendenza,
         String numeroAvviso,
         String idDominio,

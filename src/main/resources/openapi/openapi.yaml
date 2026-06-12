@@ -45,11 +45,20 @@ paths:
 
         Quando `identificativoDebitore` e' valorizzato la richiesta viene
         registrata in `gp_audit` (azione `PENDENZE_RICERCA_PER_DEBITORE`).
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination` valorizzato.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(dataOraUltimoAggiornamento DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 problem+json con motivazione parlante. Cursor malformato
+        → 400.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/IdPendenza'
         - $ref: '#/components/parameters/NumeroAvviso'
         - $ref: '#/components/parameters/IdDominio'
@@ -934,6 +943,20 @@ components:
       schema:
         type: boolean
         default: false
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Cursore opaque (base64) ricevuto in `nextCursor` di una precedente
+        risposta. Attiva la modalita' di paginazione cursor (keyset) con
+        ordinamento fisso `(dataOraUltimoAggiornamento DESC, id DESC)`.
+
+        Mutuamente esclusivo con `page` esplicito, `sort` esplicito e
+        `total=true`. Cursor malformato → 400.
+      schema:
+        type: string
 
     IdPendenza:
       name: idPendenza

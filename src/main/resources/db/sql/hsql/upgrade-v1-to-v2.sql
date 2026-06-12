@@ -1,8 +1,10 @@
--- Delta DB per portare una installazione GovPay V1 allo stato richiesto da
--- govpay-console-api (V2). Tutte le modifiche di schema introdotte dalla
--- migrazione V2 si accumulano qui in ordine cronologico.
+-- Delta DB per portare una installazione GovPay V1 (HSQLDB) allo stato
+-- richiesto da govpay-console-api (V2). Sintassi HSQLDB.
 --
--- Riferimento V1: govpay-381/src/govpay/src/main/resources/db/sql/postgresql/gov_pay.sql
+-- HSQLDB e' usato tipicamente in installazioni di test/sviluppo: la patch e'
+-- mantenuta per parita' con gli altri dialetti supportati da V1.
+--
+-- Riferimento V1: govpay-381/src/govpay/src/main/resources/db/sql/hsql/gov_pay.sql
 
 -- ---------------------------------------------------------------------------
 -- Issue #9 - Consultazione pendenze
@@ -16,8 +18,9 @@ ALTER TABLE gp_audit ADD COLUMN ip_richiedente VARCHAR(45);
 -- ---------------------------------------------------------------------------
 -- Issue #9 scope G - Cursor pagination opt-in su GET /pendenze
 -- Indice composito sul sort fisso usato dalla query keyset
--- (dataOraUltimoAggiornamento DESC, id DESC). Senza questo indice la
--- paginazione cursor degrada a scan sequenziale su tabelle grandi.
+-- (dataOraUltimoAggiornamento DESC, id DESC).
+--
+-- Nota: HSQLDB onora la direzione DESC sulle colonne dell'indice.
 -- ---------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_versamenti_data_ult_agg_id
+CREATE INDEX idx_versamenti_data_ult_agg_id
     ON versamenti (data_ora_ultimo_aggiornamento DESC, id DESC);

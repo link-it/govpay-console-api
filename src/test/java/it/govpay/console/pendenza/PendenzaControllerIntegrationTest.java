@@ -342,6 +342,20 @@ class PendenzaControllerIntegrationTest {
                         org.hamcrest.Matchers.hasSize(5)));
     }
 
+    /**
+     * Issue #9 scope H: il sort deve supportare multi-field
+     * ({@code ?sort=-dataScadenza,dataUltimoAggiornamento}).
+     */
+    @Test
+    void multiFieldSortIsAccepted() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111")
+                        .param("sort", "-dataScadenza,dataUltimoAggiornamento")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        org.hamcrest.Matchers.hasSize(5)));
+    }
+
     @Test
     void unknownSortFieldReturns400() throws Exception {
         mvc.perform(get("/pendenze").param("sort", "-bogusField")
@@ -365,6 +379,31 @@ class PendenzaControllerIntegrationTest {
     void limitOver200Returns400() throws Exception {
         mvc.perform(get("/pendenze").param("limit", "5000").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Issue #9 scope H: l'audit GDPR {@code PENDENZE_RICERCA_PER_DEBITORE}
+     * viene scritto SOLO quando il filtro {@code identificativoDebitore} e'
+     * valorizzato. Una ricerca senza quel filtro (anche con altri filtri come
+     * {@code idDominio}) non deve generare audit.
+     */
+    @Test
+    void searchWithoutIdentificativoDebitoreScriveNessunAudit() throws Exception {
+        long auditBefore = gpAuditRepository.findAll().stream()
+                .filter(a -> "PENDENZE_RICERCA_PER_DEBITORE".equals(a.getTipoOggetto()))
+                .count();
+
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk());
+
+        long auditAfter = gpAuditRepository.findAll().stream()
+                .filter(a -> "PENDENZE_RICERCA_PER_DEBITORE".equals(a.getTipoOggetto()))
+                .count();
+
+        org.assertj.core.api.Assertions.assertThat(auditAfter)
+                .as("ricerca senza identificativoDebitore: nessun audit GDPR atteso")
+                .isEqualTo(auditBefore);
     }
 
     @Test

@@ -399,6 +399,17 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Esclude codice generato (OpenAPI server stubs, client govpay-stampe,
+                         classi model serializzazione) e classi di bootstrap. -->
+                    <excludes>
+                        <exclude>it/govpay/console/api/**</exclude>
+                        <exclude>it/govpay/console/model/**</exclude>
+                        <exclude>it/govpay/stampe/client/**</exclude>
+                        <exclude>it/govpay/console/GovPayConsoleApplication.class</exclude>
+                        <exclude>org/openspcoop2/**</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>

@@ -1,27 +1,24 @@
 package it.govpay.console.audit;
 
-import java.time.OffsetDateTime;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import it.govpay.console.entity.GpAudit;
-import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.security.OperatoreCorrente;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * Scrive una riga in {@code gp_audit}. In #9 e' sincrono; lo step H lo
- * trasformera' in {@code @Async} con failure handling (vedi
- * {@code project-sequence-issue-9}).
+ * Entry point per la scrittura di righe in {@code gp_audit}. In scope H della
+ * issue #9 la persistence e' delegata ad {@link AuditWriter} asincrono:
+ * questo service estrae IP e idOperatore (operazioni che richiedono la
+ * request del thread chiamante) e poi delega al writer.
  *
- * Convenzione tipo_oggetto/azione: codici UPPER_SNAKE
+ * <p>Convenzione tipo_oggetto/azione: codici UPPER_SNAKE
  * (`PENDENZE_RICERCA_PER_DEBITORE`, `PENDENZA_VISUALIZZA_DEBITORE`, ...).
  */
 @Service
@@ -31,15 +28,14 @@ public class AuditService {
 
     private static final String HEADER_X_FORWARDED_FOR = "X-Forwarded-For";
 
-    private final GpAuditRepository repository;
+    private final AuditWriter writer;
     private final ObjectMapper objectMapper;
 
-    public AuditService(GpAuditRepository repository, ObjectMapper objectMapper) {
-        this.repository = repository;
+    public AuditService(AuditWriter writer, ObjectMapper objectMapper) {
+        this.writer = writer;
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
     public void registra(String azione,
                          long idOggetto,
                          Map<String, Object> dettaglio,
@@ -50,16 +46,9 @@ public class AuditService {
                     azione, operatore.principal());
             return;
         }
-        GpAudit row = new GpAudit();
-        row.setData(OffsetDateTime.now());
-        row.setIdOggetto(idOggetto);
-        row.setTipoOggetto(azione);
-        row.setOggetto(serializeDettaglio(dettaglio));
-        row.setIdOperatore(operatore.idOperatore());
-        row.setIpRichiedente(resolveClientIp(request));
-        repository.save(row);
-        log.debug("audit registrato azione={} idOggetto={} operatore={} ip={}",
-                azione, idOggetto, operatore.principal(), row.getIpRichiedente());
+        String oggetto = serializeDettaglio(dettaglio);
+        String ip = resolveClientIp(request);
+        writer.write(azione, idOggetto, oggetto, operatore.idOperatore(), ip);
     }
 
     private String serializeDettaglio(Map<String, Object> dettaglio) {

@@ -26,7 +26,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class PendenzaController implements PendenzeApi {
 
     private static final Set<String> LIST_PENDENZE_QUERY_PARAMS = Set.of(
-            "page", "limit", "sort", "total",
+            "page", "limit", "sort", "total", "cursor",
             "idPendenza", "numeroAvviso", "idDominio", "identificativoDebitore");
 
     private static final Set<String> GET_PENDENZA_QUERY_PARAMS = Set.of("expand");
@@ -63,21 +63,76 @@ public class PendenzaController implements PendenzeApi {
                                                                 Integer limit,
                                                                 String sort,
                                                                 Boolean total,
+                                                                String cursor,
                                                                 String idPendenza,
                                                                 String numeroAvviso,
                                                                 String idDominio,
                                                                 String identificativoDebitore) {
         rejectUnsupportedQueryParams(currentRequest, LIST_PENDENZE_QUERY_PARAMS);
+        // cursor mode attivo se ?cursor=... e' presente nella query string,
+        // anche con valore vuoto ("prima pagina cursor-mode", scope G issue #9).
+        if (currentRequest != null && currentRequest.getParameterMap().containsKey("cursor")) {
+            rejectCursorIncompatibleParams(currentRequest);
+        }
+        boolean cursorMode = currentRequest != null
+                && currentRequest.getParameterMap().containsKey("cursor");
         PendenzaListQuery query = new PendenzaListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
                 sort,
                 total,
+                cursorMode ? (cursor != null ? cursor : "") : null,
                 idPendenza,
                 numeroAvviso,
                 idDominio,
                 identificativoDebitore);
         return ResponseEntity.ok(service.list(query, currentRequest));
+    }
+
+    /**
+     * In modalita' cursor (`?cursor=...`) sono incompatibili:
+     * <ul>
+     *   <li>{@code page} esplicito (mutua esclusione paginazione: scope G issue #9);</li>
+     *   <li>{@code sort} esplicito (l'ordinamento e' fisso
+     *       {@code (dataOraUltimoAggiornamento DESC, id DESC)} per il keyset);</li>
+     *   <li>{@code total=true} (in cursor mode il conteggio totale non e'
+     *       disponibile, {@code nextCursor} lo sostituisce funzionalmente).</li>
+     * </ul>
+     * Messaggi dei {@code Problem} parlanti per orientare il client.
+     */
+    private static void rejectCursorIncompatibleParams(HttpServletRequest request) {
+        if (request == null) {
+            return;
+        }
+        if (isExplicit(request, "page")) {
+            throw new BadRequestException(
+                    "Parametri 'page' e 'cursor' mutuamente esclusivi: usa solo uno dei due "
+                            + "(cursor per paginazione keyset, page per paginazione offset).");
+        }
+        if (isExplicit(request, "sort")) {
+            throw new BadRequestException(
+                    "In modalita' cursor (?cursor=...) l'ordinamento e' fisso "
+                            + "(dataOraUltimoAggiornamento DESC, id DESC): non specificare ?sort=.");
+        }
+        if (isExplicit(request, "total")) {
+            throw new BadRequestException(
+                    "In modalita' cursor (?cursor=...) il conteggio totale non e' disponibile; "
+                            + "?total=true non e' compatibile. Usa la presenza di 'nextCursor' "
+                            + "in risposta per sapere se ci sono altre pagine.");
+        }
+    }
+
+    private static boolean isExplicit(HttpServletRequest request, String name) {
+        String[] values = request.getParameterMap().get(name);
+        if (values == null || values.length == 0) {
+            return false;
+        }
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
