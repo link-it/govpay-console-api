@@ -14,6 +14,8 @@ import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.model.ListPendenze200Response;
 import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
+import it.govpay.console.model.Ricevuta;
+import it.govpay.console.ricevuta.RicevutaService;
 import it.govpay.console.web.BadRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,8 +31,11 @@ public class PendenzaController implements PendenzeApi {
 
     private static final Set<String> GET_AVVISO_QUERY_PARAMS = Set.of("linguaSecondaria");
 
+    private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
+
     private final PendenzaService service;
     private final AvvisoService avvisoService;
+    private final RicevutaService ricevutaService;
 
     @Autowired(required = false)
     private HttpServletRequest currentRequest;
@@ -38,9 +43,12 @@ public class PendenzaController implements PendenzeApi {
     @Autowired(required = false)
     private HttpServletResponse currentResponse;
 
-    public PendenzaController(PendenzaService service, AvvisoService avvisoService) {
+    public PendenzaController(PendenzaService service,
+                              AvvisoService avvisoService,
+                              RicevutaService ricevutaService) {
         this.service = service;
         this.avvisoService = avvisoService;
+        this.ricevutaService = ricevutaService;
     }
 
     @Override
@@ -89,6 +97,20 @@ public class PendenzaController implements PendenzeApi {
         rejectUnsupportedQueryParams(currentRequest, GET_AVVISO_QUERY_PARAMS);
         ResponseEntity<Avviso> response = avvisoService.get(
                 idA2A, idPendenza, linguaSecondaria, currentRequest, currentResponse);
+        return response != null ? response : ResponseEntity.ok().build();
+    }
+
+    /**
+     * Analogo a {@link #getPendenzaAvviso}: stesso pattern di delega allo
+     * scrivere direttamente sulla {@link HttpServletResponse} per le varianti
+     * binarie (xml, pdf) — il service ritorna {@code null} in quei casi e il
+     * controller risponde con {@code ResponseEntity.ok().build()}.
+     */
+    @Override
+    public ResponseEntity<Ricevuta> getPendenzaRicevuta(String idA2A, String idPendenza) {
+        rejectUnsupportedQueryParams(currentRequest, GET_RICEVUTA_QUERY_PARAMS);
+        ResponseEntity<Ricevuta> response = ricevutaService.get(
+                idA2A, idPendenza, currentRequest, currentResponse);
         return response != null ? response : ResponseEntity.ok().build();
     }
 

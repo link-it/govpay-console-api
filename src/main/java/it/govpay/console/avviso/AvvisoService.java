@@ -20,6 +20,7 @@ import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.web.NotAcceptableMediaTypeException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.stampe.client.model.PaymentNotice;
 import jakarta.servlet.http.HttpServletRequest;
@@ -154,7 +155,7 @@ public class AvvisoService {
         if (header.toLowerCase().contains(MediaType.APPLICATION_PDF_VALUE)) {
             return MediaType.APPLICATION_PDF;
         }
-        throw new AvvisoNonAccettabileException(
+        throw new NotAcceptableMediaTypeException(
                 "Accept '" + header + "' non supportato: ammessi application/json e application/pdf.");
     }
 

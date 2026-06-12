@@ -248,6 +248,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /pendenze/{idA2A}/{idPendenza}/ricevuta:
+    get:
+      tags:
+        - Pendenze
+      operationId: getPendenzaRicevuta
+      summary: Ricevuta Telematica associata a una pendenza.
+      description: |
+        Ritorna la Ricevuta Telematica (RT) associata alla pendenza identificata
+        da `(idA2A, idPendenza)`. Strategia **"RT principale"**: l'ultima RT
+        riuscita ordinata per `dataPagamento DESC`, dove "riuscita" significa
+        `cod_esito_pagamento ∈ {0, 2}` (Eseguito o Parzialmente eseguito) —
+        coerente con scope C, dove `_links.ricevuta` appare solo per stati
+        `PAGATA | PAGATA_PARZIALE | RICONCILIATA`.
+
+        Content negotiation tramite header `Accept`:
+        - `application/json` (default) → metadati locali della RT (`Ricevuta`);
+        - `application/xml` → **RT originale dal DB** (`xml_rt` byte-identico
+          al ricevuto da PagoPA), streaming;
+        - `application/pdf` → stampa binaria generata dal microservizio
+          `govpay-stampe` (endpoint `/receipt`), streaming.
+
+        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
+        viene restituito 404 (no leak di esistenza). Se la pendenza non ha
+        nessuna RT principale (es. pendenza non ancora pagata) viene
+        restituito 404.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPendenza
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+      responses:
+        '200':
+          description: Ricevuta (formato dipende dall'header `Accept`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ricevuta'
+            application/xml:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: |
+            Pendenza non trovata, non visibile per l'operatore corrente, oppure
+            priva di RT principale (es. pendenza non pagata).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: |
+            Header `Accept` non compatibile con `application/json`, `application/xml`
+            o `application/pdf`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: Errore di comunicazione con il microservizio `govpay-stampe`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   schemas:
 

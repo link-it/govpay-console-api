@@ -37,6 +37,14 @@ public class Dominio {
     @JoinColumn(name = "id_stazione")
     private Stazione stazione;
 
+    /**
+     * Logo dell'ente creditore in base64 ASCII (es. {@code data:image/png;base64,...}).
+     * Usato per il PDF della ricevuta (campo {@code creditor_logo} del payload del
+     * microservizio {@code govpay-stampe}).
+     */
+    @Column(name = "logo", columnDefinition = "BYTEA")
+    private byte[] logo;
+
     public Long getId() {
         return id;
     }
@@ -83,5 +91,13 @@ public class Dominio {
 
     public void setStazione(Stazione stazione) {
         this.stazione = stazione;
+    }
+
+    public byte[] getLogo() {
+        return logo;
+    }
+
+    public void setLogo(byte[] logo) {
+        this.logo = logo;
     }
 }

@@ -23,7 +23,6 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import it.govpay.console.avviso.AvvisoMbtException;
-import it.govpay.console.avviso.AvvisoNonAccettabileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
 import it.govpay.console.avviso.StampeUnavailableException;
 import it.govpay.console.model.Problem;
@@ -107,9 +106,9 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null, ex);
     }
 
-    @ExceptionHandler(AvvisoNonAccettabileException.class)
-    public ResponseEntity<Problem> handleNonAccettabile(AvvisoNonAccettabileException ex,
-                                                       HttpServletRequest request) {
+    @ExceptionHandler(NotAcceptableMediaTypeException.class)
+    public ResponseEntity<Problem> handleNotAcceptableMediaType(NotAcceptableMediaTypeException ex,
+                                                                HttpServletRequest request) {
         return build(HttpStatus.NOT_ACCEPTABLE, ex.getMessage(), request, null, ex);
     }
 

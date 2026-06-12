@@ -21,6 +21,7 @@ import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import it.govpay.stampe.client.model.PaymentNotice;
+import it.govpay.stampe.client.model.Receipt;
 
 /**
  * Facade verso il microservizio {@code govpay-stampe}. Responsabilita':
@@ -51,6 +52,7 @@ public class StampeClient {
 
     /** Path del microservizio sul base-url (allineato a govpay-stampe.yaml). */
     private static final String PAYMENT_NOTICE_PATH = "/standard";
+    private static final String RECEIPT_PATH = "/receipt";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -67,10 +69,20 @@ public class StampeClient {
     @CircuitBreaker(name = "stampe")
     @Retry(name = "stampe")
     public void streamPaymentNotice(PaymentNotice payload, OutputStream output) {
+        streamToOutput(PAYMENT_NOTICE_PATH, payload, output);
+    }
+
+    @CircuitBreaker(name = "stampe")
+    @Retry(name = "stampe")
+    public void streamReceipt(Receipt payload, OutputStream output) {
+        streamToOutput(RECEIPT_PATH, payload, output);
+    }
+
+    private void streamToOutput(String path, Object payload, OutputStream output) {
         if (!StringUtils.hasText(baseUrl)) {
             throw new StampeNotConfiguredException();
         }
-        URI url = URI.create(baseUrl + PAYMENT_NOTICE_PATH);
+        URI url = URI.create(baseUrl + path);
         try {
             restTemplate.execute(url, HttpMethod.POST,
                     request -> {
@@ -83,11 +95,13 @@ public class StampeClient {
                         return null;
                     });
         } catch (CallNotPermittedException e) {
-            log.warn("Circuit breaker aperto sul client govpay-stampe: {}", e.getMessage());
+            log.warn("Circuit breaker aperto sul client govpay-stampe ({}): {}",
+                    path, e.getMessage());
             throw new StampeUnavailableException(
                     "Microservizio govpay-stampe momentaneamente non disponibile (circuit open).", e);
         } catch (RestClientException e) {
-            log.warn("Chiamata al microservizio govpay-stampe fallita: {}", e.getMessage());
+            log.warn("Chiamata al microservizio govpay-stampe fallita ({}): {}",
+                    path, e.getMessage());
             throw new StampeUnavailableException(
                     "Chiamata al microservizio govpay-stampe fallita.", e);
         }
