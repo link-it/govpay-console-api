@@ -15,7 +15,9 @@ import it.govpay.console.model.ListPendenze200Response;
 import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
 import it.govpay.console.model.Ricevuta;
+import it.govpay.console.model.Soggetto;
 import it.govpay.console.ricevuta.RicevutaService;
+import it.govpay.console.soggetto.InformazioniDebitoreService;
 import it.govpay.console.web.BadRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,9 +35,12 @@ public class PendenzaController implements PendenzeApi {
 
     private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
 
+    private static final Set<String> GET_INFO_DEBITORE_QUERY_PARAMS = Set.of();
+
     private final PendenzaService service;
     private final AvvisoService avvisoService;
     private final RicevutaService ricevutaService;
+    private final InformazioniDebitoreService informazioniDebitoreService;
 
     @Autowired(required = false)
     private HttpServletRequest currentRequest;
@@ -45,10 +50,12 @@ public class PendenzaController implements PendenzeApi {
 
     public PendenzaController(PendenzaService service,
                               AvvisoService avvisoService,
-                              RicevutaService ricevutaService) {
+                              RicevutaService ricevutaService,
+                              InformazioniDebitoreService informazioniDebitoreService) {
         this.service = service;
         this.avvisoService = avvisoService;
         this.ricevutaService = ricevutaService;
+        this.informazioniDebitoreService = informazioniDebitoreService;
     }
 
     @Override
@@ -98,6 +105,13 @@ public class PendenzaController implements PendenzeApi {
         ResponseEntity<Avviso> response = avvisoService.get(
                 idA2A, idPendenza, linguaSecondaria, currentRequest, currentResponse);
         return response != null ? response : ResponseEntity.ok().build();
+    }
+
+    @Override
+    public ResponseEntity<Soggetto> getInformazioniDebitore(String idA2A, String idPendenza) {
+        rejectUnsupportedQueryParams(currentRequest, GET_INFO_DEBITORE_QUERY_PARAMS);
+        return ResponseEntity.ok(
+                informazioniDebitoreService.get(idA2A, idPendenza, currentRequest));
     }
 
     /**

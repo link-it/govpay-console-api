@@ -248,6 +248,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /pendenze/{idA2A}/{idPendenza}/informazioniDebitore:
+    get:
+      tags:
+        - Pendenze
+      operationId: getInformazioniDebitore
+      summary: Dati anagrafici e contatti del debitore associato alla pendenza.
+      description: |
+        Ritorna l'oggetto `Soggetto` completo (dati anagrafici e contatti del
+        soggetto pagatore). Endpoint separato dal dettaglio pendenza per
+        minimizzare l'esposizione di dati personali (scope F della issue #9).
+
+        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
+        viene restituito 404 (no leak di esistenza).
+
+        **Audit GDPR**: ogni 200 scrive una riga in `gp_audit` con azione
+        `PENDENZA_VISUALIZZA_DEBITORE`, dettaglio JSON
+        `{idA2A, idPendenza, identificativoDebitore}` e IP del richiedente
+        (dal primo elemento di `X-Forwarded-For` se presente, altrimenti
+        `request.getRemoteAddr()`).
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPendenza
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+      responses:
+        '200':
+          description: Soggetto pagatore.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Soggetto'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Pendenza non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /pendenze/{idA2A}/{idPendenza}/ricevuta:
     get:
       tags:
