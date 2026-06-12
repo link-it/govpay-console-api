@@ -88,6 +88,7 @@ class PendenzaAclIntegrationTest {
         domA = new Dominio();
         domA.setCodDominio("11111111111");
         domA.setRagioneSociale("Dominio A");
+        domA.setAuxDigit(0);
         dominioRepository.save(domA);
 
         uoX = new UnitaOperativa();

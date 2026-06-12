@@ -27,7 +27,8 @@ public interface VersamentoRepository
     Page<Versamento> findAll(@Nullable Specification<Versamento> spec, Pageable pageable);
 
     @EntityGraph(attributePaths = {"dominio", "applicazione", "tipoVersamento", "unitaOperativa",
-            "tipoVersamentoDominio.tipoVersamento", "singoliVersamenti"})
+            "tipoVersamentoDominio.tipoVersamento", "singoliVersamenti",
+            "singoliVersamenti.ibanAccredito", "singoliVersamenti.ibanAppoggio", "documento"})
     @Query("select v from Versamento v where v.applicazione.codApplicazione = :idA2A and v.codVersamentoEnte = :idPendenza")
     Optional<Versamento> findDetail(@Param("idA2A") String idA2A, @Param("idPendenza") String idPendenza);
 }

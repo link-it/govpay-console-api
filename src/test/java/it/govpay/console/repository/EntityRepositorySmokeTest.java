@@ -38,6 +38,7 @@ class EntityRepositorySmokeTest {
         Dominio dominio = new Dominio();
         dominio.setCodDominio("12345678901");
         dominio.setRagioneSociale("Comune di Test");
+        dominio.setAuxDigit(0);
         em.persist(dominio);
 
         Applicazione applicazione = new Applicazione();

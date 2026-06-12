@@ -196,6 +196,7 @@ class PendenzaControllerIntegrationTest {
         Dominio d = new Dominio();
         d.setCodDominio(cod);
         d.setRagioneSociale(rs);
+        d.setAuxDigit(0);
         return dominioRepository.save(d);
     }
 

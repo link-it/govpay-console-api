@@ -84,11 +84,13 @@ class SecurityIntegrationTest {
         Dominio dominio1 = new Dominio();
         dominio1.setCodDominio("11111111111");
         dominio1.setRagioneSociale("Comune Uno");
+        dominio1.setAuxDigit(0);
         dominioRepository.save(dominio1);
 
         Dominio dominio2 = new Dominio();
         dominio2.setCodDominio("22222222222");
         dominio2.setRagioneSociale("Comune Due");
+        dominio2.setAuxDigit(0);
         dominioRepository.save(dominio2);
 
         UtenzaDominio link1 = new UtenzaDominio();

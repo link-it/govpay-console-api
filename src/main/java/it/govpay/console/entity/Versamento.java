@@ -148,6 +148,13 @@ public class Versamento {
     @JoinColumn(name = "id_tipo_versamento_dominio", nullable = false)
     private TipoVersamentoDominio tipoVersamentoDominio;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_documento")
+    private Documento documento;
+
+    @Column(name = "cod_rata", length = 35)
+    private String codRata;
+
     @OneToMany(mappedBy = "versamento", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("indiceDati ASC")
     private List<SingoloVersamento> singoliVersamenti = new ArrayList<>();
@@ -454,6 +461,22 @@ public class Versamento {
 
     public void setTipoVersamentoDominio(TipoVersamentoDominio tipoVersamentoDominio) {
         this.tipoVersamentoDominio = tipoVersamentoDominio;
+    }
+
+    public Documento getDocumento() {
+        return documento;
+    }
+
+    public void setDocumento(Documento documento) {
+        this.documento = documento;
+    }
+
+    public String getCodRata() {
+        return codRata;
+    }
+
+    public void setCodRata(String codRata) {
+        this.codRata = codRata;
     }
 
     public List<SingoloVersamento> getSingoliVersamenti() {

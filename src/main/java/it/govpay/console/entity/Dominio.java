@@ -2,9 +2,12 @@ package it.govpay.console.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
@@ -23,6 +26,16 @@ public class Dominio {
 
     @Column(name = "ragione_sociale", nullable = false, length = 70)
     private String ragioneSociale;
+
+    @Column(name = "aux_digit", nullable = false)
+    private Integer auxDigit;
+
+    @Column(name = "gln", length = 35)
+    private String gln;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_stazione")
+    private Stazione stazione;
 
     public Long getId() {
         return id;
@@ -46,5 +59,29 @@ public class Dominio {
 
     public void setRagioneSociale(String ragioneSociale) {
         this.ragioneSociale = ragioneSociale;
+    }
+
+    public Integer getAuxDigit() {
+        return auxDigit;
+    }
+
+    public void setAuxDigit(Integer auxDigit) {
+        this.auxDigit = auxDigit;
+    }
+
+    public String getGln() {
+        return gln;
+    }
+
+    public void setGln(String gln) {
+        this.gln = gln;
+    }
+
+    public Stazione getStazione() {
+        return stazione;
+    }
+
+    public void setStazione(Stazione stazione) {
+        this.stazione = stazione;
     }
 }

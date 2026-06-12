@@ -152,6 +152,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /pendenze/{idA2A}/{idPendenza}/avviso:
+    get:
+      tags:
+        - Pendenze
+      operationId: getPendenzaAvviso
+      summary: Avviso di pagamento associato a una pendenza.
+      description: |
+        Ritorna l'avviso di pagamento associato alla pendenza identificata da
+        `(idA2A, idPendenza)`. Il backend deriva `(idDominio, numeroAvviso)` dalla
+        pendenza, evitando al client il lookup esplicito.
+
+        Content negotiation tramite header `Accept`:
+        - `application/json` (default) → metadati locali dell'avviso (`Avviso`);
+        - `application/pdf` → stampa binaria generata dal microservizio
+          `govpay-stampe`. Endpoint allineato a V1 `/avvisi/{idDominio}/{numeroAvviso}`:
+          genera il PDF dell'avviso della singola pendenza anche quando
+          appartiene a un documento multi-rata. Il PDF aggregato dell'intero
+          documento e' una feature distinta, oggetto di issue dedicata.
+
+        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
+        viene restituito 404 (no leak di esistenza). Se la pendenza non ha
+        `numeroAvviso` (es. pendenza spontanea non ancora avvisata) viene
+        restituito 404.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPendenza
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: linguaSecondaria
+          in: query
+          required: false
+          description: |
+            Lingua secondaria per la stampa bilingue dell'avviso. Significativa
+            solo in `application/pdf`. Vedi schema `LinguaSecondaria`.
+          schema:
+            $ref: '#/components/schemas/LinguaSecondaria'
+      responses:
+        '200':
+          description: Avviso (formato dipende dall'header `Accept`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Avviso'
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: |
+            Pendenza non trovata, non visibile per l'operatore corrente, oppure
+            priva di `numeroAvviso`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: |
+            Header `Accept` non compatibile con `application/json` o `application/pdf`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Avviso PDF non applicabile a questa pendenza (Marca da Bollo Telematica).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: Errore di comunicazione con il microservizio `govpay-stampe`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   schemas:
 
@@ -326,12 +422,24 @@ components:
 
     LinguaSecondaria:
       type: string
-      description: Lingua secondaria per province bilingui. Default in italiano se assente.
+      description: |
+        Lingua secondaria per province bilingui.
+
+        Semantica equivalente a V1 (`it.govpay.core.beans.tracciati.LinguaSecondaria`):
+        - **`DE`/`EN`/`FR`/`SL`**: forza la stampa bilingue con la lingua indicata,
+          sovrascrivendo l'eventuale default impostato sulla pendenza.
+        - **`NONE`**: forza la stampa solo in italiano, sovrascrivendo l'eventuale
+          default bilingue impostato sulla pendenza. In V1 questo valore era
+          denominato `FALSE`; e' stato rinominato in `NONE` in V2 per leggibilita',
+          la semantica e' identica.
+        - **Parametro assente**: usa il default della pendenza (`proprietaPendenza.linguaSecondaria`).
+          Se anche il default e' assente, l'avviso e' in solo italiano.
       enum:
         - DE
         - EN
         - FR
         - SL
+        - NONE
 
     PendenzaExpand:
       type: string

@@ -48,9 +48,26 @@ public class SingoloVersamento {
     @Column(name = "metadata", columnDefinition = "TEXT")
     private String metadata;
 
+    @Column(name = "tipo_bollo", length = 2)
+    private String tipoBollo;
+
+    @Column(name = "hash_documento", length = 70)
+    private String hashDocumento;
+
+    @Column(name = "provincia_residenza", length = 2)
+    private String provinciaResidenza;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_versamento", nullable = false)
     private Versamento versamento;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_iban_accredito")
+    private IbanAccredito ibanAccredito;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_iban_appoggio")
+    private IbanAccredito ibanAppoggio;
 
     public Long getId() {
         return id;
@@ -138,5 +155,45 @@ public class SingoloVersamento {
 
     public void setVersamento(Versamento versamento) {
         this.versamento = versamento;
+    }
+
+    public IbanAccredito getIbanAccredito() {
+        return ibanAccredito;
+    }
+
+    public void setIbanAccredito(IbanAccredito ibanAccredito) {
+        this.ibanAccredito = ibanAccredito;
+    }
+
+    public IbanAccredito getIbanAppoggio() {
+        return ibanAppoggio;
+    }
+
+    public void setIbanAppoggio(IbanAccredito ibanAppoggio) {
+        this.ibanAppoggio = ibanAppoggio;
+    }
+
+    public String getTipoBollo() {
+        return tipoBollo;
+    }
+
+    public void setTipoBollo(String tipoBollo) {
+        this.tipoBollo = tipoBollo;
+    }
+
+    public String getHashDocumento() {
+        return hashDocumento;
+    }
+
+    public void setHashDocumento(String hashDocumento) {
+        this.hashDocumento = hashDocumento;
+    }
+
+    public String getProvinciaResidenza() {
+        return provinciaResidenza;
+    }
+
+    public void setProvinciaResidenza(String provinciaResidenza) {
+        this.provinciaResidenza = provinciaResidenza;
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,6 +22,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import it.govpay.console.avviso.AvvisoMbtException;
+import it.govpay.console.avviso.AvvisoNonAccettabileException;
+import it.govpay.console.avviso.StampeNotConfiguredException;
+import it.govpay.console.avviso.StampeUnavailableException;
 import it.govpay.console.model.Problem;
 import it.govpay.console.model.ProblemErrorsInner;
 import jakarta.persistence.OptimisticLockException;
@@ -100,6 +105,38 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<Problem> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(AvvisoNonAccettabileException.class)
+    public ResponseEntity<Problem> handleNonAccettabile(AvvisoNonAccettabileException ex,
+                                                       HttpServletRequest request) {
+        return build(HttpStatus.NOT_ACCEPTABLE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Problem> handleMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException ex,
+                                                                HttpServletRequest request) {
+        return build(HttpStatus.NOT_ACCEPTABLE,
+                "Accept header non compatibile coi content-type supportati.",
+                request, null, ex);
+    }
+
+    @ExceptionHandler(AvvisoMbtException.class)
+    public ResponseEntity<Problem> handleAvvisoMbt(AvvisoMbtException ex,
+                                                   HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(StampeUnavailableException.class)
+    public ResponseEntity<Problem> handleStampeUnavailable(StampeUnavailableException ex,
+                                                          HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(StampeNotConfiguredException.class)
+    public ResponseEntity<Problem> handleStampeNotConfigured(StampeNotConfiguredException ex,
+                                                             HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
     }
 
     @ExceptionHandler(Exception.class)
