@@ -177,12 +177,12 @@ public class RicevutaPdfPayloadMapper {
      */
     static ReceiptVersion mapVersione(String versione) {
         if (versione == null) {
-            return ReceiptVersion._240;
+            return ReceiptVersion.SANP_240;
         }
         return switch (versione) {
-            case "SANP_321_V2", "RPTV1_RTV2", "RPTSANP230_RTV2" -> ReceiptVersion._240_V2;
-            case "SANP_240", "RPTV2_RTV1" -> ReceiptVersion._240;
-            default -> ReceiptVersion._230;
+            case "SANP_321_V2", "RPTV1_RTV2", "RPTSANP230_RTV2" -> ReceiptVersion.SANP_240_V2;
+            case "SANP_240", "RPTV2_RTV1" -> ReceiptVersion.SANP_240;
+            default -> ReceiptVersion.SANP_230;
         };
     }
 

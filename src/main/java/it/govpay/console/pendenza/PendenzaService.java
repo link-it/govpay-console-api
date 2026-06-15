@@ -134,12 +134,16 @@ public class PendenzaService {
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
 
+        // Spring Data JPA 4.x: Specification.allOf rifiuta null. Filtriamo i predicati assenti.
         Specification<Versamento> spec = Specification.allOf(
-                PendenzaSpecifications.idPendenzaPartial(query.idPendenza()),
-                PendenzaSpecifications.numeroAvvisoExact(query.numeroAvviso()),
-                PendenzaSpecifications.idDominioExact(query.idDominio()),
-                PendenzaSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
-                PendenzaSpecifications.visibiliPerOperatore(operatore));
+                java.util.stream.Stream.of(
+                        PendenzaSpecifications.idPendenzaPartial(query.idPendenza()),
+                        PendenzaSpecifications.numeroAvvisoExact(query.numeroAvviso()),
+                        PendenzaSpecifications.idDominioExact(query.idDominio()),
+                        PendenzaSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
+                        PendenzaSpecifications.visibiliPerOperatore(operatore))
+                .filter(java.util.Objects::nonNull)
+                .toList());
 
         ListPendenze200Response response = new ListPendenze200Response();
         List<Versamento> rows;

@@ -23,9 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -79,7 +79,7 @@ class RicevutaIntegrationTest {
     @Autowired private VersamentoRepository versamentoRepository;
     @Autowired private RptRepository rptRepository;
 
-    @MockBean private StampeClient stampeClient;
+    @MockitoBean private StampeClient stampeClient;
 
     private Dominio dom;
     private TipoVersamento tv;

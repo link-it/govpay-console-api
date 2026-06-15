@@ -1,14 +1,15 @@
 package it.govpay.console;
 
 import java.time.Clock;
+import java.util.TimeZone;
 
 import org.openapitools.jackson.nullable.JsonNullableModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -33,8 +34,8 @@ public class GovPayConsoleApplication extends SpringBootServletInitializer {
      * Impostazione del timezone nel mapper Jackson
      */
     @Bean
-    public Jackson2ObjectMapperBuilderCustomizer jsonCustomizer() {
-        return builder -> builder.timeZone(this.timeZone);
+    public JsonMapperBuilderCustomizer jsonCustomizer() {
+        return builder -> builder.defaultTimeZone(TimeZone.getTimeZone(this.timeZone));
     }
 
     /**

@@ -6,8 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import it.govpay.console.security.OperatoreCorrente;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,7 +54,7 @@ public class AuditService {
     private String serializeDettaglio(Map<String, Object> dettaglio) {
         try {
             return objectMapper.writeValueAsString(dettaglio != null ? dettaglio : Map.of());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Audit: serializzazione dettaglio fallita, scrivo placeholder", e);
             return "{}";
         }

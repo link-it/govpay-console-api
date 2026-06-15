@@ -3,7 +3,7 @@ package it.govpay.console.avviso;
 import java.time.Duration;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -21,8 +21,8 @@ public class StampeConfig {
             @Value("${app.stampe.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${app.stampe.read-timeout-ms:30000}") int readTimeoutMs) {
         return builder
-                .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .setReadTimeout(Duration.ofMillis(readTimeoutMs))
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .readTimeout(Duration.ofMillis(readTimeoutMs))
                 .build();
     }
 
