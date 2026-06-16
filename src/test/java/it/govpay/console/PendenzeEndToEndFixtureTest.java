@@ -34,7 +34,7 @@ import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.security.GovpayPasswordEncoder;
+import it.govpay.common.auth.GovpayPasswordEncoder;
 
 /**
  * Test E2E che usa la fixture SQL {@code /data-pendenze-test.sql} per coprire

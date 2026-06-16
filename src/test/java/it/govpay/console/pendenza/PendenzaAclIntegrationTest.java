@@ -39,7 +39,7 @@ import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
 import it.govpay.console.repository.VersamentoRepository;
-import it.govpay.console.security.GovpayPasswordEncoder;
+import it.govpay.common.auth.GovpayPasswordEncoder;
 
 @SpringBootTest
 @AutoConfigureMockMvc

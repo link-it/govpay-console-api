@@ -56,7 +56,7 @@ import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.VersamentoRepository;
-import it.govpay.console.security.GovpayPasswordEncoder;
+import it.govpay.common.auth.GovpayPasswordEncoder;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.PaymentNotice;
 import org.mockito.ArgumentCaptor;

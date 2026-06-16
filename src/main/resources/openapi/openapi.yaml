@@ -18,8 +18,132 @@ servers:
 tags:
   - name: Pendenze
     description: Pagamenti in attesa e spontanei.
+  - name: Profilo
+    description: Profilo dell'utenza autenticata corrente.
+  - name: Autenticazione
+    description: Endpoint di login, logout e discovery dei metodi di autenticazione.
 
 paths:
+
+  /profilo:
+    get:
+      tags:
+        - Profilo
+      operationId: getProfilo
+      summary: Profilo dell'utenza autenticata corrente.
+      description: |
+        Ritorna nome, principal, metodo di autenticazione applicato, domini
+        e tipi pendenza su cui l'utenza opera, ruoli e ACL piatte.
+
+        Issue link-it/govpay-console-api#10 scope B. Cache-Control:
+        `private, max-age=60` (dato personale, niente caching condiviso).
+      responses:
+        '200':
+          description: Profilo dell'utenza autenticata.
+          headers:
+            Cache-Control:
+              description: 'private, max-age=60'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profilo'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /auth/login:
+    post:
+      tags:
+        - Autenticazione
+      operationId: login
+      summary: Login con credenziali username/password.
+      description: |
+        Autentica l'utenza tramite credenziali in body JSON e crea una
+        sessione lato server. La response porta il `Profilo` dell'utenza
+        appena autenticata (evita un secondo round-trip a `GET /profilo`)
+        e setta i cookie `JSESSIONID` (sessione) e `XSRF-TOKEN` (CSRF).
+
+        Issue link-it/govpay-console-api#10 scope C. Limitazione anti
+        brute-force: rate-limit per IP del chiamante.
+
+        Audit `gp_audit`:
+        - Successo → `PROFILO_LOGIN` con `dettaglio.metodo = FORM`.
+        - Fallimento (per principal noto) → `PROFILO_LOGIN_FAILED` con
+          `dettaglio.motivo` ∈ {BAD_CREDENTIALS, DISABLED, RATE_LIMITED}.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RichiestaLogin'
+      responses:
+        '200':
+          description: |
+            Login riuscito. Cookie di sessione (`JSESSIONID`) e CSRF
+            (`XSRF-TOKEN`) impostati. Body con il profilo utente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profilo'
+        '400':
+          description: Body JSON malformato o campi obbligatori mancanti.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Credenziali non valide o utenza disabilitata.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: |
+            Troppi tentativi di login dallo stesso IP. Riprovare piu' tardi.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /auth/logout:
+    post:
+      tags:
+        - Autenticazione
+      operationId: logout
+      summary: Logout esplicito (invalidazione sessione).
+      description: |
+        Invalida la sessione lato server e cancella i cookie `JSESSIONID`
+        e `XSRF-TOKEN`. Richiede header CSRF (`X-XSRF-TOKEN`) coerente con
+        il cookie quando la richiesta porta una sessione attiva e nessun
+        header `Authorization` (CSRF condizionale).
+
+        **Semantica idempotente**: ritorna `204` anche quando non c'e' una
+        sessione da invalidare (es. retry dopo timeout client, doppio click
+        sul pulsante di logout). L'audit `PROFILO_LOGOUT` viene scritto
+        solo se il principal era effettivamente autenticato; altrimenti
+        l'operazione e' un no-op silenzioso.
+
+        Issue link-it/govpay-console-api#10 scope D. Audit `gp_audit`:
+        `PROFILO_LOGOUT` con `dettaglio.motivo = USER_REQUEST` (principal
+        catturato pre-clear del context).
+      responses:
+        '204':
+          description: |
+            Logout effettuato (o no-op idempotente se non c'era sessione).
+        '403':
+          description: |
+            Token CSRF mancante o non coerente. Si verifica solo se la
+            richiesta porta una sessione attiva e nessun header
+            `Authorization` (CSRF e' condizionale).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /pendenze:
     get:
@@ -897,6 +1021,177 @@ components:
           format: email
         cellulare:
           type: string
+
+    AutenticazioneEnum:
+      type: string
+      description: |
+        Codice del metodo di autenticazione con cui l'utenza si e' autenticata.
+        Valori allineati alla property `authType` delle chain V1 di GovPay
+        e all'enum `it.govpay.common.auth.spi.AuthType` della libreria
+        `govpay-common-auth`.
+      enum:
+        - BASIC
+        - LDAP
+        - FORM
+        - SSL
+        - SSL_HEADER
+        - HEADER
+        - API_KEY
+        - SPID
+        - SESSION
+        - OAUTH2
+        - PUBLIC
+      example: FORM
+
+    RuoloRef:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Identificativo del ruolo (es. nome del role configurato).
+          example: AMMINISTRATORE
+
+    Acl:
+      type: object
+      required:
+        - servizio
+        - autorizzazioni
+      description: |
+        Entry ACL appiattita: per ciascun servizio elencato, l'utenza ha la lista
+        di autorizzazioni associate. Replica lo schema V1 `aclPost`.
+      properties:
+        servizio:
+          type: string
+          description: Servizio oggetto dell'autorizzazione.
+          enum:
+            - "Anagrafica PagoPA"
+            - "Anagrafica Creditore"
+            - "Anagrafica Applicazioni"
+            - "Anagrafica Ruoli"
+            - "Pagamenti"
+            - "Pendenze"
+            - "Rendicontazioni e Incassi"
+            - "Giornale degli Eventi"
+            - "Configurazione e manutenzione"
+        autorizzazioni:
+          type: array
+          items:
+            type: string
+            enum:
+              - R
+              - W
+          example:
+            - R
+            - W
+        ruolo:
+          type: string
+          description: |
+            Identificativo del ruolo che ha originato la entry ACL (opzionale,
+            valorizzato solo se l'ACL deriva da un ruolo del catalogo invece
+            che da un'ACL diretta sull'utenza).
+          example: AMMINISTRATORE
+
+    Profilo:
+      type: object
+      required:
+        - nome
+        - autenticazione
+      description: |
+        Profilo dell'utenza autenticata corrente. Ritornato da `GET /profilo` e
+        come body di `POST /auth/login`.
+
+        Domini, tipiPendenza e ruoli espongono singolarmente la collezione di
+        risorse su cui l'utenza puo' operare; quando l'utenza ha autorizzazione
+        "star" (tutti i domini / tutti i tipi pendenza), la collezione contiene
+        un singolo elemento placeholder con id `*` e descrizione `Tutti`
+        (compatibilita' V1).
+      properties:
+        nome:
+          type: string
+          description: Display name dell'utenza (per OPERATORE = operatori.nome).
+          example: Mario Rossi
+        principal:
+          type: string
+          description: Identificativo dell'utenza autenticata (username, CF, subject del cert, ...).
+          example: m.rossi
+        autenticazione:
+          $ref: '#/components/schemas/AutenticazioneEnum'
+        domini:
+          type: array
+          description: Domini su cui l'utenza puo' operare.
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          description: Tipi pendenza su cui l'utenza puo' operare.
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          description: Ruoli assegnati all'utenza.
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          description: ACL appiattite dell'utenza (servizio + autorizzazioni R/W).
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    RichiestaLogin:
+      type: object
+      required:
+        - username
+        - password
+      description: |
+        Body di `POST /auth/login`. Sostituisce il flusso V1 (Basic + first
+        request) con un endpoint dedicato che accetta credenziali in JSON.
+      properties:
+        username:
+          type: string
+          example: m.rossi
+        password:
+          type: string
+          format: password
+
+    MetodoAutenticazione:
+      type: object
+      required:
+        - codice
+      description: |
+        Metodo di autenticazione esposto dalla console-api, con l'URL da cui
+        il client puo' iniziare il flow corrispondente.
+      properties:
+        codice:
+          $ref: '#/components/schemas/AutenticazioneEnum'
+        etichetta:
+          type: string
+          description: Label localizzata per la UI (es. "Username e password", "SPID", "Carta CIE").
+          example: Username e password
+        urlInizio:
+          type: string
+          description: |
+            URL per iniziare il flow (es. `/auth/login` per FORM, redirect IdP per SPID).
+            Puo' essere relativo (URL interno) o assoluto (redirect esterno).
+          example: /auth/login
+        descrizione:
+          type: string
+          description: Descrizione opzionale del metodo, per UI di selezione.
+
+    MetodiAutenticazione:
+      type: object
+      required:
+        - metodi
+      description: |
+        Risposta di `GET /auth/methods`. Endpoint pubblico che permette al
+        frontend di renderizzare i pulsanti di login appropriati senza
+        hard-coding dei metodi server-side.
+      properties:
+        metodi:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetodoAutenticazione'
 
   parameters:
 

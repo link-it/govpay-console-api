@@ -51,7 +51,7 @@ import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.VersamentoRepository;
-import it.govpay.console.security.GovpayPasswordEncoder;
+import it.govpay.common.auth.GovpayPasswordEncoder;
 import it.govpay.stampe.client.model.Receipt;
 import it.govpay.stampe.client.model.ReceiptStatus;
 
