@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import it.govpay.common.auth.AuthTypeAccessor;
+import it.govpay.common.auth.AuthTypeStampingFilter;
 import it.govpay.common.auth.GovpayPasswordEncoder;
 import it.govpay.common.auth.spi.AuthType;
 import it.govpay.console.entity.Operatore;
@@ -41,7 +42,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Verifica end-to-end della <b>precedenza tra metodi di autenticazione</b>
- * sulla chain unica (issue #10): a parita' di chain con piu' metodi attivi
+ * sulla chain unica: a parita' di chain con piu' metodi attivi
  * contemporaneamente, quale "vince" dipende dall'ordine dei filter,
  * dall'eager/lazy del provider e dalla semantica del SecurityContext
  * (overwrite vs preserve).
@@ -203,6 +204,56 @@ class MultiAuthPrecedenceIntegrationTest {
                 .andExpect(jsonPath("$.authType", is("API_KEY")));
     }
 
+    // ---------- 7a. Sessione FORM (alice) + Basic (alice) → FORM (no BASIC) ----------
+    // Caso sottile sollevato come bug: Spring BasicAuthFilter skippa per stesso
+    // username (`authenticationIsRequired=false`); senza la persistenza
+    // (AuthType, principal) sulla session, lo stamping cadeva sul cue
+    // Basic header e ritornava BASIC, ingannevole. Adesso il detect legge
+    // la coppia salvata su session e ritorna FORM.
+    @Test
+    void sessionFormPreservedWhenBasicHeaderForSameUser() throws Exception {
+        MockHttpSession session = sessionWithSecurityContextFor("alice");
+        mvc.perform(get("/whoami")
+                        .session(session)
+                        .with(httpBasic("alice", "alicepwd")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.principal", is("alice")))
+                .andExpect(jsonPath("$.authType", is("FORM")));
+    }
+
+    // ---------- 7b. ApiKey (alice) + Basic (alice) → API_KEY (no BASIC) ----------
+    // Stesso pattern: ApiKey filter ha autenticato e self-stampato la coppia
+    // (API_KEY, alice). BasicAuthFilter skippa per stesso user. Lo stamping
+    // detect trova il preset request coerente (principal=alice) e ritorna
+    // API_KEY anziche' cadere sul cue Basic.
+    @Test
+    void apiKeyPreservedWhenBasicHeaderForSameUser() throws Exception {
+        mvc.perform(get("/whoami")
+                        .header("X-Govpay-API-ID", "apikey-id")
+                        .header("X-Govpay-API-Key", "apikey-secret")
+                        .with(httpBasic("apikey-id", "any-pwd-because-skipped")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.principal", is("apikey-id")))
+                .andExpect(jsonPath("$.authType", is("API_KEY")));
+    }
+
+    // ---------- 7c. Sessione FORM (alice) + Basic (alice, password ERRATA) ----------
+    // Variazione del 7a: stesso user, ma con password sbagliata. Spring
+    // BasicAuthFilter skippa comunque (non valida le credenziali) → sessione
+    // resta valida, stamping = FORM. Documenta che credenziali Basic errate
+    // per lo stesso principal della sessione NON sono mai validate quando
+    // si presenta una sessione attiva, e NON producono 401.
+    @Test
+    void sessionFormPreservedEvenWithWrongBasicPasswordForSameUser() throws Exception {
+        MockHttpSession session = sessionWithSecurityContextFor("alice");
+        mvc.perform(get("/whoami")
+                        .session(session)
+                        .with(httpBasic("alice", "WRONG-PASSWORD")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.principal", is("alice")))
+                .andExpect(jsonPath("$.authType", is("FORM")));
+    }
+
     // ---------- 8. Bearer JWT → OAUTH2 stamping ----------
     // Caso end-to-end coperto a UNIT level (libreria) da
     // AuthTypeStampingFilterTest#stampsOauth2WhenAuthenticatedWithJwtAuthenticationToken,
@@ -221,6 +272,12 @@ class MultiAuthPrecedenceIntegrationTest {
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
                 principal, "n/a", List.of(new SimpleGrantedAuthority("ROLE_OPERATORE"))));
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, ctx);
+        // Simula la coppia (AuthType, principal) che il JsonUsernamePasswordAuthenticationFilter
+        // setterebbe al login FORM. Senza, lo stamping filter cade su un cue
+        // (es. Authorization: Basic header) potenzialmente ingannevole.
+        session.setAttribute(AuthTypeStampingFilter.SESSION_ATTRIBUTE,
+                it.govpay.common.auth.spi.AuthType.FORM);
+        session.setAttribute(AuthTypeStampingFilter.SESSION_ATTRIBUTE_PRINCIPAL, principal);
         return session;
     }
 

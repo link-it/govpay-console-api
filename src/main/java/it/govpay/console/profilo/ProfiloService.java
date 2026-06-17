@@ -30,18 +30,16 @@ import it.govpay.console.security.OperatoreCorrente;
 /**
  * Costruisce il {@link Profilo} per l'utenza autenticata corrente:
  * <ul>
- *   <li>nome operatore (o principal se non c'e' operatore associato),</li>
- *   <li>liste {@code domini} / {@code tipiPendenza} risolte dal data layer,
- *       con singolo placeholder {@code {id:"*", desc:"Tutti"}} per la
- *       gestione V1 della star authorization,</li>
- *   <li>{@code ruoli} dal CSV {@code utenze.ruoli},</li>
- *   <li>{@code acl} appiattite per servizio + diritti R/W dalla
- *       {@link AclRepository}.</li>
+ *   <li>nome operatore (o principal se non c'e' operatore associato);</li>
+ *   <li>liste {@code domini} / {@code tipiPendenza} risolte dal data
+ *       layer, con singolo placeholder {@code {id:"*", desc:"Tutti"}}
+ *       quando l'utenza ha autorizzazione "star" (visibilita' totale);</li>
+ *   <li>{@code ruoli} dal CSV {@code utenze.ruoli};</li>
+ *   <li>{@code acl} appiattite per servizio + diritti R/W.</li>
  * </ul>
  *
- * <p>L'{@code autenticazione} (enum {@code AutenticazioneEnum}) non viene
- * settato qui: e' compito del chiamante che ha accesso alla
- * {@code HttpServletRequest} via {@code AuthTypeAccessor}.
+ * <p>{@code autenticazione} non viene settato qui: e' compito del chiamante
+ * che ha accesso all'{@code HttpServletRequest} (via {@code AuthTypeAccessor}).
  */
 @Service
 public class ProfiloService {
@@ -96,10 +94,10 @@ public class ProfiloService {
             placeholder.setRagioneSociale(STAR_LABEL);
             return List.of(placeholder);
         }
-        // V1 fidelity (UtentiDAO.getDominiAutorizzati): l'operatore vede un dominio se
-        // ha autorizzazione su tutto il dominio (utenze_domini.id_uo IS NULL) OPPURE
-        // su almeno una sua UO. Senza la fusione, un operatore autorizzato solo per UO
-        // riceveva domini=[] (regressione vs V1 segnalata).
+        // Un operatore vede un dominio quando ha autorizzazione su tutto il
+        // dominio (utenze_domini.id_uo IS NULL) OPPURE su almeno una delle
+        // sue UO: bisogna unire i due insiemi per non perdere il dominio
+        // padre quando l'autorizzazione esiste solo per UO.
         Set<Long> idDomini = new LinkedHashSet<>(operatore.idDominiInteri());
         if (!operatore.idUoVisibili().isEmpty()) {
             idDomini.addAll(unitaOperativaRepository.findDistinctDominioIdsByIdIn(operatore.idUoVisibili()));
@@ -169,7 +167,7 @@ public class ProfiloService {
     private static Acl toAcl(it.govpay.console.entity.Acl entity) {
         Acl.ServizioEnum servizio = SERVIZIO_LOOKUP.get(entity.getServizio());
         if (servizio == null) {
-            return null; // servizio fuori dall'enum V1 → skip
+            return null; // servizio fuori dall'enum noto → skip
         }
         Acl acl = new Acl();
         acl.setServizio(servizio);

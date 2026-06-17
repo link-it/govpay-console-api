@@ -108,11 +108,10 @@ class ProfiloControllerIntegrationTest {
     }
 
     /**
-     * Regressione: utenza autorizzata SOLO su una UO specifica di un dominio
-     * (riga {@code utenze_domini} con {@code id_uo IS NOT NULL}, nessuna riga
-     * con {@code id_uo IS NULL}). V1 (UtentiDAO.getDominiAutorizzati)
-     * restituisce comunque il dominio padre; V2 prima del fix lo perdeva
-     * perche' {@code buildDomini} guardava solo {@code idDominiInteri}.
+     * Utenza autorizzata SOLO su una UO specifica di un dominio (riga
+     * {@code utenze_domini} con {@code id_uo IS NOT NULL}, nessuna riga
+     * con {@code id_uo IS NULL}): il dominio padre deve comunque
+     * comparire in {@code Profilo.domini}.
      */
     @Test
     void returnsParentDominioWhenAuthorizationIsUoScoped() throws Exception {

@@ -323,6 +323,42 @@
                 </configuration>
             </plugin>
 
+            <!-- Espone le dipendenze come property con la sintassi
+                 ${groupId:artifactId:type[:classifier]} = path al jar nel
+                 repository locale Maven. Serve a Surefire per costruire
+                 l'argLine -javaagent puntando a byte-buddy-agent senza
+                 hard-codare il path. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>properties</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Mockito @MockitoSpyBean / @MockitoBean usano il mock-maker
+                 inline che richiede ByteBuddy come Java agent. Su JDK 25+
+                 il self-attach genera solo warning per ora ma sara'
+                 disabilitato by-default; piu' in generale, in ambienti
+                 CI con `-XX:-EnableDynamicAgentLoading` il self-attach
+                 fallisce gia' oggi. Configurando esplicitamente -javaagent
+                 i test sono deterministici su qualunque JDK.
+                 @{argLine} preserva l'argLine impostato dal JaCoCo
+                 prepare-agent (late-binding Maven); senza il prefisso, la
+                 coverage non viene piu' raccolta. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar}</argLine>
+                </configuration>
+            </plugin>
+
             <!-- OpenAPI Generator Maven Plugin -->
             <plugin>
                 <groupId>org.openapitools</groupId>

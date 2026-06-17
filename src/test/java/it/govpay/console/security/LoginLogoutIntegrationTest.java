@@ -33,17 +33,16 @@ import it.govpay.console.repository.UtenzaRepository;
 import jakarta.servlet.http.Cookie;
 
 /**
- * Verifica end-to-end di {@code POST /auth/login} e {@code POST /auth/logout}
- * (scope C+D issue #10):
+ * Verifica end-to-end di {@code POST /auth/login} e {@code POST /auth/logout}:
  * <ul>
  *   <li>login con credenziali valide → 200 + body {@code Profilo} +
- *       cookie {@code JSESSIONID} + cookie {@code XSRF-TOKEN};</li>
- *   <li>login con password errata → 401 {@code application/problem+json};</li>
- *   <li>login con utenza disabilitata → 401 {@code application/problem+json};</li>
+ *       cookie {@code JSESSIONID} + {@code XSRF-TOKEN};</li>
+ *   <li>login con password errata / utenza disabilitata → 401
+ *       {@code application/problem+json};</li>
  *   <li>login con body malformato → 400 {@code application/problem+json};</li>
  *   <li>logout con sessione valida e header CSRF → 204;</li>
- *   <li>logout senza sessione → 204 (idempotente, CSRF condizionalmente
- *       ignorato se non c'e' session id).</li>
+ *   <li>logout senza sessione → 204 (idempotente; il CSRF e' condizionale
+ *       e viene ignorato in assenza di session id).</li>
  * </ul>
  */
 @SpringBootTest

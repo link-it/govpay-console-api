@@ -15,14 +15,13 @@ import it.govpay.console.profilo.ProfiloService;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Implementazione console-api della SPI {@link JsonLoginResponseWriter}.
- * Sul successo di {@code POST /auth/login} ritorna sulla stessa response
- * il {@link Profilo} dell'utenza appena autenticata, evitando un secondo
- * round-trip {@code GET /profilo} dal frontend (scope C issue #10).
+ * Implementazione di {@link JsonLoginResponseWriter} che, sul successo
+ * di {@code POST /auth/login}, scrive il {@link Profilo} dell'utenza
+ * autenticata come body della response — il frontend non deve fare un
+ * secondo round-trip a {@code GET /profilo}.
  *
- * <p>Il metodo di autenticazione e' sempre {@code FORM}: questo writer
- * e' invocato solo dal {@code JsonUsernamePasswordAuthenticationFilter}
- * (la libreria non riusa questo SPI per BASIC/SSL/...).
+ * <p>{@code autenticazione} viene fissata a {@code FORM}: la SPI e'
+ * invocata solo dal flusso JSON login, niente ambiguita' di metodo.
  */
 @Component
 public class ConsoleJsonLoginResponseWriter implements JsonLoginResponseWriter {

@@ -110,6 +110,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /auth/methods:
+    get:
+      tags:
+        - Autenticazione
+      operationId: getAuthMethods
+      summary: Metodi di autenticazione attivi sul server.
+      description: |
+        Discovery dei metodi di autenticazione abilitati lato server, cosi'
+        il frontend puo' renderizzare i pulsanti di login senza hard-coding.
+
+        **Endpoint pubblico** (no auth). `Cache-Control: public, max-age=300`
+        perche' la risposta dipende solo dalla configurazione lato server e
+        un short TTL evita round-trip ridondanti.
+
+        Issue link-it/govpay-console-api#10 scope E.
+      responses:
+        '200':
+          description: Lista dei metodi attivi.
+          headers:
+            Cache-Control:
+              description: 'public, max-age=300'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetodiAutenticazione'
+
   /auth/logout:
     post:
       tags:

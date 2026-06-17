@@ -16,17 +16,15 @@ import java.time.Duration;
 
 /**
  * Endpoint {@code GET /profilo}: ritorna il {@link Profilo} dell'utenza
- * autenticata corrente. Issue link-it/govpay-console-api#10 scope B.
+ * autenticata corrente.
  *
- * <p>{@code Profilo.autenticazione} viene derivato dal cue
- * dell'{@link AuthTypeAccessor}: tipicamente {@code BASIC} se l'utenza
- * arriva con header Basic, {@code FORM} se dopo login JSON con cookie
- * sessione, ecc. L'autenticazione e' stata gia' validata dalla chain di
- * common-auth: se la request arriva qui significa che il SecurityContext
- * e' valorizzato.
+ * <p>{@code Profilo.autenticazione} viene derivato via
+ * {@link AuthTypeAccessor} dal marker stampato dall'{@code AuthTypeStampingFilter}.
+ * Se la request arriva qui, il {@code SecurityContext} e' gia' stato
+ * valorizzato dalla chain di sicurezza.
  *
- * <p>Cache-Control: {@code private, max-age=60}. Dato personale, niente
- * caching condiviso; piccolo TTL per ridurre carico DB sulle UI che lo
+ * <p>Cache-Control: {@code private, max-age=60}. Dato personale (niente
+ * caching condiviso); short TTL per ridurre carico DB sulle UI che lo
  * rinfrescano spesso (sidebar profilo).
  */
 @RestController

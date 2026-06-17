@@ -10,20 +10,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Espone il file {@code openapi.yaml} sorgente come endpoint statico, cosi'
- * SpringDoc/Swagger UI possono usarlo come fonte di verita' della
- * documentazione invece delle annotation {@code @Operation}/{@code @ApiResponse}
- * generate da {@code openapi-generator-maven-plugin}.
- *
- * <p><b>Motivazione</b>: il generator 7.23 ha un bug per cui aggrega tutti i
- * content-type di un'operation e li ri-applica a OGNI response. Esempio: una
- * 200 che produce solo {@code application/json} si ritrova annotata anche
- * con {@code application/problem+json}, e la doc esposta da SpringDoc
- * mostrerebbe quel media type fuorviante per il caso di successo.
- *
- * <p>Tenendo {@code springdoc.api-docs.enabled=false} si disattiva lo
- * scanning delle annotation e Swagger UI legge esclusivamente da questo
- * endpoint il YAML committato dal team, che e' la spec autorevole della V2.
+ * Espone il file {@code openapi.yaml} sorgente come endpoint statico.
+ * Swagger UI lo carica come spec autorevole tramite
+ * {@code springdoc.swagger-ui.url}, evitando la spec auto-generata da
+ * {@code @Operation}/{@code @ApiResponse} (che {@code openapi-generator}
+ * popola in modo inaccurato sui media type per response).
  */
 @RestController
 public class OpenApiSpecController {

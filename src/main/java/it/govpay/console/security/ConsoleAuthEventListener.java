@@ -22,31 +22,29 @@ import it.govpay.console.repository.UtenzaRepository;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * Bridge tra l'{@link AuthEventListener} della libreria common-auth e il
- * sotto-sistema di audit di console-api ({@code AuditService}, scope H
- * dell'issue #9).
+ * Bridge tra l'{@link AuthEventListener} della libreria common-auth e
+ * l'{@link AuditWriter}: traduce gli eventi di autenticazione in righe
+ * {@code gp_audit}.
  *
- * <p>Politica audit:
+ * <p>Politica:
  * <ul>
- *   <li>{@code onLoginSuccess} → riga {@code PROFILO_LOGIN} con
- *       {@code dettaglio.metodo} = tipo di auth applicato; idOperatore
- *       risolto via {@link CurrentOperatorService} (SecurityContext gia'
- *       popolato dal filter di Spring Security al momento del callback).</li>
- *   <li>{@code onLoginFailed} → audit DB best-effort: se l'{@code
- *       attemptedPrincipal} esiste in {@code utenze} risolviamo il suo
- *       {@code Operatore} e scriviamo {@code PROFILO_LOGIN_FAILED} con
- *       {@code dettaglio.motivo}. Se principal sconosciuto o senza Operatore
- *       associato → solo log (V1 voleva operatore="anonymous" ma lo schema
- *       V2 di {@code gp_audit} non lo supporta).</li>
- *   <li>{@code onLogout} → riga {@code PROFILO_LOGOUT} con
- *       {@code dettaglio.motivo} = "USER_REQUEST"; principal arriva
- *       come argomento (catturato pre-clear del context dal
- *       {@code GovpayLogoutSuccessHandler}), lookup
+ *   <li>{@code onLoginSuccess} → {@code PROFILO_LOGIN} con
+ *       {@code dettaglio.metodo} = tipo di auth; idOperatore risolto via
+ *       {@link CurrentOperatorService}.</li>
+ *   <li>{@code onLoginFailed} → {@code PROFILO_LOGIN_FAILED} best-effort:
+ *       se l'{@code attemptedPrincipal} esiste in {@code utenze} si
+ *       risolve l'{@code Operatore} e si scrive con
+ *       {@code dettaglio.motivo}; per principal sconosciuti o senza
+ *       Operatore associato si registra solo a log (lo schema di
+ *       {@code gp_audit} non ammette riferimenti anonimi).</li>
+ *   <li>{@code onLogout} → {@code PROFILO_LOGOUT} con
+ *       {@code dettaglio.motivo = USER_REQUEST}; il principal arriva come
+ *       argomento del callback (catturato pre-clear del context), lookup
  *       Utenza+Operatore in DB.</li>
  * </ul>
  *
- * <p>Audit failure-safe: nessuna exception viene rilanciata al chiamante.
- * Il pattern e' lo stesso di {@link AuditWriter} (scope H issue #9).
+ * <p>Audit failure-safe: ogni branch e' wrappato in try/catch e non
+ * propaga eccezioni al chiamante.
  */
 @Component
 public class ConsoleAuthEventListener implements AuthEventListener {
