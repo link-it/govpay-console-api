@@ -26,6 +26,8 @@ tags:
     description: Anagrafica degli intermediari pagoPA.
   - name: Stazioni
     description: Anagrafica delle stazioni di un intermediario.
+  - name: Connettori
+    description: Connettori pagoPA di un intermediario (uno per canale).
 
 paths:
 
@@ -1086,6 +1088,552 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /intermediari/{idIntermediario}/connettori/pagopa:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopa
+      summary: Connettore pagoPA (PDD) dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA (PDD).
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopa'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopa
+      summary: Sostituisce la configurazione del connettore pagoPA (PDD) (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopa'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopa
+      summary: Imposta le credenziali del connettore pagoPA (PDD) (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /intermediari/{idIntermediario}/connettori/pagopa-aca:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopaAca
+      summary: Connettore pagoPA ACA dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA ACA.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaAca'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopaAca
+      summary: Sostituisce la configurazione del connettore pagoPA ACA (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopaAca'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaAca'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa-aca/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopaAca
+      summary: Imposta le credenziali del connettore pagoPA ACA (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /intermediari/{idIntermediario}/connettori/pagopa-gpd:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopaGpd
+      summary: Connettore pagoPA GPD dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA GPD.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaGpd'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopaGpd
+      summary: Sostituisce la configurazione del connettore pagoPA GPD (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopaGpd'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaGpd'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa-gpd/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopaGpd
+      summary: Imposta le credenziali del connettore pagoPA GPD (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /intermediari/{idIntermediario}/connettori/pagopa-fr:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopaFr
+      summary: Connettore pagoPA FR dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA FR.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaFr'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopaFr
+      summary: Sostituisce la configurazione del connettore pagoPA FR (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopaFr'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaFr'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa-fr/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopaFr
+      summary: Imposta le credenziali del connettore pagoPA FR (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /intermediari/{idIntermediario}/connettori/pagopa-backoffice-ec:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopaBackofficeEc
+      summary: Connettore pagoPA Backoffice EC dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA Backoffice EC.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaBackofficeEc'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopaBackofficeEc
+      summary: Sostituisce la configurazione del connettore pagoPA Backoffice EC (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopaBackofficeEc'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaBackofficeEc'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa-backoffice-ec/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopaBackofficeEc
+      summary: Imposta le credenziali del connettore pagoPA Backoffice EC (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /intermediari/{idIntermediario}/connettori/pagopa-recupero-rt:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Connettori
+      operationId: getConnettorePagopaRecuperoRt
+      summary: Connettore pagoPA Recupero RT dell'intermediario (senza credenziali).
+      description: |
+        Lo slot del connettore esiste sempre: se non ancora configurato la GET
+        restituisce un connettore con `abilitato=false` e campi vuoti.
+      responses:
+        '200':
+          description: Connettore pagoPA Recupero RT.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaRecuperoRt'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori
+      operationId: replaceConnettorePagopaRecuperoRt
+      summary: Sostituisce la configurazione del connettore pagoPA Recupero RT (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntermediarioPagopaRecuperoRt'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntermediarioPagopaRecuperoRt'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /intermediari/{idIntermediario}/connettori/pagopa-recupero-rt/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    put:
+      tags:
+        - Connettori
+      operationId: putCredenzialiConnettorePagopaRecuperoRt
+      summary: Imposta le credenziali del connettore pagoPA Recupero RT (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
 components:
   schemas:
 
@@ -1927,6 +2475,187 @@ components:
         abilitato:
           type: boolean
 
+    TipoAutenticazioneConnettore:
+      type: string
+      description: |
+        Tipo di autenticazione del connettore verso pagoPA. Determina quali
+        campi di `ConnettoreAuth` (e quali credenziali) sono significativi.
+      enum:
+        - NONE
+        - HTTPBASIC
+        - SSL
+        - HEADER
+        - APIKEY
+        - OAUTH2
+
+    SslTipo:
+      type: string
+      description: Modalita' SSL quando `tipoAutenticazione=SSL`.
+      enum:
+        - CLIENT
+        - SERVER
+
+    ConnettoreAuth:
+      type: object
+      description: |
+        Parametri di autenticazione del connettore, **senza credenziali**
+        (password, segreti, subscription key sono gestiti dall'endpoint
+        `/credenziali`).
+      required:
+        - tipoAutenticazione
+      properties:
+        tipoAutenticazione:
+          $ref: '#/components/schemas/TipoAutenticazioneConnettore'
+        username:
+          type: string
+          description: Username HTTP Basic (la password e' una credenziale).
+        sslTipo:
+          $ref: '#/components/schemas/SslTipo'
+        ksLocation:
+          type: string
+        ksType:
+          type: string
+        tsLocation:
+          type: string
+        tsType:
+          type: string
+        sslType:
+          type: string
+        headerName:
+          type: string
+          description: Nome dell'header per `tipoAutenticazione=HEADER` (il valore e' una credenziale).
+        apiId:
+          type: string
+          description: ID per `tipoAutenticazione=APIKEY` (la api key e' una credenziale).
+        clientId:
+          type: string
+          description: Client id per `tipoAutenticazione=OAUTH2` (il client secret e' una credenziale).
+        scope:
+          type: string
+        urlTokenEndpoint:
+          type: string
+
+    ConnettoreIntermediarioPagopa:
+      type: object
+      description: Connettore pagoPA (PDD) dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        urlRPT:
+          type: string
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreIntermediarioPagopaAca:
+      type: object
+      description: Connettore pagoPA ACA dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+        abilitaGDE:
+          type: boolean
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreIntermediarioPagopaGpd:
+      type: object
+      description: Connettore pagoPA GPD dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+        abilitaGDE:
+          type: boolean
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreIntermediarioPagopaFr:
+      type: object
+      description: Connettore pagoPA FR dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+        abilitaGDE:
+          type: boolean
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreIntermediarioPagopaBackofficeEc:
+      type: object
+      description: Connettore pagoPA Backoffice EC dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+        abilitaGDE:
+          type: boolean
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreIntermediarioPagopaRecuperoRt:
+      type: object
+      description: Connettore pagoPA Recupero RT dell'intermediario. Le credenziali non sono incluse.
+      required:
+        - abilitato
+        - auth
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+        abilitaGDE:
+          type: boolean
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreCredenziali:
+      type: object
+      description: |
+        Credenziali del connettore (write-only). Non vengono mai restituite dalle GET.
+        Sono significative solo le credenziali coerenti col `tipoAutenticazione` del connettore.
+      properties:
+        subscriptionKey:
+          type: string
+        password:
+          type: string
+          description: Password HTTP Basic.
+        ksPassword:
+          type: string
+        tsPassword:
+          type: string
+        ksPKeyPasswd:
+          type: string
+        headerValue:
+          type: string
+          description: Valore dell'header per `tipoAutenticazione=HEADER`.
+        apiKey:
+          type: string
+          description: Api key per `tipoAutenticazione=APIKEY`.
+        clientSecret:
+          type: string
+          description: Client secret per `tipoAutenticazione=OAUTH2`.
+
     JsonPatchOperation:
       type: object
       description: Singola operazione JSON Patch (RFC 6902).
@@ -1957,6 +2686,39 @@ components:
       description: Documento JSON Patch (RFC 6902), sequenza ordinata di operazioni.
       items:
         $ref: '#/components/schemas/JsonPatchOperation'
+
+  responses:
+
+    Problem400:
+      description: Richiesta non valida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem401:
+      description: Autenticazione mancante o non valida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem404:
+      description: Risorsa non trovata.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem412:
+      description: '`If-Match` non corrisponde all''`ETag` corrente.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem428:
+      description: Header `If-Match` mancante.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   parameters:
 

@@ -33,6 +33,21 @@ public class Intermediario {
     @Column(name = "cod_connettore_pdd", nullable = false, length = 35)
     private String codConnettorePdd;
 
+    @Column(name = "cod_connettore_recupero_rt", length = 35)
+    private String codConnettoreRecuperoRt;
+
+    @Column(name = "cod_connettore_aca", length = 35)
+    private String codConnettoreAca;
+
+    @Column(name = "cod_connettore_gpd", length = 35)
+    private String codConnettoreGpd;
+
+    @Column(name = "cod_connettore_fr", length = 35)
+    private String codConnettoreFr;
+
+    @Column(name = "cod_connettore_backoffice_ec", length = 35)
+    private String codConnettoreBackofficeEc;
+
     @Column(name = "abilitato", nullable = false)
     private Boolean abilitato;
 
@@ -82,6 +97,46 @@ public class Intermediario {
 
     public void setCodConnettorePdd(String codConnettorePdd) {
         this.codConnettorePdd = codConnettorePdd;
+    }
+
+    public String getCodConnettoreRecuperoRt() {
+        return codConnettoreRecuperoRt;
+    }
+
+    public void setCodConnettoreRecuperoRt(String codConnettoreRecuperoRt) {
+        this.codConnettoreRecuperoRt = codConnettoreRecuperoRt;
+    }
+
+    public String getCodConnettoreAca() {
+        return codConnettoreAca;
+    }
+
+    public void setCodConnettoreAca(String codConnettoreAca) {
+        this.codConnettoreAca = codConnettoreAca;
+    }
+
+    public String getCodConnettoreGpd() {
+        return codConnettoreGpd;
+    }
+
+    public void setCodConnettoreGpd(String codConnettoreGpd) {
+        this.codConnettoreGpd = codConnettoreGpd;
+    }
+
+    public String getCodConnettoreFr() {
+        return codConnettoreFr;
+    }
+
+    public void setCodConnettoreFr(String codConnettoreFr) {
+        this.codConnettoreFr = codConnettoreFr;
+    }
+
+    public String getCodConnettoreBackofficeEc() {
+        return codConnettoreBackofficeEc;
+    }
+
+    public void setCodConnettoreBackofficeEc(String codConnettoreBackofficeEc) {
+        this.codConnettoreBackofficeEc = codConnettoreBackofficeEc;
     }
 
     public Boolean getAbilitato() {
