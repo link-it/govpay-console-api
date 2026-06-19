@@ -22,6 +22,8 @@ tags:
     description: Profilo dell'utenza autenticata corrente.
   - name: Autenticazione
     description: Endpoint di login, logout e discovery dei metodi di autenticazione.
+  - name: Intermediari
+    description: Anagrafica degli intermediari pagoPA.
 
 paths:
 
@@ -544,6 +546,263 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '503':
           description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /intermediari:
+    get:
+      tags:
+        - Intermediari
+      operationId: listIntermediari
+      summary: Elenca gli intermediari pagoPA (paginati).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `codIntermediario` — match parziale;
+        - `denominazione` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
+        Con `?total=true` vengono aggiunti `totalResults` e `totalPages`
+        (modalita' Page, con COUNT addizionale).
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
+        prefisso per ASC), campi multipli separati da virgola; campi ammessi:
+        `codIntermediario`, `denominazione`. Default `codIntermediario` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/CodIntermediario'
+        - $ref: '#/components/parameters/Denominazione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di intermediari.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/IntermediarioSummary'
+        '400':
+          description: Parametro di paginazione, ordinamento o filtro non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      tags:
+        - Intermediari
+      operationId: createIntermediario
+      summary: Crea un nuovo intermediario.
+      description: |
+        Crea l'intermediario identificato da `idIntermediario`. Il riferimento al
+        connettore pagoPA (`codConnettorePagoPa`) e' obbligatorio. La gestione
+        completa dei connettori e' demandata alla sub-resource dedicata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntermediarioCreate'
+      responses:
+        '201':
+          description: Intermediario creato.
+          headers:
+            Location:
+              description: URI del nuovo intermediario.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intermediario'
+        '400':
+          description: Body non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Esiste gia' un intermediario con lo stesso `idIntermediario`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /intermediari/{idIntermediario}:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Intermediari
+      operationId: getIntermediario
+      summary: Dettaglio di un intermediario.
+      description: |
+        Restituisce l'intermediario identificato da `idIntermediario`, con header
+        `ETag` da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio intermediario.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intermediario'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario non trovato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    put:
+      tags:
+        - Intermediari
+      operationId: replaceIntermediario
+      summary: Sostituisce un intermediario (full update).
+      description: |
+        Sostituisce integralmente l'intermediario. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente per la concorrenza ottimistica.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntermediarioReplace'
+      responses:
+        '200':
+          description: Intermediario aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intermediario'
+        '400':
+          description: Body non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario non trovato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '412':
+          description: '`If-Match` non corrisponde all''`ETag` corrente: risorsa modificata da altri.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Header `If-Match` mancante.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    patch:
+      tags:
+        - Intermediari
+      operationId: patchIntermediario
+      summary: Modifica parziale di un intermediario (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) all'intermediario.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Intermediario aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intermediario'
+        '400':
+          description: Documento JSON Patch non valido o rappresentazione risultante non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario non trovato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '412':
+          description: '`If-Match` non corrisponde all''`ETag` corrente: risorsa modificata da altri.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Header `If-Match` mancante.
           content:
             application/problem+json:
               schema:
@@ -1221,6 +1480,128 @@ components:
           items:
             $ref: '#/components/schemas/MetodoAutenticazione'
 
+    IntermediarioSummary:
+      type: object
+      description: Proiezione leggera dell'intermediario, usata nelle liste paginate.
+      required:
+        - idIntermediario
+        - denominazione
+        - abilitato
+      properties:
+        idIntermediario:
+          type: string
+          description: Codice identificativo dell'intermediario.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        denominazione:
+          type: string
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    Intermediario:
+      type: object
+      description: Dettaglio canonico di un intermediario pagoPA.
+      required:
+        - idIntermediario
+        - denominazione
+        - principalPagoPa
+        - abilitato
+      properties:
+        idIntermediario:
+          type: string
+          description: Codice identificativo dell'intermediario.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        denominazione:
+          type: string
+          description: Ragione sociale dell'intermediario pagoPA.
+          maxLength: 255
+        principalPagoPa:
+          type: string
+          description: Principal con cui sono autenticate le richieste ricevute da pagoPA.
+          maxLength: 4000
+        abilitato:
+          type: boolean
+
+    IntermediarioCreate:
+      type: object
+      description: Body per la creazione di un intermediario.
+      required:
+        - idIntermediario
+        - denominazione
+        - principalPagoPa
+        - codConnettorePagoPa
+        - abilitato
+      properties:
+        idIntermediario:
+          type: string
+          description: Codice identificativo dell'intermediario.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        denominazione:
+          type: string
+          maxLength: 255
+        principalPagoPa:
+          type: string
+          maxLength: 4000
+        codConnettorePagoPa:
+          type: string
+          description: Riferimento al connettore pagoPA (PDD) dell'intermediario.
+          maxLength: 35
+        abilitato:
+          type: boolean
+
+    IntermediarioReplace:
+      type: object
+      description: Body per la sostituzione completa di un intermediario (`idIntermediario` dal path).
+      required:
+        - denominazione
+        - principalPagoPa
+        - codConnettorePagoPa
+        - abilitato
+      properties:
+        denominazione:
+          type: string
+          maxLength: 255
+        principalPagoPa:
+          type: string
+          maxLength: 4000
+        codConnettorePagoPa:
+          type: string
+          description: Riferimento al connettore pagoPA (PDD) dell'intermediario.
+          maxLength: 35
+        abilitato:
+          type: boolean
+
+    JsonPatchOperation:
+      type: object
+      description: Singola operazione JSON Patch (RFC 6902).
+      required:
+        - op
+        - path
+      properties:
+        op:
+          type: string
+          enum:
+            - add
+            - remove
+            - replace
+            - move
+            - copy
+            - test
+        path:
+          type: string
+          description: JSON Pointer (RFC 6901) del campo destinazione.
+        value:
+          description: Valore dell'operazione (per `add`, `replace`, `test`).
+        from:
+          type: string
+          description: JSON Pointer sorgente (per `move`, `copy`).
+
+    JsonPatch:
+      type: array
+      description: Documento JSON Patch (RFC 6902), sequenza ordinata di operazioni.
+      items:
+        $ref: '#/components/schemas/JsonPatchOperation'
+
   parameters:
 
     Page:
@@ -1317,4 +1698,48 @@ components:
         (`PENDENZE_RICERCA_PER_DEBITORE`) in `gp_audit`.
       schema:
         type: string
+
+    IdIntermediarioPath:
+      name: idIntermediario
+      in: path
+      required: true
+      description: Codice identificativo dell'intermediario.
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        `ETag` della rappresentazione su cui si intende operare, ottenuto da una
+        GET precedente. Abilita la concorrenza ottimistica: se non corrisponde
+        all'`ETag` corrente la richiesta fallisce con 412.
+      schema:
+        type: string
+
+    CodIntermediario:
+      name: codIntermediario
+      in: query
+      required: false
+      description: Match parziale sul codice intermediario.
+      schema:
+        type: string
+
+    Denominazione:
+      name: denominazione
+      in: query
+      required: false
+      description: Match parziale sulla denominazione.
+      schema:
+        type: string
+
+    Abilitato:
+      name: abilitato
+      in: query
+      required: false
+      description: Match esatto sullo stato di abilitazione.
+      schema:
+        type: boolean
 

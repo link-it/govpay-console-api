@@ -16,6 +16,7 @@ import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -90,10 +91,25 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.PRECONDITION_FAILED, ex.getMessage(), request, null, ex);
     }
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<Problem> handleDataIntegrity(DataIntegrityViolationException ex,
+    @ExceptionHandler(PreconditionRequiredException.class)
+    public ResponseEntity<Problem> handlePreconditionRequired(PreconditionRequiredException ex,
+                                                              HttpServletRequest request) {
+        return build(HttpStatus.PRECONDITION_REQUIRED, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<Problem> handleMissingHeader(MissingRequestHeaderException ex,
                                                        HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "Conflitto con lo stato corrente della risorsa.", request, null, ex);
+        return build(HttpStatus.PRECONDITION_REQUIRED,
+                "Header obbligatorio mancante: " + ex.getHeaderName() + ".", request, null, ex);
+    }
+
+    @ExceptionHandler({ DataIntegrityViolationException.class, ConflictException.class })
+    public ResponseEntity<Problem> handleConflict(Exception ex, HttpServletRequest request) {
+        String detail = ex instanceof ConflictException
+                ? ex.getMessage()
+                : "Conflitto con lo stato corrente della risorsa.";
+        return build(HttpStatus.CONFLICT, detail, request, null, ex);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
