@@ -24,6 +24,8 @@ tags:
     description: Endpoint di login, logout e discovery dei metodi di autenticazione.
   - name: Intermediari
     description: Anagrafica degli intermediari pagoPA.
+  - name: Stazioni
+    description: Anagrafica delle stazioni di un intermediario.
 
 paths:
 
@@ -808,6 +810,282 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /intermediari/{idIntermediario}/stazioni:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+    get:
+      tags:
+        - Stazioni
+      operationId: listStazioni
+      summary: Elenca le stazioni di un intermediario (paginate).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `codStazione` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (Slice, senza COUNT). Con
+        `?total=true` vengono aggiunti `totalResults` e `totalPages` (Page).
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
+        prefisso per ASC); campi ammessi: `codStazione`. Default `codStazione` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/CodStazione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di stazioni.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StazioneSummary'
+        '400':
+          description: Parametro di paginazione, ordinamento o filtro non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario non trovato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      tags:
+        - Stazioni
+      operationId: createStazione
+      summary: Crea una nuova stazione per l'intermediario.
+      description: |
+        Crea la stazione identificata da `idStazione`. L'`idStazione` deve avere
+        formato `{idIntermediario}_{applicationCode}`, dove `applicationCode` e'
+        un intero compreso tra 1 e 99; l'`application_code` viene derivato da
+        questo suffisso. Formato non valido → 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StazioneCreate'
+      responses:
+        '201':
+          description: Stazione creata.
+          headers:
+            Location:
+              description: URI della nuova stazione.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stazione'
+        '400':
+          description: Body non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario non trovato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Esiste gia' una stazione con lo stesso `idStazione`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: '`idStazione` non coerente con `idIntermediario` o `applicationCode` fuori range 1-99.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /intermediari/{idIntermediario}/stazioni/{idStazione}:
+    parameters:
+      - $ref: '#/components/parameters/IdIntermediarioPath'
+      - $ref: '#/components/parameters/IdStazionePath'
+    get:
+      tags:
+        - Stazioni
+      operationId: getStazione
+      summary: Dettaglio di una stazione.
+      description: |
+        Restituisce la stazione, con header `ETag` da rispedire come `If-Match`
+        nelle operazioni di modifica. `domini` elenca i domini associati alla
+        stazione (sola lettura).
+      responses:
+        '200':
+          description: Dettaglio stazione.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stazione'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario o stazione non trovati.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    put:
+      tags:
+        - Stazioni
+      operationId: replaceStazione
+      summary: Sostituisce una stazione (full update).
+      description: |
+        Sostituisce integralmente la stazione. Richiede l'header `If-Match` con
+        l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StazioneReplace'
+      responses:
+        '200':
+          description: Stazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stazione'
+        '400':
+          description: Body non valido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario o stazione non trovati.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '412':
+          description: '`If-Match` non corrisponde all''`ETag` corrente.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Header `If-Match` mancante.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    patch:
+      tags:
+        - Stazioni
+      operationId: patchStazione
+      summary: Modifica parziale di una stazione (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902) alla stazione. Richiede l'header
+        `If-Match`. La rappresentazione risultante viene validata come in una
+        sostituzione completa. `idStazione` e `domini` non sono modificabili.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Stazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stazione'
+        '400':
+          description: Documento JSON Patch non valido o rappresentazione risultante non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Intermediario o stazione non trovati.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '412':
+          description: '`If-Match` non corrisponde all''`ETag` corrente.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Header `If-Match` mancante.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   schemas:
 
@@ -1571,6 +1849,84 @@ components:
         abilitato:
           type: boolean
 
+    VersioneStazione:
+      type: string
+      description: Versione del protocollo pagoPA della stazione.
+      enum:
+        - V1
+        - V2
+
+    StazioneSummary:
+      type: object
+      description: Proiezione leggera della stazione, usata nelle liste paginate.
+      required:
+        - idStazione
+        - versione
+        - abilitato
+      properties:
+        idStazione:
+          type: string
+          description: Codice identificativo della stazione (`{idIntermediario}_{applicationCode}`).
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        versione:
+          $ref: '#/components/schemas/VersioneStazione'
+        abilitato:
+          type: boolean
+
+    Stazione:
+      type: object
+      description: Dettaglio canonico di una stazione.
+      required:
+        - idStazione
+        - versione
+        - abilitato
+        - domini
+      properties:
+        idStazione:
+          type: string
+          description: Codice identificativo della stazione (`{idIntermediario}_{applicationCode}`).
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        versione:
+          $ref: '#/components/schemas/VersioneStazione'
+        abilitato:
+          type: boolean
+        domini:
+          type: array
+          description: Domini associati alla stazione (sola lettura).
+          items:
+            $ref: '#/components/schemas/DominioRef'
+
+    StazioneCreate:
+      type: object
+      description: Body per la creazione di una stazione.
+      required:
+        - idStazione
+        - versione
+        - abilitato
+      properties:
+        idStazione:
+          type: string
+          description: |
+            Codice identificativo della stazione. Formato
+            `{idIntermediario}_{applicationCode}` con `applicationCode` tra 1 e 99.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        versione:
+          $ref: '#/components/schemas/VersioneStazione'
+        abilitato:
+          type: boolean
+
+    StazioneReplace:
+      type: object
+      description: Body per la sostituzione completa di una stazione (`idStazione` dal path).
+      required:
+        - versione
+        - abilitato
+      properties:
+        versione:
+          $ref: '#/components/schemas/VersioneStazione'
+        abilitato:
+          type: boolean
+
     JsonPatchOperation:
       type: object
       description: Singola operazione JSON Patch (RFC 6902).
@@ -1724,6 +2080,23 @@ components:
       in: query
       required: false
       description: Match parziale sul codice intermediario.
+      schema:
+        type: string
+
+    IdStazionePath:
+      name: idStazione
+      in: path
+      required: true
+      description: Codice identificativo della stazione.
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    CodStazione:
+      name: codStazione
+      in: query
+      required: false
+      description: Match parziale sul codice stazione.
       schema:
         type: string
 

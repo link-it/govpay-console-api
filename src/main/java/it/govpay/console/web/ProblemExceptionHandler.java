@@ -136,9 +136,8 @@ public class ProblemExceptionHandler {
                 request, null, ex);
     }
 
-    @ExceptionHandler(AvvisoMbtException.class)
-    public ResponseEntity<Problem> handleAvvisoMbt(AvvisoMbtException ex,
-                                                   HttpServletRequest request) {
+    @ExceptionHandler({ AvvisoMbtException.class, UnprocessableEntityException.class })
+    public ResponseEntity<Problem> handleUnprocessable(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
     }
 

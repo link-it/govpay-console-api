@@ -35,6 +35,7 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Documento;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
+import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
@@ -48,6 +49,7 @@ import it.govpay.console.repository.ApplicazioneRepository;
 import it.govpay.console.repository.DocumentoRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
+import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
@@ -87,6 +89,8 @@ class AvvisoIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private StazioneRepository stazioneRepository;
+    @Autowired
+    private IntermediarioRepository intermediarioRepository;
     @Autowired
     private ApplicazioneRepository applicazioneRepository;
     @Autowired
@@ -139,9 +143,22 @@ class AvvisoIntegrationTest {
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
 
+        Intermediario intermediario = new Intermediario();
+        intermediario.setCodIntermediario("INT-AVV");
+        intermediario.setDenominazione("Intermediario Avviso");
+        intermediario.setPrincipal("p");
+        intermediario.setPrincipalOriginale("p");
+        intermediario.setCodConnettorePdd("C");
+        intermediario.setAbilitato(true);
+        intermediarioRepository.save(intermediario);
+
         Stazione stazione = new Stazione();
         stazione.setCodStazione("STZ-1");
         stazione.setApplicationCode(7);
+        stazione.setPassword("");
+        stazione.setAbilitato(true);
+        stazione.setVersione("V2");
+        stazione.setIntermediario(intermediario);
         stazioneRepository.save(stazione);
 
         domA = new Dominio();
