@@ -433,6 +433,33 @@ class StazioneControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void createStazioneForIntermediarioWithUnderscoreInId() throws Exception {
+        newIntermediario("INT_A");
+        String body = """
+                {"idStazione":"INT_A_01","versione":"V2","abilitato":true}""";
+        mvc.perform(post("/intermediari/INT_A/stazioni").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idStazione", is("INT_A_01")));
+    }
+
+    @Test
+    void etagReflectsDominiChanges() throws Exception {
+        String etagBefore = currentEtag("INT-001", "INT-001_01");
+
+        Stazione s1 = stazioneRepository.findByCodStazione("INT-001_01").orElseThrow();
+        Dominio extra = new Dominio();
+        extra.setCodDominio("22222222222");
+        extra.setRagioneSociale("Secondo Comune");
+        extra.setAuxDigit(0);
+        extra.setStazione(s1);
+        dominioRepository.save(extra);
+
+        String etagAfter = currentEtag("INT-001", "INT-001_01");
+        org.assertj.core.api.Assertions.assertThat(etagAfter).isNotEqualTo(etagBefore);
+    }
+
     private String currentEtag(String idIntermediario, String idStazione) throws Exception {
         return mvc.perform(get("/intermediari/" + idIntermediario + "/stazioni/" + idStazione)
                         .with(httpBasic(PRINCIPAL, PASSWORD)))

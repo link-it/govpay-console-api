@@ -4,9 +4,10 @@ import it.govpay.console.web.UnprocessableEntityException;
 
 /**
  * Validazione e parsing del formato {@code idStazione = {idIntermediario}_{applicationCode}}.
- * L'{@code applicationCode} (intero 1-99) viene derivato dal suffisso dopo il primo
- * {@code _}; il prefisso deve coincidere con l'{@code idIntermediario} del path.
- * Le violazioni producono 422 (allineato V1).
+ * L'{@code idStazione} deve iniziare esattamente con {@code idIntermediario + "_"}
+ * (cosi' il parsing e' corretto anche quando l'{@code idIntermediario} contiene
+ * {@code _}); l'{@code applicationCode} (intero 1-99) e' il suffisso residuo.
+ * Le violazioni producono 422.
  */
 public final class StazioneIdFormat {
 
@@ -14,17 +15,12 @@ public final class StazioneIdFormat {
     }
 
     public static int applicationCode(String idStazione, String idIntermediario) {
-        int idx = idStazione.indexOf('_');
-        if (idx == -1) {
+        String prefix = idIntermediario + "_";
+        if (!idStazione.startsWith(prefix)) {
             throw new UnprocessableEntityException(
-                    "Formato 'idStazione' non valido: previsto {idIntermediario}_{applicationCode}.");
+                    "'idStazione' non coerente: previsto formato '" + idIntermediario + "_{applicationCode}'.");
         }
-        String base = idStazione.substring(0, idx);
-        if (!base.equals(idIntermediario)) {
-            throw new UnprocessableEntityException(
-                    "'idStazione' non coerente: il prefisso deve essere l'idIntermediario '" + idIntermediario + "'.");
-        }
-        String suffix = idStazione.substring(idx + 1);
+        String suffix = idStazione.substring(prefix.length());
         int applicationCode;
         try {
             applicationCode = Integer.parseInt(suffix);

@@ -616,8 +616,9 @@ paths:
       summary: Crea un nuovo intermediario.
       description: |
         Crea l'intermediario identificato da `idIntermediario`. Il riferimento al
-        connettore pagoPA (`codConnettorePagoPa`) e' obbligatorio. La gestione
-        completa dei connettori e' demandata alla sub-resource dedicata.
+        connettore pagoPA (PDD) coincide con l'`idIntermediario` ed e' impostato
+        automaticamente; la gestione dei connettori e' demandata alla sub-resource
+        dedicata.
       requestBody:
         required: true
         content:
@@ -2355,7 +2356,6 @@ components:
         - idIntermediario
         - denominazione
         - principalPagoPa
-        - codConnettorePagoPa
         - abilitato
       properties:
         idIntermediario:
@@ -2368,10 +2368,6 @@ components:
         principalPagoPa:
           type: string
           maxLength: 4000
-        codConnettorePagoPa:
-          type: string
-          description: Riferimento al connettore pagoPA (PDD) dell'intermediario.
-          maxLength: 35
         abilitato:
           type: boolean
 
@@ -2381,7 +2377,6 @@ components:
       required:
         - denominazione
         - principalPagoPa
-        - codConnettorePagoPa
         - abilitato
       properties:
         denominazione:
@@ -2390,10 +2385,6 @@ components:
         principalPagoPa:
           type: string
           maxLength: 4000
-        codConnettorePagoPa:
-          type: string
-          description: Riferimento al connettore pagoPA (PDD) dell'intermediario.
-          maxLength: 35
         abilitato:
           type: boolean
 

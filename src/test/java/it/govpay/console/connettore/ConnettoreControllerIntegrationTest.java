@@ -280,6 +280,27 @@ class ConnettoreControllerIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void pagopaEtagIgnoresOutOfRepresentationProperty() throws Exception {
+        seed(PDD_COD, "URL", "https://x");
+        String etagBefore = currentEtag("pagopa");
+        // ABILITA_GDE non e' esposto dalla shape pagopa: cambiarlo non deve cambiare l'ETag.
+        seed(PDD_COD, "ABILITA_GDE", "true");
+        String etagAfter = currentEtag("pagopa");
+        org.assertj.core.api.Assertions.assertThat(etagAfter).isEqualTo(etagBefore);
+    }
+
+    @Test
+    void weakIfMatchIsRejectedOnConfigPut() throws Exception {
+        String weak = "W/" + currentEtag("pagopa");
+        String body = """
+                {"abilitato":true,"urlRPT":"https://x","auth":{"tipoAutenticazione":"NONE"}}""";
+        mvc.perform(put("/intermediari/INT-001/connettori/pagopa")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)).header("If-Match", weak)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isPreconditionFailed());
+    }
+
     private String currentEtag(String canale) throws Exception {
         return mvc.perform(get("/intermediari/INT-001/connettori/" + canale)
                         .with(httpBasic(PRINCIPAL, PASSWORD)))

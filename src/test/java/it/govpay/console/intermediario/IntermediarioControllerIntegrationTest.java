@@ -202,8 +202,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void createReturns201WithLocationAndEtag() throws Exception {
         String body = """
-                {"idIntermediario":"INT-NEW","denominazione":"Delta","principalPagoPa":"p-delta",
-                 "codConnettorePagoPa":"CONN-PDD-9","abilitato":true}""";
+                {"idIntermediario":"INT-NEW","denominazione":"Delta","principalPagoPa":"p-delta","abilitato":true}""";
         mvc.perform(post("/intermediari").with(httpBasic(PRINCIPAL, PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -216,8 +215,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void createDuplicateReturns409() throws Exception {
         String body = """
-                {"idIntermediario":"INT-001","denominazione":"Dup","principalPagoPa":"p",
-                 "codConnettorePagoPa":"CONN-PDD-1","abilitato":true}""";
+                {"idIntermediario":"INT-001","denominazione":"Dup","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(post("/intermediari").with(httpBasic(PRINCIPAL, PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict())
@@ -227,7 +225,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void createWithMissingFieldReturns400() throws Exception {
         String body = """
-                {"idIntermediario":"INT-NEW","principalPagoPa":"p","codConnettorePagoPa":"C","abilitato":true}""";
+                {"idIntermediario":"INT-NEW","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(post("/intermediari").with(httpBasic(PRINCIPAL, PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -238,8 +236,7 @@ class IntermediarioControllerIntegrationTest {
     void createWritesAudit() throws Exception {
         long before = countAudit("INTERMEDIARIO_CREATE");
         String body = """
-                {"idIntermediario":"INT-AUD","denominazione":"Aud","principalPagoPa":"p",
-                 "codConnettorePagoPa":"C","abilitato":true}""";
+                {"idIntermediario":"INT-AUD","denominazione":"Aud","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(post("/intermediari").with(httpBasic(PRINCIPAL, PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated());
@@ -252,8 +249,7 @@ class IntermediarioControllerIntegrationTest {
     void replaceWithCorrectIfMatchSucceeds() throws Exception {
         String etag = currentEtag("INT-001");
         String body = """
-                {"denominazione":"Alfa Aggiornata","principalPagoPa":"p-alfa2",
-                 "codConnettorePagoPa":"CONN-PDD-1","abilitato":false}""";
+                {"denominazione":"Alfa Aggiornata","principalPagoPa":"p-alfa2","abilitato":false}""";
         String newEtag = mvc.perform(put("/intermediari/INT-001").with(httpBasic(PRINCIPAL, PASSWORD))
                         .header("If-Match", etag)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -267,7 +263,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void replaceWithWrongIfMatchReturns412() throws Exception {
         String body = """
-                {"denominazione":"X","principalPagoPa":"p","codConnettorePagoPa":"C","abilitato":true}""";
+                {"denominazione":"X","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(put("/intermediari/INT-001").with(httpBasic(PRINCIPAL, PASSWORD))
                         .header("If-Match", "\"deadbeef\"")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -278,7 +274,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void replaceWithoutIfMatchReturns428() throws Exception {
         String body = """
-                {"denominazione":"X","principalPagoPa":"p","codConnettorePagoPa":"C","abilitato":true}""";
+                {"denominazione":"X","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(put("/intermediari/INT-001").with(httpBasic(PRINCIPAL, PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isPreconditionRequired())
@@ -288,7 +284,7 @@ class IntermediarioControllerIntegrationTest {
     @Test
     void replaceUnknownReturns404() throws Exception {
         String body = """
-                {"denominazione":"X","principalPagoPa":"p","codConnettorePagoPa":"C","abilitato":true}""";
+                {"denominazione":"X","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(put("/intermediari/INT-999").with(httpBasic(PRINCIPAL, PASSWORD))
                         .header("If-Match", "*")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -300,7 +296,7 @@ class IntermediarioControllerIntegrationTest {
         long before = countAudit("INTERMEDIARIO_MODIFICA");
         String etag = currentEtag("INT-001");
         String body = """
-                {"denominazione":"Alfa Mod","principalPagoPa":"p","codConnettorePagoPa":"CONN-PDD-1","abilitato":true}""";
+                {"denominazione":"Alfa Mod","principalPagoPa":"p","abilitato":true}""";
         mvc.perform(put("/intermediari/INT-001").with(httpBasic(PRINCIPAL, PASSWORD))
                         .header("If-Match", etag)
                         .contentType(MediaType.APPLICATION_JSON).content(body))

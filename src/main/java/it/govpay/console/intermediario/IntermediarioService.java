@@ -34,6 +34,7 @@ import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
+import it.govpay.console.web.RepresentationEtag;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -145,7 +146,9 @@ public class IntermediarioService {
         entity.setDenominazione(body.getDenominazione());
         entity.setPrincipal(body.getPrincipalPagoPa());
         entity.setPrincipalOriginale(body.getPrincipalPagoPa());
-        entity.setCodConnettorePdd(body.getCodConnettorePagoPa());
+        // Il connettore PDD coincide con l'idIntermediario (allineato a V1): cod_connettore_pdd
+        // e' derivato e non e' un input del client.
+        entity.setCodConnettorePdd(body.getIdIntermediario());
         entity.setAbilitato(body.getAbilitato());
         Intermediario saved = repository.save(entity);
 
@@ -155,9 +158,10 @@ public class IntermediarioService {
                 .path("/{id}")
                 .buildAndExpand(saved.getCodIntermediario())
                 .toUri();
+        it.govpay.console.model.Intermediario dto = mapper.toDetail(saved);
         return ResponseEntity.created(location)
-                .eTag(IntermediarioEtag.compute(saved))
-                .body(mapper.toDetail(saved));
+                .eTag(RepresentationEtag.of(dto, objectMapper))
+                .body(dto);
     }
 
     @Transactional
@@ -171,7 +175,6 @@ public class IntermediarioService {
         entity.setDenominazione(body.getDenominazione());
         entity.setPrincipal(body.getPrincipalPagoPa());
         entity.setPrincipalOriginale(body.getPrincipalPagoPa());
-        entity.setCodConnettorePdd(body.getCodConnettorePagoPa());
         entity.setAbilitato(body.getAbilitato());
         Intermediario saved = repository.save(entity);
 
@@ -211,9 +214,10 @@ public class IntermediarioService {
     }
 
     private ResponseEntity<it.govpay.console.model.Intermediario> ok(Intermediario entity) {
+        it.govpay.console.model.Intermediario dto = mapper.toDetail(entity);
         return ResponseEntity.ok()
-                .eTag(IntermediarioEtag.compute(entity))
-                .body(mapper.toDetail(entity));
+                .eTag(RepresentationEtag.of(dto, objectMapper))
+                .body(dto);
     }
 
     private Intermediario load(String idIntermediario) {
@@ -227,7 +231,7 @@ public class IntermediarioService {
             throw new PreconditionRequiredException(
                     "Header 'If-Match' obbligatorio per le operazioni di modifica.");
         }
-        if (!IntermediarioEtag.matches(ifMatch, entity)) {
+        if (!RepresentationEtag.matches(ifMatch, mapper.toDetail(entity), objectMapper)) {
             throw new IfMatchMismatchException(
                     "L'header 'If-Match' non corrisponde alla versione corrente dell'intermediario.");
         }

@@ -16,6 +16,7 @@ import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
+import it.govpay.console.web.RepresentationEtag;
 import jakarta.servlet.http.HttpServletRequest;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -51,10 +52,10 @@ public class ConnettoreService {
     @Transactional(readOnly = true)
     public <T> ResponseEntity<T> get(String idIntermediario, ConnettoreCanale canale, Class<T> dtoClass) {
         Intermediario intermediario = loadIntermediario(idIntermediario);
-        Map<String, String> config = readConfig(canale.codConnettore(intermediario));
+        T dto = toDto(readConfig(canale.codConnettore(intermediario)), canale, dtoClass);
         return ResponseEntity.ok()
-                .eTag(ConnettoreEtag.compute(config))
-                .body(toDto(config, canale, dtoClass));
+                .eTag(RepresentationEtag.of(dto, objectMapper))
+                .body(dto);
     }
 
     @Transactional
@@ -63,8 +64,7 @@ public class ConnettoreService {
                                          HttpServletRequest request) {
         Intermediario intermediario = loadIntermediario(idIntermediario);
         String cod = canale.codConnettore(intermediario);
-        Map<String, String> current = readConfig(cod);
-        checkIfMatch(ifMatch, current);
+        checkIfMatch(ifMatch, toDto(readConfig(cod), canale, dtoClass));
 
         cod = ensureCodConnettore(intermediario, canale, cod);
         Map<String, String> desired = mapper.toConfigMap(objectMapper.valueToTree(dto), canale);
@@ -72,10 +72,10 @@ public class ConnettoreService {
 
         audit(AZIONE_AUDIT_MODIFICA, intermediario, canale, request);
 
-        Map<String, String> updated = store.read(cod);
+        T updated = toDto(store.read(cod), canale, dtoClass);
         return ResponseEntity.ok()
-                .eTag(ConnettoreEtag.compute(updated))
-                .body(toDto(updated, canale, dtoClass));
+                .eTag(RepresentationEtag.of(updated, objectMapper))
+                .body(updated);
     }
 
     @Transactional
@@ -115,12 +115,12 @@ public class ConnettoreService {
                 .orElseThrow(() -> new NotFoundException("Intermediario non trovato: " + idIntermediario));
     }
 
-    private void checkIfMatch(String ifMatch, Map<String, String> config) {
+    private void checkIfMatch(String ifMatch, Object dto) {
         if (ifMatch == null || ifMatch.isBlank()) {
             throw new PreconditionRequiredException(
                     "Header 'If-Match' obbligatorio per le operazioni di modifica.");
         }
-        if (!ConnettoreEtag.matches(ifMatch, config)) {
+        if (!RepresentationEtag.matches(ifMatch, dto, objectMapper)) {
             throw new IfMatchMismatchException(
                     "L'header 'If-Match' non corrisponde alla configurazione corrente del connettore.");
         }

@@ -40,6 +40,7 @@ import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
+import it.govpay.console.web.RepresentationEtag;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -169,9 +170,10 @@ public class StazioneService {
                 .path("/{id}")
                 .buildAndExpand(saved.getCodStazione())
                 .toUri();
+        it.govpay.console.model.Stazione dto = toDetailDto(saved);
         return ResponseEntity.created(location)
-                .eTag(StazioneEtag.compute(saved))
-                .body(toDetailDto(saved));
+                .eTag(RepresentationEtag.of(dto, objectMapper))
+                .body(dto);
     }
 
     @Transactional
@@ -222,9 +224,10 @@ public class StazioneService {
     }
 
     private ResponseEntity<it.govpay.console.model.Stazione> ok(Stazione entity) {
+        it.govpay.console.model.Stazione dto = toDetailDto(entity);
         return ResponseEntity.ok()
-                .eTag(StazioneEtag.compute(entity))
-                .body(toDetailDto(entity));
+                .eTag(RepresentationEtag.of(dto, objectMapper))
+                .body(dto);
     }
 
     private it.govpay.console.model.Stazione toDetailDto(Stazione entity) {
@@ -254,7 +257,7 @@ public class StazioneService {
             throw new PreconditionRequiredException(
                     "Header 'If-Match' obbligatorio per le operazioni di modifica.");
         }
-        if (!StazioneEtag.matches(ifMatch, entity)) {
+        if (!RepresentationEtag.matches(ifMatch, toDetailDto(entity), objectMapper)) {
             throw new IfMatchMismatchException(
                     "L'header 'If-Match' non corrisponde alla versione corrente della stazione.");
         }
