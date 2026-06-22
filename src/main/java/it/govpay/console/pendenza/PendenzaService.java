@@ -90,8 +90,8 @@ public class PendenzaService {
         PendenzaLinks links = linksBuilder.build(idA2A, idPendenza,
                 versamento.getNumeroAvviso(), pendenza.getStato());
         pendenza.setLinks(links);
-        log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={} ricevuta={}",
-                idPendenza, pendenza.getVoci().size(), links.getAvviso() != null, links.getRicevuta() != null);
+        log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={}",
+                idPendenza, pendenza.getVoci().size(), links.getAvviso() != null);
         return pendenza;
     }
 

@@ -387,6 +387,7 @@
                                 <openApiNullable>true</openApiNullable>
                                 <documentationProvider>springdoc</documentationProvider>
                                 <serializableModel>true</serializableModel>
+                                <useOneOfInterfaces>true</useOneOfInterfaces>
                             </configOptions>
                         </configuration>
                     </execution>

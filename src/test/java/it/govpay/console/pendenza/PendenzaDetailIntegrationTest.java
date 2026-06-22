@@ -26,8 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
+import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.console.entity.TipoTributo;
+import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
@@ -154,6 +157,48 @@ class PendenzaDetailIntegrationTest {
                 "GLGFNC85D04H501R", null,
                 200.0, "NON_ESEGUITO", 4, null, null);
 
+        // 5) Pendenza con voci di tipo diverso (dettaglio oneOf) + multibeneficiario.
+        Versamento pendenzaVoci = newPendenza("PEND-VOCI", domVisibile, app, tv, tvdVis, null,
+                "RSSMRA80A01H501U", null, 60.0, "NON_ESEGUITO", 5, null, null);
+        // ENTRATA_ANAGRAFICA: voce con riferimento a tributo (cod entrata via tipi_tributo).
+        TipoTributo tipoTributo = new TipoTributo();
+        tipoTributo.setCodTributo("TARI-2026");
+        em.persist(tipoTributo);
+        Tributo tributo = new Tributo();
+        tributo.setTipoTributo(tipoTributo);
+        em.persist(tributo);
+        SingoloVersamento vEntrata = newVoce(pendenzaVoci, "VOCE-ENTRATA", 1, 20.0);
+        vEntrata.setTributo(tributo);
+        singoloVersamentoRepository.save(vEntrata);
+        // INCASSO_DIRETTO: voce con iban + contabilita, su dominio diverso (multibeneficiario).
+        IbanAccredito iban = new IbanAccredito();
+        iban.setPostale(false);
+        iban.setCodIban("IT60X0542811101000000123456");
+        em.persist(iban);
+        SingoloVersamento vIncasso = newVoce(pendenzaVoci, "VOCE-INCASSO", 2, 20.0);
+        vIncasso.setIbanAccredito(iban);
+        vIncasso.setTipoContabilita("0");
+        vIncasso.setCodiceContabilita("3321");
+        vIncasso.setDominio(domNonVisibile);
+        singoloVersamentoRepository.save(vIncasso);
+        // BOLLO_TELEMATICO: voce con i tre campi del bollo.
+        SingoloVersamento vBollo = newVoce(pendenzaVoci, "VOCE-BOLLO", 3, 20.0);
+        vBollo.setTipoBollo("01");
+        vBollo.setHashDocumento("aGFzaC1iYXNlNjQ=");
+        vBollo.setProvinciaResidenza("RM");
+        singoloVersamentoRepository.save(vBollo);
+        // Voce legacy ambigua (bollo + iban): la priorita' deve scegliere BOLLO_TELEMATICO.
+        IbanAccredito ibanAmbiguo = new IbanAccredito();
+        ibanAmbiguo.setPostale(false);
+        ibanAmbiguo.setCodIban("IT60X0542811101000000999999");
+        em.persist(ibanAmbiguo);
+        SingoloVersamento vAmbigua = newVoce(pendenzaVoci, "VOCE-AMBIGUA", 4, 0.0);
+        vAmbigua.setTipoBollo("01");
+        vAmbigua.setHashDocumento("aGFzaA==");
+        vAmbigua.setProvinciaResidenza("MI");
+        vAmbigua.setIbanAccredito(ibanAmbiguo);
+        singoloVersamentoRepository.save(vAmbigua);
+
         // Forza l'INSERT delle voci e libera il primo livello: senza questo, la
         // collection LAZY del Versamento resta vuota in cache anche se le voci sono
         // state salvate via repository.
@@ -221,11 +266,53 @@ class PendenzaDetailIntegrationTest {
         singoloVersamentoRepository.save(sv);
     }
 
+    private SingoloVersamento newVoce(Versamento v, String idVoce, int indice, double importo) {
+        SingoloVersamento sv = new SingoloVersamento();
+        sv.setCodSingoloVersamentoEnte(idVoce);
+        sv.setIndiceDati(indice);
+        sv.setImportoSingoloVersamento(importo);
+        sv.setDescrizione(idVoce);
+        sv.setStatoSingoloVersamento("NON_ESEGUITO");
+        sv.setVersamento(v);
+        return sv;
+    }
+
     @Test
     void requiresAuthentication() throws Exception {
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-FULL"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void vociExposeDettaglioOneOfPerType() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-VOCI").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.voci", hasSize(4)))
+                // VOCE-ENTRATA → ENTRATA_ANAGRAFICA con codEntrata dal tipo tributo.
+                .andExpect(jsonPath("$.voci[0].dettaglio.tipoVoce", is("ENTRATA_ANAGRAFICA")))
+                .andExpect(jsonPath("$.voci[0].dettaglio.codEntrata", is("TARI-2026")))
+                .andExpect(jsonPath("$.voci[0].descrizione", is("VOCE-ENTRATA")))
+                // VOCE-INCASSO → INCASSO_DIRETTO con iban + contabilita.
+                .andExpect(jsonPath("$.voci[1].dettaglio.tipoVoce", is("INCASSO_DIRETTO")))
+                .andExpect(jsonPath("$.voci[1].dettaglio.ibanAccredito", is("IT60X0542811101000000123456")))
+                .andExpect(jsonPath("$.voci[1].dettaglio.tipoContabilita", is("CAPITOLO")))
+                .andExpect(jsonPath("$.voci[1].dettaglio.codiceContabilita", is("3321")))
+                // VOCE-BOLLO → BOLLO_TELEMATICO.
+                .andExpect(jsonPath("$.voci[2].dettaglio.tipoVoce", is("BOLLO_TELEMATICO")))
+                .andExpect(jsonPath("$.voci[2].dettaglio.provinciaResidenza", is("RM")))
+                // VOCE-AMBIGUA (bollo + iban) → la priorita' sceglie BOLLO_TELEMATICO.
+                .andExpect(jsonPath("$.voci[3].dettaglio.tipoVoce", is("BOLLO_TELEMATICO")));
+    }
+
+    @Test
+    void multibeneficiarioVoceHasOwnDominio() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-VOCI").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                // VOCE-INCASSO ha dominio diverso dalla pendenza → valorizzato.
+                .andExpect(jsonPath("$.voci[1].dominio.idDominio", is("22222222222")))
+                // VOCE-ENTRATA senza dominio proprio → assente (single-beneficiario).
+                .andExpect(jsonPath("$.voci[0].dominio").doesNotExist());
     }
 
     @Test
@@ -235,9 +322,6 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(jsonPath("$.idA2A", is(APP_COD)))
                 .andExpect(jsonPath("$.idPendenza", is("PEND-FULL")))
                 .andExpect(jsonPath("$.stato", is("NON_PAGATA")))
-                .andExpect(jsonPath("$.tipo", is("DOVUTA")))
-                .andExpect(jsonPath("$.tassonomia", is("tax-A")))
-                .andExpect(jsonPath("$.tassonomiaAvviso", is("tax-avv")))
                 .andExpect(jsonPath("$.direzione", is("Dir-X")))
                 .andExpect(jsonPath("$.divisione", is("Div-Y")))
                 .andExpect(jsonPath("$.voci", hasSize(2)))
@@ -245,8 +329,14 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(jsonPath("$.voci[*].indice", contains(1, 2)))
                 .andExpect(jsonPath("$._links.informazioniDebitore.href",
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/informazioniDebitore")))
+                .andExpect(jsonPath("$._links.ricevute.href",
+                        endsWith("/pendenze/" + APP_COD + "/PEND-FULL/ricevute")))
                 .andExpect(jsonPath("$._links.avviso.href",
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/avviso")))
+                // Campi rimossi dal refactor #9.
+                .andExpect(jsonPath("$.tipo").doesNotExist())
+                .andExpect(jsonPath("$.tassonomia").doesNotExist())
+                .andExpect(jsonPath("$.tassonomiaAvviso").doesNotExist())
                 .andExpect(jsonPath("$._links.ricevuta").doesNotExist());
     }
 
@@ -255,17 +345,18 @@ class PendenzaDetailIntegrationTest {
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NO-AVV").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._links.informazioniDebitore.href", notNullValue()))
-                .andExpect(jsonPath("$._links.avviso").doesNotExist())
-                .andExpect(jsonPath("$._links.ricevuta").doesNotExist());
+                .andExpect(jsonPath("$._links.ricevute.href", notNullValue()))
+                .andExpect(jsonPath("$._links.avviso").doesNotExist());
     }
 
     @Test
-    void linksRicevutaPresentWhenStatoIsPaid() throws Exception {
+    void linksRicevuteAlwaysPresent() throws Exception {
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-PAGATA").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stato", is("PAGATA")))
-                .andExpect(jsonPath("$._links.ricevuta.href",
-                        endsWith("/pendenze/" + APP_COD + "/PEND-PAGATA/ricevuta")));
+                .andExpect(jsonPath("$._links.ricevute.href",
+                        endsWith("/pendenze/" + APP_COD + "/PEND-PAGATA/ricevute")))
+                .andExpect(jsonPath("$._links.ricevuta").doesNotExist());
     }
 
     @Test
@@ -338,9 +429,9 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.datiAllegati").doesNotExist())
                 .andExpect(jsonPath("$.proprieta").doesNotExist())
-                .andExpect(jsonPath("$.causaleBreve", is("Causale per PEND-FULL")))
+                .andExpect(jsonPath("$.causale", is("Causale per PEND-FULL")))
                 .andExpect(jsonPath("$.unitaOperativa.idUnitaOperativa", is("UO1")))
-                .andExpect(jsonPath("$.idDebitore", is("RSSMRA80A01H501U")));
+                .andExpect(jsonPath("$.idDebitore").doesNotExist());
     }
 
     @Test

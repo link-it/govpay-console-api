@@ -53,6 +53,12 @@ public class Versamento {
     @Column(name = "data_ora_ultimo_aggiornamento", nullable = false)
     private OffsetDateTime dataOraUltimoAggiornamento;
 
+    @Column(name = "data_ultima_modifica_aca")
+    private OffsetDateTime dataUltimaModificaAca;
+
+    @Column(name = "data_ultima_comunicazione_aca")
+    private OffsetDateTime dataUltimaComunicazioneAca;
+
     @Column(name = "causale_versamento", length = 1024)
     private String causaleVersamento;
 
@@ -205,6 +211,22 @@ public class Versamento {
 
     public void setDataValidita(OffsetDateTime dataValidita) {
         this.dataValidita = dataValidita;
+    }
+
+    public OffsetDateTime getDataUltimaModificaAca() {
+        return dataUltimaModificaAca;
+    }
+
+    public void setDataUltimaModificaAca(OffsetDateTime dataUltimaModificaAca) {
+        this.dataUltimaModificaAca = dataUltimaModificaAca;
+    }
+
+    public OffsetDateTime getDataUltimaComunicazioneAca() {
+        return dataUltimaComunicazioneAca;
+    }
+
+    public void setDataUltimaComunicazioneAca(OffsetDateTime dataUltimaComunicazioneAca) {
+        this.dataUltimaComunicazioneAca = dataUltimaComunicazioneAca;
     }
 
     public OffsetDateTime getDataScadenza() {

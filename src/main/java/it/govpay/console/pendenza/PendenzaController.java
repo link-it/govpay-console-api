@@ -1,6 +1,7 @@
 package it.govpay.console.pendenza;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +15,7 @@ import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.model.ListPendenze200Response;
 import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
-import it.govpay.console.model.Ricevuta;
+import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.model.Soggetto;
 import it.govpay.console.ricevuta.RicevutaService;
 import it.govpay.console.soggetto.InformazioniDebitoreService;
@@ -33,7 +34,7 @@ public class PendenzaController implements PendenzeApi {
 
     private static final Set<String> GET_AVVISO_QUERY_PARAMS = Set.of("linguaSecondaria");
 
-    private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
+    private static final Set<String> GET_RICEVUTE_QUERY_PARAMS = Set.of();
 
     private static final Set<String> GET_INFO_DEBITORE_QUERY_PARAMS = Set.of();
 
@@ -169,18 +170,10 @@ public class PendenzaController implements PendenzeApi {
                 informazioniDebitoreService.get(idA2A, idPendenza, currentRequest));
     }
 
-    /**
-     * Analogo a {@link #getPendenzaAvviso}: stesso pattern di delega allo
-     * scrivere direttamente sulla {@link HttpServletResponse} per le varianti
-     * binarie (xml, pdf) — il service ritorna {@code null} in quei casi e il
-     * controller risponde con {@code ResponseEntity.ok().build()}.
-     */
     @Override
-    public ResponseEntity<Ricevuta> getPendenzaRicevuta(String idA2A, String idPendenza) {
-        rejectUnsupportedQueryParams(currentRequest, GET_RICEVUTA_QUERY_PARAMS);
-        ResponseEntity<Ricevuta> response = ricevutaService.get(
-                idA2A, idPendenza, currentRequest, currentResponse);
-        return response != null ? response : ResponseEntity.ok().build();
+    public ResponseEntity<List<RicevutaSummary>> listPendenzaRicevute(String idA2A, String idPendenza) {
+        rejectUnsupportedQueryParams(currentRequest, GET_RICEVUTE_QUERY_PARAMS);
+        return ResponseEntity.ok(ricevutaService.listByPendenza(idA2A, idPendenza));
     }
 
     private static void rejectUnsupportedQueryParams(HttpServletRequest request,

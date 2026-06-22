@@ -117,52 +117,27 @@ class PendenzeEndToEndFixtureTest {
     }
 
     @Test
-    void dettaglioPendenzaPagataIncludeLinkRicevuta() throws Exception {
+    void dettaglioPendenzaPagataIncludeLinkRicevute() throws Exception {
         mvc.perform(get("/pendenze/APP-FIXTURE/PEND-FIX-1")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idPendenza", is("PEND-FIX-1")))
                 .andExpect(jsonPath("$._links.informazioniDebitore.href").exists())
-                .andExpect(jsonPath("$._links.ricevuta.href").exists())
+                .andExpect(jsonPath("$._links.ricevute.href").exists())
+                .andExpect(jsonPath("$._links.ricevuta").doesNotExist())
                 .andExpect(jsonPath("$._links.avviso.href").exists());
     }
 
     @Test
-    void ricevutaJsonContieneMetadatiDaFixture() throws Exception {
-        mvc.perform(get("/pendenze/APP-FIXTURE/PEND-FIX-1/ricevuta")
+    void ricevuteListContieneMetadatiDaFixture() throws Exception {
+        mvc.perform(get("/pendenze/APP-FIXTURE/PEND-FIX-1/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.iuv", is("1111111111111")))
-                .andExpect(jsonPath("$.ccp", is("CCP-FIX-001")))
-                .andExpect(jsonPath("$.idDominio", is("12345678901")))
-                .andExpect(jsonPath("$.psp.idPsp", is("BNCFIXTURE")))
-                .andExpect(jsonPath("$.psp.ragioneSociale", is("Banca Fixture S.p.A.")));
-    }
-
-    @Test
-    void ricevutaXmlEByteIdenticoAllaFixture() throws Exception {
-        byte[] expected = "<RT xmlns=\"urn:fixture\"><id>FIX-1</id></RT>".getBytes();
-
-        mvc.perform(get("/pendenze/APP-FIXTURE/PEND-FIX-1/ricevuta")
-                        .accept(MediaType.APPLICATION_XML)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_XML))
-                .andExpect(content().bytes(expected));
-    }
-
-    @Test
-    void ricevutaPdfStreamingDelegataAlMicroservizio() throws Exception {
-        byte[] fakePdf = new byte[]{'%', 'P', 'D', 'F', '-', '1', '.', '7'};
-        doAnswer(writePdf(fakePdf)).when(stampeClient).streamReceipt(any(), any());
-
-        mvc.perform(get("/pendenze/APP-FIXTURE/PEND-FIX-2/ricevuta")
-                        .accept(MediaType.APPLICATION_PDF)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
-                .andExpect(content().bytes(fakePdf));
+                .andExpect(jsonPath("$[0].iuv", is("1111111111111")))
+                .andExpect(jsonPath("$[0].ccp", is("CCP-FIX-001")))
+                .andExpect(jsonPath("$[0].idDominio", is("12345678901")))
+                .andExpect(jsonPath("$[0].idPsp", is("BNCFIXTURE")));
     }
 
     @Test

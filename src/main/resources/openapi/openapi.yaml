@@ -260,9 +260,8 @@ paths:
 
         `_links`:
         - `informazioniDebitore` sempre presente;
-        - `avviso` presente solo se `numeroAvviso != null`;
-        - `ricevuta` presente solo se la pendenza ha almeno un pagamento riuscito
-          (stato in `PAGATA | PAGATA_PARZIALE | RICONCILIATA`).
+        - `ricevute` sempre presente (la lista e' eventualmente vuota);
+        - `avviso` presente solo se `numeroAvviso != null`.
 
         `?expand=datiAllegati,proprieta` consente di includere sotto-tree
         opt-in nel body. Valori sconosciuti causano 400.
@@ -467,31 +466,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
-  /pendenze/{idA2A}/{idPendenza}/ricevuta:
+  /pendenze/{idA2A}/{idPendenza}/ricevute:
     get:
       tags:
         - Pendenze
-      operationId: getPendenzaRicevuta
-      summary: Ricevuta Telematica associata a una pendenza.
+      operationId: listPendenzaRicevute
+      summary: Elenca le ricevute telematiche associate a una pendenza.
       description: |
-        Ritorna la Ricevuta Telematica (RT) associata alla pendenza identificata
-        da `(idA2A, idPendenza)`. Strategia **"RT principale"**: l'ultima RT
-        riuscita ordinata per `dataPagamento DESC`, dove "riuscita" significa
-        `cod_esito_pagamento ∈ {0, 2}` (Eseguito o Parzialmente eseguito) —
-        coerente con scope C, dove `_links.ricevuta` appare solo per stati
-        `PAGATA | PAGATA_PARZIALE | RICONCILIATA`.
+        Ritorna la lista (metadata-only) delle Ricevute Telematiche (RT) associate
+        alla pendenza identificata da `(idA2A, idPendenza)`, ordinate per
+        `dataPagamento DESC` (RT piu' recenti prima). Una pendenza puo' avere piu'
+        RT (pagamenti parziali, retry, attestazioni out-of-band).
 
-        Content negotiation tramite header `Accept`:
-        - `application/json` (default) → metadati locali della RT (`Ricevuta`);
-        - `application/xml` → **RT originale dal DB** (`xml_rt` byte-identico
-          al ricevuto da PagoPA), streaming;
-        - `application/pdf` → stampa binaria generata dal microservizio
-          `govpay-stampe` (endpoint `/receipt`), streaming.
+        Nessuna paginazione: il numero di RT per pendenza e' limitato. Nessuna
+        content negotiation: questo endpoint ritorna solo `application/json`. Per
+        scaricare una RT in XML o PDF il client naviga ai sub-resource dedicati
+        delle ricevute partendo dai metadati ottenuti qui.
 
-        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
-        viene restituito 404 (no leak di esistenza). Se la pendenza non ha
-        nessuna RT principale (es. pendenza non ancora pagata) viene
-        restituito 404.
+        ACL: se l'operatore non ha visibilita' sul dominio della pendenza, viene
+        restituito 404 (no leak di esistenza). Se la pendenza esiste ma non ha
+        ricevute (es. non ancora pagata), viene restituito 200 con lista vuota.
       parameters:
         - name: idA2A
           in: path
@@ -507,19 +501,13 @@ paths:
             pattern: '^[a-zA-Z0-9\-_]{1,35}$'
       responses:
         '200':
-          description: Ricevuta (formato dipende dall'header `Accept`).
+          description: Lista delle ricevute della pendenza (eventualmente vuota).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Ricevuta'
-            application/xml:
-              schema:
-                type: string
-                format: binary
-            application/pdf:
-              schema:
-                type: string
-                format: binary
+                type: array
+                items:
+                  $ref: '#/components/schemas/RicevutaSummary'
         '401':
           description: Autenticazione mancante o non valida.
           content:
@@ -527,29 +515,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: |
-            Pendenza non trovata, non visibile per l'operatore corrente, oppure
-            priva di RT principale (es. pendenza non pagata).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '406':
-          description: |
-            Header `Accept` non compatibile con `application/json`, `application/xml`
-            o `application/pdf`.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '502':
-          description: Errore di comunicazione con il microservizio `govpay-stampe`.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '503':
-          description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
+          description: Pendenza non trovata o non visibile per l'operatore corrente.
           content:
             application/problem+json:
               schema:
@@ -1761,12 +1727,6 @@ components:
         ragioneSociale:
           type: string
 
-    TipoPendenza:
-      type: string
-      enum:
-        - DOVUTA
-        - SPONTANEA
-
     StatoPendenza:
       type: string
       description: |
@@ -1849,18 +1809,19 @@ components:
     PendenzaLinks:
       type: object
       description: |
-        Collezione di hyperlink relativi alla pendenza. La chiave `informazioniDebitore`
-        e' sempre presente; `avviso`/`ricevuta` sono condizionali (vedi descrizione di `Pendenza`).
+        Collezione di hyperlink relativi alla pendenza. Le chiavi `informazioniDebitore`
+        e `ricevute` sono sempre presenti; `avviso` e' condizionale (vedi descrizione di `Pendenza`).
         Lo schema accetta `additionalProperties` di tipo `Link` per consentire l'aggiunta
         non-breaking di chiavi future (rpp, pagamenti, allegati, ...).
       required:
         - informazioniDebitore
+        - ricevute
       properties:
         informazioniDebitore:
           $ref: '#/components/schemas/Link'
         avviso:
           $ref: '#/components/schemas/Link'
-        ricevuta:
+        ricevute:
           $ref: '#/components/schemas/Link'
       additionalProperties:
         $ref: '#/components/schemas/Link'
@@ -1870,8 +1831,8 @@ components:
       description: Voce di una pendenza (embedded inline in `Pendenza`, max 5 per pendenza).
       required:
         - idVocePendenza
-        - indice
         - importo
+        - descrizione
         - stato
       properties:
         idVocePendenza:
@@ -1895,24 +1856,130 @@ components:
           type: string
         metadata:
           type: string
+        dominio:
+          allOf:
+            - $ref: '#/components/schemas/DominioRef'
+          nullable: true
+          description: |
+            Dominio (ente creditore) della singola voce, per pendenze
+            multibeneficiario. Null per voci single-beneficiario: in tal caso
+            vale il `dominio` della pendenza. Quando presente vince sul dominio
+            della pendenza ai fini dell'incasso di questa voce.
+        dettaglio:
+          description: |
+            Tipo effettivo della voce. La struttura del payload cambia in base al
+            tipo: riferimento a entrata anagrafica, incasso esplicito, o bollo telematico.
+          oneOf:
+            - $ref: '#/components/schemas/VocePendenzaEntrataAnagrafica'
+            - $ref: '#/components/schemas/VocePendenzaIncassoDiretto'
+            - $ref: '#/components/schemas/VocePendenzaBolloTelematico'
+          discriminator:
+            propertyName: tipoVoce
+            mapping:
+              ENTRATA_ANAGRAFICA: '#/components/schemas/VocePendenzaEntrataAnagrafica'
+              INCASSO_DIRETTO: '#/components/schemas/VocePendenzaIncassoDiretto'
+              BOLLO_TELEMATICO: '#/components/schemas/VocePendenzaBolloTelematico'
+
+    VocePendenzaEntrataAnagrafica:
+      description: Dettagli di incasso tramite riferimento a una entrata configurata in anagrafica GovPay.
+      type: object
+      required:
+        - tipoVoce
+        - codEntrata
+      properties:
+        tipoVoce:
+          type: string
+          pattern: '^ENTRATA_ANAGRAFICA$'
+          description: Discriminatore, valore fisso `ENTRATA_ANAGRAFICA`.
+        codEntrata:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_\.]{1,35}$'
+          description: Codice della entrata configurata in anagrafica.
+
+    VocePendenzaIncassoDiretto:
+      description: Dettagli di incasso espliciti (IBAN + contabilita').
+      type: object
+      required:
+        - tipoVoce
+        - ibanAccredito
+        - tipoContabilita
+        - codiceContabilita
+      properties:
+        tipoVoce:
+          type: string
+          pattern: '^INCASSO_DIRETTO$'
+          description: Discriminatore, valore fisso `INCASSO_DIRETTO`.
+        ibanAccredito:
+          type: string
+          example: IT60X0542811101000000123456
+          description: IBAN su cui accreditare l'importo della voce.
+        ibanAppoggio:
+          type: string
+          example: IT60X0542811101000000123456
+          description: IBAN di appoggio (opzionale, per fallback).
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          example: '3321'
+          description: Codifica del capitolo di bilancio.
+
+    VocePendenzaBolloTelematico:
+      description: Dati di un bollo telematico (marca da bollo digitale).
+      type: object
+      required:
+        - tipoVoce
+        - tipoBollo
+        - hashDocumento
+        - provinciaResidenza
+      properties:
+        tipoVoce:
+          type: string
+          pattern: '^BOLLO_TELEMATICO$'
+          description: Discriminatore, valore fisso `BOLLO_TELEMATICO`.
+        tipoBollo:
+          type: string
+          enum:
+            - "Imposta di bollo"
+          description: Tipologia di bollo digitale.
+        hashDocumento:
+          type: string
+          description: Digest in base64 del documento informatico associato alla marca da bollo.
+        provinciaResidenza:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          example: RM
+          description: Sigla automobilistica della provincia di residenza del soggetto pagatore.
+
+    TipoContabilita:
+      type: string
+      description: |
+        Tipo di contabilita' della voce. Valori allineati a V1 (codifica DB a 1 char:
+        CAPITOLO=0, SPECIALE=1, SIOPE=2, SRTP_ESCLUSA_RAVV_OPEROSO=6,
+        SRTP_ESCLUSA_ALTRO_OPERATORE=7, SRTP_ESCLUSA=8, ALTRO=9).
+      enum:
+        - CAPITOLO
+        - SPECIALE
+        - SIOPE
+        - SRTP_ESCLUSA_RAVV_OPEROSO
+        - SRTP_ESCLUSA_ALTRO_OPERATORE
+        - SRTP_ESCLUSA
+        - ALTRO
 
     PendenzaSummary:
       type: object
       description: |
-        Proiezione leggera della pendenza, usata nelle liste paginate.
+        Proiezione leggera della pendenza, usata nelle liste paginate. Non espone
+        dati personali del debitore (per quelli vedi `/informazioniDebitore`).
       required:
         - idA2A
         - idPendenza
         - stato
-        - tipo
-        - anomalo
-        - verificato
         - dominio
         - tipoPendenza
         - importo
-        - importoPagato
+        - causale
         - dataUltimoAggiornamento
-        - idDebitore
       properties:
         idA2A:
           type: string
@@ -1922,12 +1989,6 @@ components:
           pattern: '^[a-zA-Z0-9\-_]{1,35}$'
         stato:
           $ref: '#/components/schemas/StatoPendenza'
-        tipo:
-          $ref: '#/components/schemas/TipoPendenza'
-        anomalo:
-          type: boolean
-        verificato:
-          type: boolean
         dominio:
           $ref: '#/components/schemas/DominioRef'
         tipoPendenza:
@@ -1940,26 +2001,29 @@ components:
         importo:
           type: number
           format: double
-        importoPagato:
-          type: number
-          format: double
-        dataScadenza:
-          type: string
-          format: date-time
-        dataUltimoAggiornamento:
-          type: string
-          format: date-time
         numeroAvviso:
           type: string
           pattern: '^[0-9]{18}$'
         iuvAvviso:
           type: string
-        causaleBreve:
+        causale:
           type: string
-          maxLength: 80
-        idDebitore:
+          description: Causale completa della pendenza.
+        dataScadenza:
           type: string
-          description: Solo CF/PIVA del soggetto pagatore. I dati anagrafici completi sono su `/informazioniDebitore`.
+          format: date-time
+        dataValidita:
+          type: string
+          format: date
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+        dataUltimaModificaAca:
+          type: string
+          format: date-time
+        dataUltimaComunicazioneAca:
+          type: string
+          format: date-time
 
     Pendenza:
       description: |
@@ -1977,10 +2041,6 @@ components:
             - _links
           properties:
             descrizione:
-              type: string
-            tassonomia:
-              type: string
-            tassonomiaAvviso:
               type: string
             documento:
               type: string
@@ -2093,6 +2153,37 @@ components:
                 format: double
               causale:
                 type: string
+
+    RicevutaSummary:
+      type: object
+      description: |
+        Proiezione leggera (metadata-only) di una ricevuta telematica, usata nella
+        lista delle ricevute di una pendenza. Non espone dati personali. I tre
+        campi `idDominio`, `iuv`, `ccp` identificano la RT per la navigazione ai
+        sub-resource di dettaglio (XML/PDF).
+      required:
+        - idDominio
+        - iuv
+        - ccp
+      properties:
+        idDominio:
+          type: string
+        iuv:
+          type: string
+        ccp:
+          type: string
+        dataPagamento:
+          type: string
+          format: date-time
+        importoTotalePagato:
+          type: number
+          format: double
+        esito:
+          type: integer
+          format: int32
+          description: Codice esito pagamento pagoPA (0 = Eseguito, 2 = Parzialmente eseguito).
+        idPsp:
+          type: string
 
     Soggetto:
       type: object

@@ -43,4 +43,18 @@ public interface RptRepository extends JpaRepository<Rpt, Long> {
         List<Rpt> hits = findPrincipale(idA2A, idPendenza, PageRequest.of(0, 1));
         return hits.isEmpty() ? Optional.empty() : Optional.of(hits.get(0));
     }
+
+    /**
+     * Tutte le RT di una pendenza, ordinate per {@code data_msg_ricevuta DESC}
+     * (RT piu' recenti prima). Usata dalla lista {@code /ricevute}: include ogni
+     * RT presente, non solo la principale.
+     */
+    @EntityGraph(attributePaths = {"versamento", "versamento.dominio"})
+    @Query("""
+            select r from Rpt r
+             where r.versamento.applicazione.codApplicazione = :idA2A
+               and r.versamento.codVersamentoEnte = :idPendenza
+             order by r.dataMsgRicevuta desc
+            """)
+    List<Rpt> findByPendenza(@Param("idA2A") String idA2A, @Param("idPendenza") String idPendenza);
 }

@@ -16,7 +16,9 @@ import it.govpay.console.avviso.StampeClient;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.Ricevuta;
+import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.NotAcceptableMediaTypeException;
@@ -49,21 +51,53 @@ public class RicevutaService {
     private static final Logger log = LoggerFactory.getLogger(RicevutaService.class);
 
     private final RptRepository rptRepository;
+    private final VersamentoRepository versamentoRepository;
     private final RicevutaMapper ricevutaMapper;
     private final RicevutaPdfPayloadMapper pdfPayloadMapper;
     private final StampeClient stampeClient;
     private final CurrentOperatorService currentOperatorService;
 
     public RicevutaService(RptRepository rptRepository,
+                           VersamentoRepository versamentoRepository,
                            RicevutaMapper ricevutaMapper,
                            RicevutaPdfPayloadMapper pdfPayloadMapper,
                            StampeClient stampeClient,
                            CurrentOperatorService currentOperatorService) {
         this.rptRepository = rptRepository;
+        this.versamentoRepository = versamentoRepository;
         this.ricevutaMapper = ricevutaMapper;
         this.pdfPayloadMapper = pdfPayloadMapper;
         this.stampeClient = stampeClient;
         this.currentOperatorService = currentOperatorService;
+    }
+
+    /**
+     * Lista (metadata-only) delle RT di una pendenza, ordinata per
+     * {@code dataPagamento DESC}. Pendenza inesistente o non visibile per ACL
+     * → 404 (anti-leak); pendenza senza RT → lista vuota.
+     */
+    @Transactional(readOnly = true)
+    public List<RicevutaSummary> listByPendenza(String idA2A, String idPendenza) {
+        OperatoreCorrente operatore = currentOperatorService.get();
+        Versamento versamento = versamentoRepository.findDetail(idA2A, idPendenza)
+                .orElseThrow(() -> new NotFoundException(
+                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
+        if (!isVisibile(versamento, operatore)) {
+            throw new NotFoundException(
+                    "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
+        }
+        return rptRepository.findByPendenza(idA2A, idPendenza).stream()
+                .map(RicevutaService::toSummary)
+                .toList();
+    }
+
+    private static RicevutaSummary toSummary(Rpt rpt) {
+        RicevutaSummary s = new RicevutaSummary(rpt.getCodDominio(), rpt.getIuv(), rpt.getCcp());
+        s.setDataPagamento(rpt.getDataMsgRicevuta());
+        s.setImportoTotalePagato(rpt.getImportoTotalePagato());
+        s.setEsito(rpt.getCodEsitoPagamento());
+        s.setIdPsp(rpt.getCodPsp());
+        return s;
     }
 
     @Transactional(readOnly = true)

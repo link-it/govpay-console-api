@@ -9,11 +9,10 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 /**
- * IBAN associabile a un singolo versamento (accredito o appoggio). In V2 slim
- * mappiamo solo {@code id} e {@code postale}: serve all'avviso PDF per
- * decidere se valorizzare {@code postal=true} sul payload del microservizio
- * {@code govpay-stampe} (V1 fa lo stesso controllo in
- * {@code AvvisoPagamentoV2Utils.java:441-446}).
+ * IBAN associabile a un singolo versamento (accredito o appoggio). Mappa
+ * {@code id}, {@code postale} (l'avviso PDF lo usa per valorizzare
+ * {@code postal=true} sul payload del microservizio {@code govpay-stampe}) e
+ * {@code codIban} (esposto nelle voci di tipo incasso diretto).
  */
 @Entity
 @Table(name = "iban_accredito")
@@ -27,6 +26,9 @@ public class IbanAccredito {
 
     @Column(name = "postale", nullable = false)
     private Boolean postale;
+
+    @Column(name = "cod_iban", nullable = false, length = 255)
+    private String codIban;
 
     public Long getId() {
         return id;
@@ -42,5 +44,13 @@ public class IbanAccredito {
 
     public void setPostale(Boolean postale) {
         this.postale = postale;
+    }
+
+    public String getCodIban() {
+        return codIban;
+    }
+
+    public void setCodIban(String codIban) {
+        this.codIban = codIban;
     }
 }

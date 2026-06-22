@@ -57,6 +57,12 @@ public class SingoloVersamento {
     @Column(name = "provincia_residenza", length = 2)
     private String provinciaResidenza;
 
+    @Column(name = "tipo_contabilita", length = 1)
+    private String tipoContabilita;
+
+    @Column(name = "codice_contabilita", length = 255)
+    private String codiceContabilita;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_versamento", nullable = false)
     private Versamento versamento;
@@ -68,6 +74,14 @@ public class SingoloVersamento {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_iban_appoggio")
     private IbanAccredito ibanAppoggio;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_dominio")
+    private Dominio dominio;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_tributo")
+    private Tributo tributo;
 
     public Long getId() {
         return id;
@@ -195,5 +209,37 @@ public class SingoloVersamento {
 
     public void setProvinciaResidenza(String provinciaResidenza) {
         this.provinciaResidenza = provinciaResidenza;
+    }
+
+    public String getTipoContabilita() {
+        return tipoContabilita;
+    }
+
+    public void setTipoContabilita(String tipoContabilita) {
+        this.tipoContabilita = tipoContabilita;
+    }
+
+    public String getCodiceContabilita() {
+        return codiceContabilita;
+    }
+
+    public void setCodiceContabilita(String codiceContabilita) {
+        this.codiceContabilita = codiceContabilita;
+    }
+
+    public Dominio getDominio() {
+        return dominio;
+    }
+
+    public void setDominio(Dominio dominio) {
+        this.dominio = dominio;
+    }
+
+    public Tributo getTributo() {
+        return tributo;
+    }
+
+    public void setTributo(Tributo tributo) {
+        this.tributo = tributo;
     }
 }

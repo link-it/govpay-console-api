@@ -230,6 +230,8 @@ class PendenzaControllerIntegrationTest {
         v.setAnomalo(false);
         v.setAck(false);
         v.setTipo("DOVUTO");
+        v.setCausaleVersamento("Causale " + idPendenza);
+        v.setDataValidita(OffsetDateTime.parse("2026-03-15T10:30:00Z"));
         v.setNumeroAvviso(numAvviso);
         v.setDominio(dom);
         v.setApplicazione(app);
@@ -422,16 +424,77 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].idA2A", is(APP_COD)))
                 .andExpect(jsonPath("$.results[0].stato", is("NON_PAGATA")))
-                .andExpect(jsonPath("$.results[0].tipo", is("DOVUTA")))
                 .andExpect(jsonPath("$.results[0].importo", is(100.0)))
-                .andExpect(jsonPath("$.results[0].importoPagato", greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.results[0].causale", org.hamcrest.Matchers.notNullValue()))
+                // dataValidita e' una data pura (format: date): nessun orario nel payload.
+                .andExpect(jsonPath("$.results[0].dataValidita", is("2026-03-15")))
                 .andExpect(jsonPath("$.results[0].dominio.idDominio", is("11111111111")))
                 .andExpect(jsonPath("$.results[0].dominio.ragioneSociale", is("Dominio A")))
                 .andExpect(jsonPath("$.results[0].tipoPendenza.idTipoPendenza", is("TARI")))
                 .andExpect(jsonPath("$.results[0].unitaOperativa.idUnitaOperativa", is("UO1")))
-                .andExpect(jsonPath("$.results[0].idDebitore", is("RSSMRA80A01H501U")))
                 .andExpect(jsonPath("$.results[0].dataUltimoAggiornamento", org.hamcrest.Matchers.notNullValue()))
-                .andExpect(jsonPath("$.results[0].verificato", is(false)));
+                // Campi rimossi dal refactor #9: non devono comparire nel summary.
+                .andExpect(jsonPath("$.results[0].tipo").doesNotExist())
+                .andExpect(jsonPath("$.results[0].anomalo").doesNotExist())
+                .andExpect(jsonPath("$.results[0].verificato").doesNotExist())
+                .andExpect(jsonPath("$.results[0].importoPagato").doesNotExist())
+                .andExpect(jsonPath("$.results[0].idDebitore").doesNotExist())
+                .andExpect(jsonPath("$.results[0].causaleBreve").doesNotExist());
+    }
+
+    @Test
+    void pendenzaSummaryHasExactlyFifteenFields() throws Exception {
+        // Pendenza dedicata con TUTTI i 15 campi del summary popolati (creata nel
+        // test per non alterare i conteggi degli altri): la proiezione deve esporne
+        // esattamente 15, cosi' l'aggiunta accidentale di un 16esimo campo rompe il test.
+        Versamento base = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        Versamento full = new Versamento();
+        full.setCodVersamentoEnte("PEND-15");
+        full.setImportoTotale(123.0);
+        full.setStatoVersamento("NON_ESEGUITO");
+        full.setDataCreazione(OffsetDateTime.now().minusHours(12));
+        full.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(12));
+        full.setDataScadenza(OffsetDateTime.now().plusDays(10));
+        full.setDataValidita(OffsetDateTime.parse("2026-04-01T08:00:00Z"));
+        full.setDataUltimaModificaAca(OffsetDateTime.now().minusDays(1));
+        full.setDataUltimaComunicazioneAca(OffsetDateTime.now().minusDays(2));
+        full.setCausaleVersamento("Causale completa");
+        full.setNumeroAvviso("009999999999999999");
+        full.setIuvVersamento("9999999999999");
+        full.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        full.setDebitoreAnagrafica("Mario Rossi");
+        full.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        full.setImportoPagato(0.0);
+        full.setAnomalo(false);
+        full.setAck(false);
+        full.setTipo("DOVUTO");
+        full.setDominio(base.getDominio());
+        full.setApplicazione(base.getApplicazione());
+        full.setTipoVersamento(base.getTipoVersamento());
+        full.setTipoVersamentoDominio(base.getTipoVersamentoDominio());
+        full.setUnitaOperativa(base.getUnitaOperativa());
+        versamentoRepository.save(full);
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-15")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].*", hasSize(15)))
+                .andExpect(jsonPath("$.results[0].idA2A").exists())
+                .andExpect(jsonPath("$.results[0].idPendenza").exists())
+                .andExpect(jsonPath("$.results[0].stato").exists())
+                .andExpect(jsonPath("$.results[0].dominio").exists())
+                .andExpect(jsonPath("$.results[0].tipoPendenza").exists())
+                .andExpect(jsonPath("$.results[0].unitaOperativa").exists())
+                .andExpect(jsonPath("$.results[0].importo").exists())
+                .andExpect(jsonPath("$.results[0].numeroAvviso").exists())
+                .andExpect(jsonPath("$.results[0].iuvAvviso").exists())
+                .andExpect(jsonPath("$.results[0].causale").exists())
+                .andExpect(jsonPath("$.results[0].dataScadenza").exists())
+                .andExpect(jsonPath("$.results[0].dataValidita").exists())
+                .andExpect(jsonPath("$.results[0].dataUltimoAggiornamento").exists())
+                .andExpect(jsonPath("$.results[0].dataUltimaModificaAca").exists())
+                .andExpect(jsonPath("$.results[0].dataUltimaComunicazioneAca").exists());
     }
 
     @Test

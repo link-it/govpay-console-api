@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -194,161 +195,70 @@ class RicevutaIntegrationTest {
 
     @Test
     void requiresAuthentication() throws Exception {
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-1/ricevuta"))
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-1/ricevute"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void returnsRicevutaJsonByDefault() throws Exception {
+    void listReturnsSummariesMetadataOnly() throws Exception {
         Versamento v = newPendenza("PEND-1");
-        newSv(v, 1, "Voce 1", 100.0);
-        versamentoRepository.save(v);
         newRpt(v, "1234567890123", "CCP-001", 0, OffsetDateTime.now(), XML_RT);
 
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-1/ricevuta")
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-1/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.iuv", is("1234567890123")))
-                .andExpect(jsonPath("$.ccp", is("CCP-001")))
-                .andExpect(jsonPath("$.idDominio", is(DOM)))
-                .andExpect(jsonPath("$.importoTotalePagato", is(100.0)))
-                .andExpect(jsonPath("$.causale", is("TARI 2026 — saldo")))
-                .andExpect(jsonPath("$.psp.idPsp", is("BNCITEST01")))
-                .andExpect(jsonPath("$.psp.ragioneSociale", is("Banca Test S.p.A.")))
-                .andExpect(jsonPath("$.riferimentoTransazione", is("TX-001")))
-                .andExpect(jsonPath("$.singoliVersamenti[0].iur", is("1")))
-                .andExpect(jsonPath("$.singoliVersamenti[0].importo", is(100.0)))
-                .andExpect(jsonPath("$.singoliVersamenti[0].causale", is("Voce 1")));
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDominio", is(DOM)))
+                .andExpect(jsonPath("$[0].iuv", is("1234567890123")))
+                .andExpect(jsonPath("$[0].ccp", is("CCP-001")))
+                .andExpect(jsonPath("$[0].importoTotalePagato", is(100.0)))
+                .andExpect(jsonPath("$[0].esito", is(0)))
+                .andExpect(jsonPath("$[0].idPsp", is("BNCITEST01")))
+                // metadata-only: nessun dato personale ne' XML nel summary.
+                .andExpect(jsonPath("$[0].causale").doesNotExist())
+                .andExpect(jsonPath("$[0].xmlRt").doesNotExist());
     }
 
     @Test
-    void returnsRawXmlWhenAcceptIsXml() throws Exception {
-        Versamento v = newPendenza("PEND-XML");
-        newRpt(v, "1234567890123", "CCP-XML", 0, OffsetDateTime.now(), XML_RT);
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-XML/ricevuta")
-                        .accept(MediaType.APPLICATION_XML)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_XML))
-                .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"" + DOM + "_1234567890123_CCP-XML.xml\""))
-                .andExpect(content().bytes(XML_RT));
-    }
-
-    @Test
-    void returnsPdfWhenAcceptIsPdf() throws Exception {
-        Versamento v = newPendenza("PEND-PDF");
-        newSv(v, 1, "Voce 1", 100.0);
-        versamentoRepository.save(v);
-        newRpt(v, "1234567890123", "CCP-PDF", 0, OffsetDateTime.now(), XML_RT);
-
-        byte[] fakePdf = new byte[]{'%', 'P', 'D', 'F'};
-        doAnswer(writePdf(fakePdf)).when(stampeClient).streamReceipt(any(), any());
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-PDF/ricevuta")
-                        .accept(MediaType.APPLICATION_PDF)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
-                .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"" + DOM + "_1234567890123_CCP-PDF.pdf\""))
-                .andExpect(content().bytes(fakePdf));
-
-        ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
-        verify(stampeClient).streamReceipt(captor.capture(), any());
-        Receipt r = captor.getValue();
-        assertThat(r.getStatus()).isEqualTo(ReceiptStatus.EXECUTED);
-        assertThat(r.getCreditorReferenceId()).isEqualTo("1234567890123");
-        assertThat(r.getReceiptId()).isEqualTo("CCP-PDF");
-        assertThat(r.getItems()).hasSize(1);
-        assertThat(r.getItems().get(0).getIur()).isEqualTo("1");
-    }
-
-    @Test
-    void picksMostRecentRtWhenMultiple() throws Exception {
+    void listOrdersByDataPagamentoDesc() throws Exception {
         Versamento v = newPendenza("PEND-MULTI");
-        OffsetDateTime older = OffsetDateTime.now().minusDays(2);
-        OffsetDateTime newer = OffsetDateTime.now();
-        newRpt(v, "OLD", "CCP-OLD", 0, older, XML_RT);
-        newRpt(v, "NEW", "CCP-NEW", 0, newer, XML_RT);
+        newRpt(v, "OLD", "CCP-OLD", 0, OffsetDateTime.now().minusDays(2), XML_RT);
+        newRpt(v, "NEW", "CCP-NEW", 0, OffsetDateTime.now(), XML_RT);
 
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-MULTI/ricevuta")
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-MULTI/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.iuv", is("NEW")));
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].iuv", contains("NEW", "OLD")));
     }
 
     @Test
-    void excludesRtWithEsitoNonEseguito() throws Exception {
-        Versamento v = newPendenza("PEND-FAIL");
-        newRpt(v, "FAIL", "CCP-FAIL", 1 /* Non eseguito */,
-                OffsetDateTime.now(), XML_RT);
+    void listIncludesAllRtRegardlessOfEsito() throws Exception {
+        Versamento v = newPendenza("PEND-ALL");
+        newRpt(v, "OK", "CCP-OK", 0, OffsetDateTime.now(), XML_RT);
+        newRpt(v, "KO", "CCP-KO", 1 /* Non eseguito */, OffsetDateTime.now().minusHours(1), XML_RT);
 
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-FAIL/ricevuta")
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-ALL/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
     }
 
     @Test
-    void returns404WhenNoRt() throws Exception {
+    void listReturnsEmptyArrayWhenNoRt() throws Exception {
         newPendenza("PEND-NO-RT");
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NO-RT/ricevuta")
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NO-RT/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isNotFound())
-                .andExpect(content().contentType("application/problem+json"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 
     @Test
     void returns404WhenPendenzaDoesNotExist() throws Exception {
-        mvc.perform(get("/pendenze/" + APP_COD + "/UNKNOWN/ricevuta")
+        mvc.perform(get("/pendenze/" + APP_COD + "/UNKNOWN/ricevute")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void returns406ForUnsupportedAccept() throws Exception {
-        Versamento v = newPendenza("PEND-406");
-        newRpt(v, "1234567890123", "CCP-406", 0, OffsetDateTime.now(), XML_RT);
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-406/ricevuta")
-                        .accept(MediaType.TEXT_PLAIN)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isNotAcceptable())
+                .andExpect(status().isNotFound())
                 .andExpect(content().contentType("application/problem+json"));
-        verify(stampeClient, never()).streamReceipt(any(), any());
-    }
-
-    @Test
-    void returns502WhenStampeFailsOnPdf() throws Exception {
-        Versamento v = newPendenza("PEND-502");
-        newRpt(v, "1234567890123", "CCP-502", 0, OffsetDateTime.now(), XML_RT);
-        doThrow(new StampeUnavailableException("boom", new RuntimeException()))
-                .when(stampeClient).streamReceipt(any(), any());
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-502/ricevuta")
-                        .accept(MediaType.APPLICATION_PDF)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isBadGateway())
-                .andExpect(content().contentType("application/problem+json"));
-    }
-
-    @Test
-    void jsonAndXmlNotAffectedByStampeFailure() throws Exception {
-        Versamento v = newPendenza("PEND-JSON-XML");
-        newRpt(v, "1234567890123", "CCP-OK", 0, OffsetDateTime.now(), XML_RT);
-        doThrow(new StampeUnavailableException("boom", new RuntimeException()))
-                .when(stampeClient).streamReceipt(any(), any());
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-JSON-XML/ricevuta")
-                        .accept(MediaType.APPLICATION_JSON)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk());
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-JSON-XML/ricevuta")
-                        .accept(MediaType.APPLICATION_XML)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk());
-        verify(stampeClient, never()).streamReceipt(any(), any());
     }
 }
