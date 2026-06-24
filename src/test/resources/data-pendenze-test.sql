@@ -73,20 +73,20 @@ VALUES (8002, 'SV-FIX-2-A', 'ESEGUITO', 50.0, 'Voce fixture 2', 1, 7002);
 -- 2 RT entrambe con xml_rt valorizzato ed esito 0 (Eseguito).
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
-                 versione, cod_psp, denominazione_attestante, cod_transazione_rt,
+                 versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
                  id_versamento)
 VALUES (9001, '1111111111111', 'CCP-FIX-001', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-1</id></RT>' AS BYTEA), 0,
         100.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-        'SANP_240_V2', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-1',
+        'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-1',
         7001);
 
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
-                 versione, cod_psp, denominazione_attestante, cod_transazione_rt,
+                 versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
                  id_versamento)
 VALUES (9002, '2222222222222', 'CCP-FIX-002', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-2</id></RT>' AS BYTEA), 0,
         50.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-        'SANP_240_V2', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-2',
+        'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-2',
         7002);

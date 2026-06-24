@@ -19,11 +19,13 @@ import jakarta.persistence.Table;
  * {@code /pendenze/{idA2A}/{idPendenza}/ricevuta}:
  * <ul>
  *   <li>chiavi pagoPA: {@code iuv}, {@code ccp}, {@code codDominio};</li>
- *   <li>RT originale: {@code xmlRt} (servita su {@code application/xml});</li>
+ *   <li>tracciati originali: {@code xmlRpt} e {@code xmlRt} (serviti su
+ *       {@code application/xml} o convertiti in JSON);</li>
  *   <li>esito e ammontare: {@code codEsitoPagamento}, {@code importoTotalePagato};</li>
+ *   <li>stato della transazione: {@code stato}, {@code descrizioneStato};</li>
  *   <li>date: {@code dataMsgRicevuta}, {@code dataMsgRichiesta};</li>
  *   <li>identificativi PSP / istituto attestante;</li>
- *   <li>versione SANP per il payload PDF.</li>
+ *   <li>versione SANP per il dispatch di conversione e il payload PDF.</li>
  * </ul>
  */
 @Entity
@@ -45,8 +47,17 @@ public class Rpt {
     @Column(name = "cod_dominio", nullable = false, length = 35)
     private String codDominio;
 
+    @Column(name = "xml_rpt", columnDefinition = "BYTEA")
+    private byte[] xmlRpt;
+
     @Column(name = "xml_rt", columnDefinition = "BYTEA")
     private byte[] xmlRt;
+
+    @Column(name = "stato", nullable = false, length = 35)
+    private String stato;
+
+    @Column(name = "descrizione_stato", columnDefinition = "TEXT")
+    private String descrizioneStato;
 
     @Column(name = "cod_esito_pagamento")
     private Integer codEsitoPagamento;
@@ -114,12 +125,36 @@ public class Rpt {
         this.codDominio = codDominio;
     }
 
+    public byte[] getXmlRpt() {
+        return xmlRpt;
+    }
+
+    public void setXmlRpt(byte[] xmlRpt) {
+        this.xmlRpt = xmlRpt;
+    }
+
     public byte[] getXmlRt() {
         return xmlRt;
     }
 
     public void setXmlRt(byte[] xmlRt) {
         this.xmlRt = xmlRt;
+    }
+
+    public String getStato() {
+        return stato;
+    }
+
+    public void setStato(String stato) {
+        this.stato = stato;
+    }
+
+    public String getDescrizioneStato() {
+        return descrizioneStato;
+    }
+
+    public void setDescrizioneStato(String descrizioneStato) {
+        this.descrizioneStato = descrizioneStato;
     }
 
     public Integer getCodEsitoPagamento() {

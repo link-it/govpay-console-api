@@ -167,6 +167,7 @@ class RicevutaIntegrationTest {
         r.setDataMsgRicevuta(dataRicevuta);
         r.setVersamento(v);
         r.setVersione("SANP_240_V2");
+        r.setStato("RT_ACCETTATA_PA");
         r.setDenominazioneAttestante("Banca Test S.p.A.");
         r.setCodPsp("BNCITEST01");
         r.setCodTransazioneRt("TX-001");

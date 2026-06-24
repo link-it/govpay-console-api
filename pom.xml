@@ -186,6 +186,19 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Runtime JAXB per i modelli generati dai tracciati PagoPA (RPT/RT);
+             porta anche jakarta.xml.bind-api in modo transitivo -->
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+        </dependency>
+
+        <!-- Serializzazione JSON dei modelli JAXB (annotazioni jakarta.xml.bind) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-jakarta-xmlbind-annotations</artifactId>
+        </dependency>
+
         <!-- Spring Security Test -->
         <dependency>
             <groupId>org.springframework.security</groupId>
@@ -419,6 +432,45 @@
                 </executions>
             </plugin>
 
+            <!-- Generazione modelli JAXB dai tracciati PagoPA (RPT/RT) -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>jaxb2-maven-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>xjc-rpt-rt</id>
+                        <goals>
+                            <goal>xjc</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/src/main/resources/xsd/pagopa/PagInf_RPT_RT_6_2_0.xsd</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>xjc-pafornode</id>
+                        <goals>
+                            <goal>xjc</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/src/main/resources/xsd/pagopa/paForNode.xsd</source>
+                            </sources>
+                            <packageName>it.gov.pagopa.pagopa_api.pa.pafornode</packageName>
+                        </configuration>
+                    </execution>
+                </executions>
+                <configuration>
+                    <xjbSources>
+                        <xjbSource>${project.basedir}/src/main/resources/xsd/pagopa/global.xjb</xjbSource>
+                    </xjbSources>
+                    <extension>true</extension>
+                    <clearOutputDir>false</clearOutputDir>
+                </configuration>
+            </plugin>
+
             <!-- Add generated sources to compilation -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -469,6 +521,8 @@
                         <exclude>it/govpay/console/api/**</exclude>
                         <exclude>it/govpay/console/model/**</exclude>
                         <exclude>it/govpay/stampe/client/**</exclude>
+                        <exclude>it/gov/digitpa/**</exclude>
+                        <exclude>it/gov/pagopa/**</exclude>
                         <exclude>it/govpay/console/GovPayConsoleApplication.class</exclude>
                         <exclude>org/openspcoop2/**</exclude>
                     </excludes>
