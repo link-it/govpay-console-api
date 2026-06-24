@@ -9,7 +9,7 @@ echo "Options
 -h             : Mostra questa pagina di aiuto
 
 Sorgente:
--v <VERSIONE>  : Imposta la versione della release binaria da utilizzare per il build (default: ${LATEST_GOVPAY_CONSOLE_RELEASE})
+-v <VERSIONE>  : Imposta la versione della release binaria da utilizzare per il build (default: ${LATEST_GOVPAY_CONSOLE_API_RELEASE})
 -l <FILE>      : Usa un'installer binario sul filesystem locale
 
 Personalizzazioni:
@@ -40,7 +40,7 @@ REGISTRY_PREFIX=linkitaly
 #REGISTRY_PREFIX=localhost
 
 LATEST_LINK="$(curl -qw '%{redirect_url}\n' https://github.com/link-it/govpay-console-api/releases/latest 2> /dev/null)"
-LATEST_GOVPAY_CONSOLE_RELEASE="${LATEST_LINK##*/}"
+LATEST_GOVPAY_CONSOLE_API_RELEASE="${LATEST_LINK##*/}"
 
 while getopts "ht:v:l:e:f:" opt; do
   case $opt in
@@ -68,10 +68,10 @@ mkdir -p buildcontext/
 cp -fr commons buildcontext/
 
 DOCKERBUILD_OPT=()
-DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_fullversion=${VER:-${LATEST_GOVPAY_CONSOLE_RELEASE}}")
+DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_api_fullversion=${VER:-${LATEST_GOVPAY_CONSOLE_API_RELEASE}}")
 [ -n "${TEMPLATE}" ] &&  cp -f "${TEMPLATE}" buildcontext/commons/
-[ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_home=${CUSTOM_GOVPAY_HOME}")
-[ -n "${CUSTOM_GOVPAY_LOG}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_log=${CUSTOM_GOVPAY_LOG}")
+[ -n "${CUSTOM_GOVPAY_HOME}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_api_home=${CUSTOM_GOVPAY_HOME}")
+[ -n "${CUSTOM_GOVPAY_LOG}" ] && DOCKERBUILD_OPTS=(${DOCKERBUILD_OPTS[@]} '--build-arg' "govpay_console_api_log=${CUSTOM_GOVPAY_LOG}")
 if [ -n "${CUSTOM_RUNTIME}" ]
 then
   cp -r ${CUSTOM_RUNTIME}/ buildcontext/runtime
@@ -81,10 +81,10 @@ fi
 # Build immagine installer
 if [ -n "${LOCALFILE}" ]
 then
-  DOCKERFILE="govpay-console/Dockerfile.daFile"
+  DOCKERFILE="govpay-console-api/Dockerfile.daFile"
   cp -f "${LOCALFILE}" buildcontext/
 else
-  DOCKERFILE="govpay-console/Dockerfile.github"
+  DOCKERFILE="govpay-console-api/Dockerfile.github"
 fi
 
 
@@ -93,7 +93,7 @@ fi
 if [ -z "$TAG" ]
 then
     REPO=${REGISTRY_PREFIX}/govpay-console-api
-  TAGNAME=${VER:-${LATEST_GOVPAY_CONSOLE_RELEASE}}
+  TAGNAME=${VER:-${LATEST_GOVPAY_CONSOLE_API_RELEASE}}
   TAG="${REPO}:${TAGNAME}"
 fi
 
