@@ -1,4 +1,4 @@
-package it.govpay.console.pendenza;
+package it.govpay.console.pagination;
 
 import it.govpay.console.web.BadRequestException;
 

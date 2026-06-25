@@ -20,6 +20,7 @@ import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.NotAcceptableMediaTypeException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.stampe.client.model.PaymentNotice;
@@ -71,7 +72,7 @@ public class AvvisoService {
                 .orElseThrow(() -> new NotFoundException(
                         "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
 
-        if (!isVisibile(versamento, operatore)) {
+        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
             log.debug("getAvviso ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={}",
                     idA2A, idPendenza);
             throw new NotFoundException(
@@ -157,36 +158,6 @@ public class AvvisoService {
         }
         throw new NotAcceptableMediaTypeException(
                 "Accept '" + header + "' non supportato: ammessi application/json e application/pdf.");
-    }
-
-    private static boolean isVisibile(Versamento v, OperatoreCorrente operatore) {
-        if (!isDominioOrUoVisible(v, operatore)) {
-            return false;
-        }
-        if (!operatore.tuttiITipiVersamento()) {
-            if (v.getTipoVersamento() == null) {
-                return false;
-            }
-            return operatore.idTipiVersamentoVisibili().contains(v.getTipoVersamento().getId());
-        }
-        return true;
-    }
-
-    private static boolean isDominioOrUoVisible(Versamento v, OperatoreCorrente operatore) {
-        if (operatore.tuttiIDomini()) {
-            return true;
-        }
-        if (v.getDominio() == null) {
-            return false;
-        }
-        if (operatore.idDominiInteri().contains(v.getDominio().getId())) {
-            return true;
-        }
-        if (v.getUnitaOperativa() != null
-                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId())) {
-            return true;
-        }
-        return false;
     }
 
     /**

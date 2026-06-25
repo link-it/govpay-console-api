@@ -1,4 +1,4 @@
-package it.govpay.console.pendenza;
+package it.govpay.console.pagination;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -6,16 +6,19 @@ import java.time.format.DateTimeParseException;
 import java.util.Base64;
 
 /**
- * Codifica/decodifica del cursore opaque per la paginazione keyset di
- * {@code GET /pendenze} (scope G issue #9).
+ * Codifica/decodifica del cursore opaque per la paginazione keyset, condiviso da
+ * tutte le collection cursor-paginated (pendenze, ricevute, ...).
  *
- * <p>Formato: base64 URL-safe (no padding) di {@code "<dataOraUltimoAggiornamento ISO_8601>|<id>"}.
- * Esempio: {@code "2026-06-12T10:15:30.123Z|42"} → base64.
+ * <p>Formato: base64 URL-safe (no padding) di {@code "<timestamp ISO_8601>|<id>"}.
+ * Esempio: {@code "2026-06-12T10:15:30.123Z|42"} → base64. Il significato del
+ * timestamp dipende dall'ordinamento della collection (es.
+ * {@code dataOraUltimoAggiornamento} per le pendenze, {@code dataPagamento} per le
+ * ricevute).
  *
- * <p><b>Non firmato</b> (allineato issue): il cursore e' un hint di
- * paginazione, non un token di sicurezza. La query e' comunque scoped sulla
- * visibilita' ACL dell'operatore corrente, quindi una manomissione non
- * permette accessi non autorizzati — al piu' fa saltare ordinamento/pagine.
+ * <p><b>Non firmato</b>: il cursore è un hint di paginazione, non un token di
+ * sicurezza. La query è comunque scoped sulla visibilità ACL dell'operatore
+ * corrente, quindi una manomissione non permette accessi non autorizzati — al più
+ * fa saltare ordinamento/pagine.
  */
 public final class CursorCodec {
 
@@ -23,8 +26,8 @@ public final class CursorCodec {
 
     private CursorCodec() {}
 
-    public static String encode(OffsetDateTime dataOraUltimoAggiornamento, long id) {
-        String raw = dataOraUltimoAggiornamento.toString() + SEPARATOR + id;
+    public static String encode(OffsetDateTime timestamp, long id) {
+        String raw = timestamp.toString() + SEPARATOR + id;
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
     }
@@ -61,5 +64,5 @@ public final class CursorCodec {
         return new Cursor(ts, id);
     }
 
-    public record Cursor(OffsetDateTime dataOraUltimoAggiornamento, long id) {}
+    public record Cursor(OffsetDateTime timestamp, long id) {}
 }

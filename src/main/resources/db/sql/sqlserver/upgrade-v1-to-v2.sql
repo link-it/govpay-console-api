@@ -43,3 +43,18 @@ DELETE FROM connettori WHERE cod_connettore IN (
 GO
 ALTER TABLE intermediari DROP COLUMN IF EXISTS cod_connettore_ftp;
 GO
+
+-- ---------------------------------------------------------------------------
+-- Migrazione V1 -> V2: Consultazione ricevute (GET /ricevute)
+-- Indice composito sul sort fisso della query keyset cursor
+-- (data_msg_ricevuta DESC, id DESC). Stessa motivazione dell'indice su
+-- versamenti: senza, la paginazione cursor degrada a scan sequenziale.
+-- ---------------------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+     WHERE name = 'idx_rpt_data_msg_ricevuta_id'
+       AND object_id = OBJECT_ID('dbo.rpt')
+)
+    CREATE INDEX idx_rpt_data_msg_ricevuta_id
+        ON rpt (data_msg_ricevuta DESC, id DESC);
+GO

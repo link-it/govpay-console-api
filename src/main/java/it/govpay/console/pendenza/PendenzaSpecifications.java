@@ -1,12 +1,10 @@
 package it.govpay.console.pendenza;
 
-import java.util.Set;
-
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.security.OperatoreCorrente;
-import jakarta.persistence.criteria.Predicate;
+import it.govpay.console.security.VersamentoVisibilita;
 
 public final class PendenzaSpecifications {
 
@@ -43,45 +41,10 @@ public final class PendenzaSpecifications {
     }
 
     /**
-     * Limita i risultati alle pendenze visibili all'operatore corrente, applicando
-     * 3 livelli di ACL come fa V1:
-     * <ul>
-     *   <li><b>dominio/UO</b>: dominio "intero" (utenze_domini.id_uo IS NULL) OR
-     *       UO specifica visibile;</li>
-     *   <li><b>tipoVersamento</b>: incluso solo se nei tipi autorizzati.</li>
-     * </ul>
-     * Lista vuota di tipi/domini → predicato falso (lista vuota, mai 403).
-     * {@code tuttiIDomini=true} e {@code tuttiITipiVersamento=true} → nessun filtro.
+     * Limita i risultati alle pendenze visibili all'operatore corrente. Delega la
+     * regola ACL alla single-source {@link VersamentoVisibilita}.
      */
     public static Specification<Versamento> visibiliPerOperatore(OperatoreCorrente operatore) {
-        return (root, q, cb) -> {
-            Predicate p = cb.conjunction();
-
-            if (!operatore.tuttiIDomini()) {
-                Set<Long> dominiInteri = operatore.idDominiInteri();
-                Set<Long> uoVisibili = operatore.idUoVisibili();
-                if ((dominiInteri == null || dominiInteri.isEmpty())
-                        && (uoVisibili == null || uoVisibili.isEmpty())) {
-                    return cb.disjunction();
-                }
-                Predicate viaDominio = (dominiInteri == null || dominiInteri.isEmpty())
-                        ? cb.disjunction()
-                        : root.get("dominio").get("id").in(dominiInteri);
-                Predicate viaUo = (uoVisibili == null || uoVisibili.isEmpty())
-                        ? cb.disjunction()
-                        : root.get("unitaOperativa").get("id").in(uoVisibili);
-                p = cb.and(p, cb.or(viaDominio, viaUo));
-            }
-
-            if (!operatore.tuttiITipiVersamento()) {
-                Set<Long> tipi = operatore.idTipiVersamentoVisibili();
-                if (tipi == null || tipi.isEmpty()) {
-                    return cb.disjunction();
-                }
-                p = cb.and(p, root.get("tipoVersamento").get("id").in(tipi));
-            }
-
-            return p;
-        };
+        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root, operatore);
     }
 }

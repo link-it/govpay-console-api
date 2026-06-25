@@ -166,8 +166,9 @@ class RicevutaIntegrationTest {
         r.setDataMsgRichiesta(dataRicevuta.minusHours(1));
         r.setDataMsgRicevuta(dataRicevuta);
         r.setVersamento(v);
-        r.setVersione("SANP_240_V2");
+        r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
+        r.setDescrizioneStato("Ricevuta accettata dalla PA");
         r.setDenominazioneAttestante("Banca Test S.p.A.");
         r.setCodPsp("BNCITEST01");
         r.setCodTransazioneRt("TX-001");
@@ -212,11 +213,17 @@ class RicevutaIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].idDominio", is(DOM)))
                 .andExpect(jsonPath("$[0].iuv", is("1234567890123")))
-                .andExpect(jsonPath("$[0].ccp", is("CCP-001")))
-                .andExpect(jsonPath("$[0].importoTotalePagato", is(100.0)))
-                .andExpect(jsonPath("$[0].esito", is(0)))
-                .andExpect(jsonPath("$[0].idPsp", is("BNCITEST01")))
-                // metadata-only: nessun dato personale ne' XML nel summary.
+                .andExpect(jsonPath("$[0].idRicevuta", is("CCP-001")))
+                .andExpect(jsonPath("$[0].importo", is(100.0)))
+                .andExpect(jsonPath("$[0].codPsp", is("BNCITEST01")))
+                .andExpect(jsonPath("$[0].versione", is("1.0")))
+                .andExpect(jsonPath("$[0].stato", is("RT_ACCETTATA_PA")))
+                .andExpect(jsonPath("$[0].descrizioneStato", is("Ricevuta accettata dalla PA")))
+                // metadata-only: nessun dato personale ne' XML nel summary; campi V1 rinominati assenti.
+                .andExpect(jsonPath("$[0].ccp").doesNotExist())
+                .andExpect(jsonPath("$[0].importoTotalePagato").doesNotExist())
+                .andExpect(jsonPath("$[0].esito").doesNotExist())
+                .andExpect(jsonPath("$[0].idPsp").doesNotExist())
                 .andExpect(jsonPath("$[0].causale").doesNotExist())
                 .andExpect(jsonPath("$[0].xmlRt").doesNotExist());
     }

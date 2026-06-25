@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.pagination.CursorCodec;
 import it.govpay.console.model.ListPendenze200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.Pendenza;
@@ -27,6 +28,7 @@ import it.govpay.console.model.PendenzaSummary;
 import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.NotFoundException;
 import jakarta.persistence.EntityGraph;
@@ -79,7 +81,7 @@ public class PendenzaService {
                 .orElseThrow(() -> new NotFoundException(
                         "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
 
-        if (!isVisibile(versamento, operatore)) {
+        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
             log.debug("getPendenza ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={} principal={}",
                     idA2A, idPendenza, operatore.principal());
             throw new NotFoundException(
@@ -93,36 +95,6 @@ public class PendenzaService {
         log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={}",
                 idPendenza, pendenza.getVoci().size(), links.getAvviso() != null);
         return pendenza;
-    }
-
-    private static boolean isVisibile(Versamento v, OperatoreCorrente operatore) {
-        if (!isDominioOrUoVisible(v, operatore)) {
-            return false;
-        }
-        if (!operatore.tuttiITipiVersamento()) {
-            if (v.getTipoVersamento() == null) {
-                return false;
-            }
-            return operatore.idTipiVersamentoVisibili().contains(v.getTipoVersamento().getId());
-        }
-        return true;
-    }
-
-    private static boolean isDominioOrUoVisible(Versamento v, OperatoreCorrente operatore) {
-        if (operatore.tuttiIDomini()) {
-            return true;
-        }
-        if (v.getDominio() == null) {
-            return false;
-        }
-        if (operatore.idDominiInteri().contains(v.getDominio().getId())) {
-            return true;
-        }
-        if (v.getUnitaOperativa() != null
-                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId())) {
-            return true;
-        }
-        return false;
     }
 
     @Transactional(readOnly = true)
@@ -248,9 +220,9 @@ public class PendenzaService {
         Predicate where;
         if (cursor != null) {
             Predicate keyset = cb.or(
-                    cb.lessThan(dataPath, cursor.dataOraUltimoAggiornamento()),
+                    cb.lessThan(dataPath, cursor.timestamp()),
                     cb.and(
-                            cb.equal(dataPath, cursor.dataOraUltimoAggiornamento()),
+                            cb.equal(dataPath, cursor.timestamp()),
                             cb.lessThan(idPath, cursor.id())));
             where = specPredicate != null ? cb.and(specPredicate, keyset) : keyset;
         } else {

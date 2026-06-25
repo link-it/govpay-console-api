@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 
 import org.springframework.stereotype.Component;
 
+import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.Versamento;
@@ -37,7 +38,7 @@ public class AvvisoMapper {
                 v.getNumeroAvviso(),
                 v.getImportoTotale(),
                 mapStato(v.getStatoVersamento(), v.getDataScadenza()));
-        a.setDescrizione(v.getCausaleVersamento());
+        a.setDescrizione(CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()));
         a.setDataValidita(v.getDataValidita());
         a.setDataScadenza(v.getDataScadenza());
         a.setTassonomiaAvviso(v.getTassonomiaAvviso());

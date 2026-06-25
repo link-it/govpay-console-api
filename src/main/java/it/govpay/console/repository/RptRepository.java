@@ -7,12 +7,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import it.govpay.console.entity.Rpt;
 
-public interface RptRepository extends JpaRepository<Rpt, Long> {
+public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificationExecutor<Rpt> {
 
     /**
      * "RT principale" per una pendenza: l'ultima RT con esito {@code Eseguito} o
@@ -57,4 +58,32 @@ public interface RptRepository extends JpaRepository<Rpt, Long> {
              order by r.dataMsgRicevuta desc
             """)
     List<Rpt> findByPendenza(@Param("idA2A") String idA2A, @Param("idPendenza") String idPendenza);
+
+    /**
+     * RT identificata dalla tupla {@code (idDominio, iuv, idRicevuta)} dove
+     * {@code idRicevuta} è il {@code ccp} di V1. La tupla è documentata come unica;
+     * per robustezza su dati storici (es. più RT legacy con {@code ccp = 'n/a'}) si
+     * ordina per {@code data_msg_ricevuta DESC} e si prende la prima.
+     *
+     * <p>L'EntityGraph carica le associazioni del {@code versamento} usate dal
+     * mapper di dettaglio (pendenza ref, _links) e dal check di visibilità ACL.
+     */
+    @EntityGraph(attributePaths = {"versamento", "versamento.applicazione", "versamento.dominio",
+            "versamento.unitaOperativa", "versamento.tipoVersamento"})
+    @Query("""
+            select r from Rpt r
+             where r.codDominio = :idDominio
+               and r.iuv = :iuv
+               and r.ccp = :idRicevuta
+             order by r.dataMsgRicevuta desc
+            """)
+    List<Rpt> findByKey(@Param("idDominio") String idDominio,
+                        @Param("iuv") String iuv,
+                        @Param("idRicevuta") String idRicevuta,
+                        Pageable pageable);
+
+    default Optional<Rpt> findByKey(String idDominio, String iuv, String idRicevuta) {
+        List<Rpt> hits = findByKey(idDominio, iuv, idRicevuta, PageRequest.of(0, 1));
+        return hits.isEmpty() ? Optional.empty() : Optional.of(hits.get(0));
+    }
 }

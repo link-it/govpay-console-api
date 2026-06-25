@@ -135,9 +135,9 @@ class PendenzeEndToEndFixtureTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[0].iuv", is("1111111111111")))
-                .andExpect(jsonPath("$[0].ccp", is("CCP-FIX-001")))
+                .andExpect(jsonPath("$[0].idRicevuta", is("CCP-FIX-001")))
                 .andExpect(jsonPath("$[0].idDominio", is("12345678901")))
-                .andExpect(jsonPath("$[0].idPsp", is("BNCFIXTURE")));
+                .andExpect(jsonPath("$[0].codPsp", is("BNCFIXTURE")));
     }
 
     @Test

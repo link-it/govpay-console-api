@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.SingoloVersamento;
@@ -62,7 +63,7 @@ public class RicevutaPdfPayloadMapper {
         receipt.setCreditorLogo(creditorLogoOf(d));
         receipt.setPagopaLogo(pagopaLogoBase64);
         receipt.setPaymentSubject(v != null && v.getCausaleVersamento() != null
-                ? v.getCausaleVersamento() : "");
+                ? CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()) : "");
         receipt.setOrganization(mapOrganization(d));
         receipt.setPayer(mapPayer(v));
         receipt.setPsp(pspOf(rpt));

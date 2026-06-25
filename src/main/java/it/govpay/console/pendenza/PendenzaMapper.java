@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 
+import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.SingoloVersamento;
@@ -55,7 +56,7 @@ public class PendenzaMapper {
                 mapDominio(dominio),
                 mapTipoPendenza(resolveTipoPendenza(v)),
                 v.getImportoTotale(),
-                v.getCausaleVersamento(),
+                CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()),
                 v.getDataOraUltimoAggiornamento())
                 .unitaOperativa(mapUnitaOperativa(v.getUnitaOperativa()))
                 .numeroAvviso(v.getNumeroAvviso())
@@ -159,7 +160,7 @@ public class PendenzaMapper {
                 .tipoPendenza(mapTipoPendenza(resolveTipoPendenza(v)))
                 .unitaOperativa(mapUnitaOperativa(v.getUnitaOperativa()))
                 .importo(v.getImportoTotale())
-                .causale(v.getCausaleVersamento())
+                .causale(CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()))
                 .numeroAvviso(v.getNumeroAvviso())
                 .iuvAvviso(v.getIuvVersamento())
                 .dataScadenza(v.getDataScadenza())

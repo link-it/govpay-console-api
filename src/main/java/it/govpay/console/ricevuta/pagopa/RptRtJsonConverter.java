@@ -1,7 +1,10 @@
 package it.govpay.console.ricevuta.pagopa;
 
+import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +24,8 @@ import jakarta.xml.bind.JAXBException;
 @Component
 public class RptRtJsonConverter {
 
+	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
 	private final ObjectMapper mapper;
 
 	public RptRtJsonConverter() {
@@ -37,21 +42,8 @@ public class RptRtJsonConverter {
 	 *         viene ricostruita).
 	 */
 	public JsonNode toRptJson(Rpt rpt) {
-		byte[] xml = rpt.getXmlRpt();
-		if (xml == null) {
-			return null;
-		}
-		try {
-			Object messaggio = switch (versione(rpt)) {
-				case "SANP_230", "RPTSANP230_RTV2" -> JaxbUtils.toRPT(xml);
-				case "SANP_240", "RPTV1_RTV2" -> JaxbUtils.toPaGetPaymentResRPT(xml).getData();
-				case "SANP_321_V2", "RPTV2_RTV1" -> JaxbUtils.toPaGetPaymentV2ResponseRPT(xml).getData();
-				default -> throw versioneNonGestita(rpt);
-			};
-			return mapper.valueToTree(messaggio);
-		} catch (JAXBException e) {
-			throw new RptRtConversionException("Errore nella conversione della RPT (versione " + versione(rpt) + ")", e);
-		}
+		Object messaggio = rptMessaggio(rpt);
+		return messaggio == null ? null : mapper.valueToTree(messaggio);
 	}
 
 	/**
@@ -59,18 +51,53 @@ public class RptRtJsonConverter {
 	 *         ancora presente.
 	 */
 	public JsonNode toRtJson(Rpt rpt) {
+		Object messaggio = rtMessaggio(rpt);
+		return messaggio == null ? null : mapper.valueToTree(messaggio);
+	}
+
+	/** Variante {@code Map} della RPT, per l'embedding inline nel modello {@code Ricevuta}. */
+	public Map<String, Object> toRptMap(Rpt rpt) {
+		Object messaggio = rptMessaggio(rpt);
+		return messaggio == null ? null : mapper.convertValue(messaggio, MAP_TYPE);
+	}
+
+	/** Variante {@code Map} della RT, per l'embedding inline nel modello {@code Ricevuta}. */
+	public Map<String, Object> toRtMap(Rpt rpt) {
+		Object messaggio = rtMessaggio(rpt);
+		return messaggio == null ? null : mapper.convertValue(messaggio, MAP_TYPE);
+	}
+
+	/** Unmarshalla e seleziona il sotto-albero RPT da serializzare, o {@code null} se l'XML manca. */
+	private Object rptMessaggio(Rpt rpt) {
+		byte[] xml = rpt.getXmlRpt();
+		if (xml == null) {
+			return null;
+		}
+		try {
+			return switch (versione(rpt)) {
+				case "SANP_230", "RPTSANP230_RTV2" -> JaxbUtils.toRPT(xml);
+				case "SANP_240", "RPTV1_RTV2" -> JaxbUtils.toPaGetPaymentResRPT(xml).getData();
+				case "SANP_321_V2", "RPTV2_RTV1" -> JaxbUtils.toPaGetPaymentV2ResponseRPT(xml).getData();
+				default -> throw versioneNonGestita(rpt);
+			};
+		} catch (JAXBException e) {
+			throw new RptRtConversionException("Errore nella conversione della RPT (versione " + versione(rpt) + ")", e);
+		}
+	}
+
+	/** Unmarshalla e seleziona il sotto-albero RT da serializzare, o {@code null} se l'XML manca. */
+	private Object rtMessaggio(Rpt rpt) {
 		byte[] xml = rpt.getXmlRt();
 		if (xml == null) {
 			return null;
 		}
 		try {
-			Object messaggio = switch (versione(rpt)) {
+			return switch (versione(rpt)) {
 				case "SANP_230" -> JaxbUtils.toRT(xml);
 				case "SANP_240", "RPTV2_RTV1" -> JaxbUtils.toPaSendRTReqRT(xml).getReceipt();
 				case "SANP_321_V2", "RPTV1_RTV2", "RPTSANP230_RTV2" -> JaxbUtils.toPaSendRTV2RequestRT(xml).getReceipt();
 				default -> throw versioneNonGestita(rpt);
 			};
-			return mapper.valueToTree(messaggio);
 		} catch (JAXBException e) {
 			throw new RptRtConversionException("Errore nella conversione della RT (versione " + versione(rpt) + ")", e);
 		}

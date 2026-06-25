@@ -18,6 +18,8 @@ servers:
 tags:
   - name: Pendenze
     description: Pagamenti in attesa e spontanei.
+  - name: Ricevute
+    description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
   - name: Profilo
     description: Profilo dell'utenza autenticata corrente.
   - name: Autenticazione
@@ -174,6 +176,240 @@ paths:
             Token CSRF mancante o non coerente. Si verifica solo se la
             richiesta porta una sessione attiva e nessun header
             `Authorization` (CSRF e' condizionale).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /ricevute:
+    get:
+      tags:
+        - Ricevute
+      operationId: listRicevute
+      summary: Elenca le ricevute telematiche (RT) visibili all'operatore (paginate).
+      description: |
+        Consultazione read-only delle ricevute telematiche emesse da pagoPA.
+        Restituisce solo metadati tecnico-finanziari (`RicevutaSummary`): nessun
+        dato personale, quindi la lista non genera audit GDPR.
+
+        Filtri supportati in Fase 1:
+        - `iuv` — match esatto;
+        - `idDominio` — match esatto, 11 cifre;
+        - `idRicevuta` — match esatto (era `ccp` in V1);
+        - `dataDa` / `dataA` — intervallo (incluso) sulla data di pagamento.
+
+        Tutti i filtri sono opzionali e in AND. I numerosi filtri V1 non ancora
+        supportati (`idA2A`, `idPendenza`, `esito`, `dataRptDa`/`dataRptA`,
+        `tassonomia`, `idDebitore`/`identificativoDebitore`, ...) ritornano 400
+        problem+json.
+
+        ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
+        silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(dataPagamento DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 con motivazione parlante. Cursor malformato → 400.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IuvFilter'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/IdRicevutaFilter'
+        - $ref: '#/components/parameters/DataDa'
+        - $ref: '#/components/parameters/DataA'
+      responses:
+        '200':
+          description: Lista paginata di ricevute.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RicevutaSummary'
+        '400':
+          description: Filtro non supportato, parametro malformato o `limit > 200`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /ricevute/{idDominio}/{iuv}/{idRicevuta}:
+    get:
+      tags:
+        - Ricevute
+      operationId: getRicevuta
+      summary: Dettaglio di una ricevuta telematica.
+      description: |
+        Restituisce il dettaglio canonico (`Ricevuta`) identificato dalla tupla
+        `(idDominio, iuv, idRicevuta)`. Il body include la conversione JSON di
+        `rpt` e `rt` (anagrafica del soggetto pagatore annidata): ogni 200 viene
+        tracciato in `gp_audit` (azione `RICEVUTA_VISUALIZZA`).
+
+        404 problem+json se la RT non esiste o se l'ACL dell'operatore non ne
+        consente la visibilità (anti-leak). Il 404 non genera audit.
+
+        **Legacy**: per le RT storiche accettate senza RPT il `ccp` valeva la
+        stringa speciale `n/a`. Il valore contiene uno slash, quindi come segmento
+        di path (`idRicevuta=n%2Fa`) è raggiungibile solo se l'encoded-slash è
+        abilitato sul servlet container; in alternativa, sempre disponibile, lo si
+        recupera via `GET /ricevute?idRicevuta=n%2Fa` (filtro query).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/IuvPath'
+        - $ref: '#/components/parameters/IdRicevutaPath'
+      responses:
+        '200':
+          description: Dettaglio della ricevuta.
+          headers:
+            Cache-Control:
+              description: Politica di cache privata.
+              schema:
+                type: string
+                example: "private, max-age=60"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ricevuta'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Ricevuta non trovata o non visibile.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /ricevute/{idDominio}/{iuv}/{idRicevuta}/rpt:
+    get:
+      tags:
+        - Ricevute
+      operationId: getRicevutaRpt
+      summary: Richiesta di Pagamento Telematica (RPT) di una ricevuta.
+      description: |
+        Ritorna la RPT della ricevuta nel formato richiesto via `Accept`:
+        - `application/json` (default) → RPT convertita in JSON (stesso valore di
+          `Ricevuta.rpt`);
+        - `application/xml` → XML originale della RPT, byte-per-byte dal DB.
+
+        Non è previsto il formato PDF: il microservizio govpay-stampe non stampa la
+        richiesta (coerente con V1, che su `/rpt` offre solo XML/JSON). Un `Accept:
+        application/pdf` ottiene 406.
+
+        404 se la RPT non esiste, non è visibile (ACL anti-leak) o non è disponibile
+        (RT acquisita in standin). Ogni 200 traccia `RICEVUTA_VISUALIZZA`
+        (`risorsa=rpt`, `formato`).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/IuvPath'
+        - $ref: '#/components/parameters/IdRicevutaPath'
+      responses:
+        '200':
+          description: RPT nel formato richiesto.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: RPT non trovata, non visibile o non disponibile.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Formato richiesto non supportato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /ricevute/{idDominio}/{iuv}/{idRicevuta}/rt:
+    get:
+      tags:
+        - Ricevute
+      operationId: getRicevutaRt
+      summary: Ricevuta Telematica (RT) di una ricevuta.
+      description: |
+        Ritorna la RT nel formato richiesto via `Accept`:
+        - `application/json` (default) → RT convertita in JSON (stesso valore di
+          `Ricevuta.rt`);
+        - `application/xml` → XML originale della RT, byte-per-byte dal DB;
+        - `application/pdf` → stampa binaria via microservizio govpay-stampe.
+
+        404 se la RT non esiste o non è visibile (ACL anti-leak). 406 se `Accept`
+        non supportato. 502 se govpay-stampe è irraggiungibile (solo PDF). Ogni 200
+        traccia `RICEVUTA_VISUALIZZA` (`risorsa=rt`, `formato`).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/IuvPath'
+        - $ref: '#/components/parameters/IdRicevutaPath'
+      responses:
+        '200':
+          description: RT nel formato richiesto.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+            application/xml:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: RT non trovata o non visibile.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Formato richiesto non supportato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: Microservizio govpay-stampe irraggiungibile (solo PDF).
           content:
             application/problem+json:
               schema:
@@ -2111,79 +2347,126 @@ components:
           type: string
 
     Ricevuta:
-      type: object
       description: |
-        Metadati locali della Ricevuta Telematica (RT) associata a una pendenza
-        (variante `application/json` dell'endpoint `/ricevuta`). Strategia "RT
-        principale": l'ultima riuscita ordinata per `dataPagamento DESC`.
-      required:
-        - iuv
-        - ccp
-        - idDominio
-        - dataPagamento
-        - importoTotalePagato
+        Dettaglio canonico di una Ricevuta Telematica (RT). Estende
+        `RicevutaSummary` con la conversione JSON della richiesta (`rpt`) e della
+        ricevuta (`rt`) pagoPA, il riferimento alla pendenza e gli hyperlink ai
+        sub-resource. Espone l'anagrafica del soggetto pagatore annidata in
+        `rpt`/`rt`: ogni risposta 200 viene tracciata in `gp_audit`.
+      allOf:
+        - $ref: '#/components/schemas/RicevutaSummary'
+        - type: object
+          properties:
+            rpt:
+              type: object
+              additionalProperties: true
+              description: |
+                Conversione JSON della Richiesta di Pagamento Telematica inviata a
+                pagoPA (standard `ctRichiestaPagamentoTelematico` / paForNode a
+                seconda della versione). `null` se la RPT non è disponibile (RT
+                acquisita in standin).
+            rt:
+              type: object
+              additionalProperties: true
+              description: |
+                Conversione JSON della Ricevuta Telematica restituita da pagoPA
+                (standard `ctRicevutaTelematica` / paForNode a seconda della versione).
+            segnalazioni:
+              type: array
+              description: Eventuali eventi/note del Nodo associati alla RT.
+              items:
+                $ref: '#/components/schemas/Segnalazione'
+            pendenza:
+              $ref: '#/components/schemas/PendenzaRef'
+            _links:
+              $ref: '#/components/schemas/RicevutaLinks'
+
+    Segnalazione:
+      type: object
+      description: Evento o nota emessi dal Nodo durante l'elaborazione della RT.
       properties:
-        iuv:
-          type: string
-        ccp:
-          type: string
-        idDominio:
-          type: string
-        dataPagamento:
+        data:
           type: string
           format: date-time
-        importoTotalePagato:
-          type: number
-          format: double
-        psp:
-          $ref: '#/components/schemas/PspRef'
-        riferimentoTransazione:
+        codice:
           type: string
-        causale:
+        descrizione:
           type: string
-        singoliVersamenti:
-          type: array
-          items:
-            type: object
-            properties:
-              iur:
-                type: string
-              importo:
-                type: number
-                format: double
-              causale:
-                type: string
+
+    PendenzaRef:
+      type: object
+      description: Riferimento minimale alla pendenza associata a una RT.
+      required:
+        - idA2A
+        - idPendenza
+      properties:
+        idA2A:
+          type: string
+        idPendenza:
+          type: string
+        causaleBreve:
+          type: string
+
+    RicevutaLinks:
+      type: object
+      description: |
+        Hyperlink relativi alla ricevuta. `rpt` e `rt` sono sempre presenti
+        (sub-resource di dettaglio); `pendenza` è condizionale (presente solo se
+        la RT è associata a una pendenza nota).
+      required:
+        - rpt
+        - rt
+      properties:
+        pendenza:
+          $ref: '#/components/schemas/Link'
+        rpt:
+          $ref: '#/components/schemas/Link'
+        rt:
+          $ref: '#/components/schemas/Link'
+      additionalProperties:
+        $ref: '#/components/schemas/Link'
 
     RicevutaSummary:
       type: object
       description: |
-        Proiezione leggera (metadata-only) di una ricevuta telematica, usata nella
-        lista delle ricevute di una pendenza. Non espone dati personali. I tre
-        campi `idDominio`, `iuv`, `ccp` identificano la RT per la navigazione ai
-        sub-resource di dettaglio (XML/PDF).
+        Proiezione leggera (metadata-only) di una ricevuta telematica (RT), usata
+        nelle liste. Puramente tecnico-finanziaria: non espone alcun dato personale
+        (no anagrafica debitore, no causale), quindi la lista non genera audit GDPR.
+        La tupla `idDominio`, `iuv`, `idRicevuta` identifica la RT per la
+        navigazione ai sub-resource di dettaglio.
       required:
         - idDominio
         - iuv
-        - ccp
+        - idRicevuta
       properties:
         idDominio:
           type: string
+          description: Codice fiscale dell'ente creditore (11 cifre).
         iuv:
           type: string
-        ccp:
+          description: Identificativo Univoco Versamento.
+        idRicevuta:
           type: string
+          description: Identificativo della ricevuta (era `ccp` in V1).
         dataPagamento:
           type: string
           format: date-time
-        importoTotalePagato:
+        codPsp:
+          type: string
+          description: Codice del PSP che ha emesso la RT.
+        versione:
+          type: string
+          description: Versione del protocollo pagoPA della RT (es. `1.0`, `2.0`).
+        stato:
+          type: string
+          description: Stato della ricevuta (stringa nativa V1, es. `RT_ACCETTATA_PA`).
+        descrizioneStato:
+          type: string
+          description: Dettaglio human-readable dello stato.
+        importo:
           type: number
           format: double
-        esito:
-          type: integer
-          format: int32
-          description: Codice esito pagamento pagoPA (0 = Eseguito, 2 = Parzialmente eseguito).
-        idPsp:
-          type: string
+          description: Importo totale pagato. Dato finanziario, non personale.
 
     Soggetto:
       type: object
@@ -2896,6 +3179,69 @@ components:
         CF/PIVA del soggetto pagatore, match esatto. La presenza di questo
         filtro determina la scrittura di una riga di audit GDPR
         (`PENDENZE_RICERCA_PER_DEBITORE`) in `gp_audit`.
+      schema:
+        type: string
+
+    IuvFilter:
+      name: iuv
+      in: query
+      required: false
+      description: Identificativo Univoco Versamento, match esatto.
+      schema:
+        type: string
+
+    IdRicevutaFilter:
+      name: idRicevuta
+      in: query
+      required: false
+      description: |
+        Identificativo della specifica ricevuta (era `ccp` in V1), match esatto.
+        Utile per il lookup diretto a una RT senza passare per il path di dettaglio.
+      schema:
+        type: string
+
+    DataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla data di pagamento (ISO 8601 date).
+      schema:
+        type: string
+        format: date
+
+    DataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data di pagamento (ISO 8601 date).
+      schema:
+        type: string
+        format: date
+
+    IdDominioPath:
+      name: idDominio
+      in: path
+      required: true
+      description: Codice fiscale dell'ente creditore (11 cifre).
+      schema:
+        type: string
+        pattern: '^[0-9]{11}$'
+
+    IuvPath:
+      name: iuv
+      in: path
+      required: true
+      description: Identificativo Univoco Versamento.
+      schema:
+        type: string
+
+    IdRicevutaPath:
+      name: idRicevuta
+      in: path
+      required: true
+      description: |
+        Identificativo della ricevuta (era `ccp` in V1). Per dati storici è
+        accettato il valore legacy `n/a` (URL-encoded `n%2Fa`).
       schema:
         type: string
 
