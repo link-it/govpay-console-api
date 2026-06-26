@@ -247,16 +247,19 @@ class InformazioniDebitoreIntegrationTest {
 
     @Test
     void returns404AntiLeakWhenDominioNotVisible() throws Exception {
-        newPendenza("PEND-HIDDEN", domInvisibile, tvVisibile, tvdVisibile);
+        Versamento hidden = newPendenza("PEND-HIDDEN", domInvisibile, tvVisibile, tvdVisibile);
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-HIDDEN/informazioniDebitore")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isNotFound());
 
+        // Scoping su idOggetto di questa pendenza: l'audit (REQUIRES_NEW) committa e
+        // si accumula nell'H2 condiviso, quindi un assert globale sarebbe ordine-dipendente.
         assertThat(gpAuditRepository.findAll())
                 .as("nessun audit per 404 ACL")
                 .filteredOn(a -> InformazioniDebitoreService.AZIONE_AUDIT_VISUALIZZA
-                        .equals(a.getTipoOggetto()))
+                        .equals(a.getTipoOggetto())
+                        && hidden.getId().equals(a.getIdOggetto()))
                 .isEmpty();
     }
 
@@ -278,10 +281,14 @@ class InformazioniDebitoreIntegrationTest {
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk());
 
+        // Scoping su idOggetto = id del versamento di questo test: l'azione è scritta
+        // anche da altri test (es. fixture E2E) e gli audit committano (REQUIRES_NEW),
+        // accumulandosi nell'H2 condiviso → un filtro per sola azione sarebbe fragile.
         List<GpAudit> tutti = gpAuditRepository.findAll();
         List<GpAudit> nostri = tutti.stream()
                 .filter(a -> InformazioniDebitoreService.AZIONE_AUDIT_VISUALIZZA
-                        .equals(a.getTipoOggetto()))
+                        .equals(a.getTipoOggetto())
+                        && v.getId().equals(a.getIdOggetto()))
                 .toList();
         assertThat(nostri).hasSize(1);
         GpAudit row = nostri.get(0);
