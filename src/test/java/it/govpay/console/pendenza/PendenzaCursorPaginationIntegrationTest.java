@@ -11,6 +11,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -113,8 +114,13 @@ class PendenzaCursorPaginationIntegrationTest {
         v.setImportoTotale(100.0);
         v.setImportoPagato(0.0);
         v.setStatoVersamento("NON_ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now().minusHours(hoursAgo));
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(hoursAgo));
+        // Troncato ai secondi: il test è @Transactional, quindi l'entity resta in
+        // sessione con la precisione di now() (nanos su Linux) mentre il DB tronca,
+        // sfasando il keyset del cursor (off-by-one al confine pagina). Senza sub-
+        // precisione il valore in-memory coincide con quello persistito.
+        OffsetDateTime ts = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusHours(hoursAgo);
+        v.setDataCreazione(ts);
+        v.setDataOraUltimoAggiornamento(ts);
         v.setDebitoreIdentificativo("RSSMRA80A01H501U");
         v.setDebitoreAnagrafica("Mario Rossi");
         v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
