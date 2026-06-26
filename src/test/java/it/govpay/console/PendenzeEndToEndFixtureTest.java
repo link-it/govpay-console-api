@@ -35,6 +35,7 @@ import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Test E2E che usa la fixture SQL {@code /data-pendenze-test.sql} per coprire
@@ -55,6 +56,8 @@ import it.govpay.common.auth.GovpayPasswordEncoder;
 @ActiveProfiles("test")
 @TestPropertySource(properties = {"app.stampe.base-url=http://stampe.mock"})
 @Sql("/data-pendenze-test.sql")
+@Transactional // isola la fixture @Sql: senza, i dati committano nell'H2 condiviso
+                // (DB_CLOSE_DELAY=-1) e trapelano negli altri test (ordine-dipendente).
 class PendenzeEndToEndFixtureTest {
 
     private static final String PRINCIPAL = "op-fixture";
