@@ -3,6 +3,7 @@ package it.govpay.console.ricevuta;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.stereotype.Component;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
@@ -41,7 +42,10 @@ public class RicevutaMapper {
      * iuv, idRicevuta)} dove {@code idRicevuta} era il {@code ccp} di V1.
      */
     public RicevutaSummary toSummary(Rpt rpt) {
-        RicevutaSummary s = new RicevutaSummary(rpt.getCodDominio(), rpt.getIuv(), rpt.getCcp());
+        RicevutaSummary s = new RicevutaSummary();
+        s.setIdDominio(rpt.getCodDominio());
+        s.setIuv(rpt.getIuv());
+        s.setIdRicevuta(rpt.getCcp());
         s.setDataPagamento(rpt.getDataMsgRicevuta());
         s.setCodPsp(rpt.getCodPsp());
         s.setVersione(versioneProtocollo(rpt.getVersione()));
@@ -56,14 +60,19 @@ public class RicevutaMapper {
         if (rpt == null) {
             return null;
         }
-        Ricevuta r = new Ricevuta(rpt.getCodDominio(), rpt.getIuv(), rpt.getCcp());
+        Ricevuta r = new Ricevuta();
+        r.setIdDominio(rpt.getCodDominio());
+        r.setIuv(rpt.getIuv());
+        r.setIdRicevuta(rpt.getCcp());
         r.setDataPagamento(rpt.getDataMsgRicevuta());
         r.setCodPsp(rpt.getCodPsp());
         r.setVersione(versioneProtocollo(rpt.getVersione()));
         r.setStato(rpt.getStato());
         r.setDescrizioneStato(rpt.getDescrizioneStato());
         r.setImporto(rpt.getImportoTotalePagato());
-        r.setRpt(rptRtJsonConverter.toRptMap(rpt));
+        // rpt è nullable nel contratto (standin senza richiesta): JsonNullable.of(null)
+        // serializza esplicitamente "rpt": null.
+        r.setRpt(JsonNullable.of(rptRtJsonConverter.toRptMap(rpt)));
         r.setRt(rptRtJsonConverter.toRtMap(rpt));
         r.setPendenza(pendenzaRef(rpt.getVersamento()));
         r.setLinks(buildLinks(rpt));

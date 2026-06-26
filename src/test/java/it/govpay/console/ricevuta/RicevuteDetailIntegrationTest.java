@@ -55,7 +55,7 @@ import jakarta.xml.bind.Marshaller;
 /**
  * Integration test del dettaglio {@code GET /ricevute/{idDominio}/{iuv}/{idRicevuta}}
  * (scope C issue #12): forma ricca con rpt/rt JSON convertiti da XML reale, _links,
- * ACL anti-leak, legacy {@code n/a} e audit {@code RICEVUTA_VISUALIZZA}.
+ * ACL anti-leak e audit {@code RICEVUTA_VISUALIZZA}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -140,29 +140,94 @@ class RicevuteDetailIntegrationTest {
     }
 
     @Test
+    void dettaglio404SeSolaRichiestaSenzaRt() throws Exception {
+        // riga rpt con sola richiesta: non è una ricevuta → 404, niente audit
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte("PEND-NORT");
+        v.setImportoTotale(10.0);
+        v.setImportoPagato(0.0);
+        v.setStatoVersamento("NON_ESEGUITO");
+        v.setDataCreazione(OffsetDateTime.of(2026, 6, 19, 12, 0, 0, 0, ZoneOffset.UTC));
+        v.setDataOraUltimoAggiornamento(v.getDataCreazione());
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setAnomalo(false);
+        v.setAck(true);
+        v.setTipo("DOVUTO");
+        v.setDominio(dom);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tv);
+        v.setTipoVersamentoDominio(tvd);
+        versamentoRepository.save(v);
+        Rpt r = new Rpt();
+        r.setIuv("NORTIUV0002");
+        r.setCcp("CCP-NORT2");
+        r.setCodDominio(DOM);
+        r.setXmlRpt("<RPT/>".getBytes());
+        r.setXmlRt(null);
+        r.setDataMsgRichiesta(v.getDataCreazione());
+        r.setVersione("SANP_240");
+        r.setStato("RPT_ATTIVATA");
+        r.setVersamento(v);
+        rptRepository.save(r);
+
+        mvc.perform(get("/ricevute/" + DOM + "/NORTIUV0002/CCP-NORT2").with(httpBasic("op-all", PASSWORD)))
+                .andExpect(status().isNotFound());
+        assertThat(auditPerIuv("NORTIUV0002")).isEmpty();
+    }
+
+    @Test
+    void dettaglio200RptNullSeStandinSenzaRichiesta() throws Exception {
+        // ricevuta valida (xml_rt presente) ma senza RPT (standin, xml_rpt null):
+        // rpt è l'unico campo che può mancare → "rpt": null, rt valorizzato.
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte("PEND-STANDIN");
+        v.setImportoTotale(123.45);
+        v.setImportoPagato(123.45);
+        v.setStatoVersamento("ESEGUITO");
+        v.setDataCreazione(OffsetDateTime.of(2026, 6, 20, 12, 0, 0, 0, ZoneOffset.UTC));
+        v.setDataOraUltimoAggiornamento(v.getDataCreazione());
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setAnomalo(false);
+        v.setAck(true);
+        v.setTipo("DOVUTO");
+        v.setCausaleVersamento("TARI 2026");
+        v.setDominio(dom);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tv);
+        v.setTipoVersamentoDominio(tvd);
+        versamentoRepository.save(v);
+        Rpt r = new Rpt();
+        r.setIuv("IUVSTANDIN1");
+        r.setCcp("CCP-ST");
+        r.setCodDominio(DOM);
+        r.setXmlRpt(null);
+        r.setXmlRt(xmlRt());
+        r.setCodEsitoPagamento(0);
+        r.setImportoTotalePagato(123.45);
+        r.setDataMsgRichiesta(v.getDataCreazione().minusHours(1));
+        r.setDataMsgRicevuta(v.getDataCreazione());
+        r.setVersione("SANP_240");
+        r.setStato("RT_ACCETTATA_PA");
+        r.setVersamento(v);
+        rptRepository.save(r);
+
+        mvc.perform(get("/ricevute/" + DOM + "/IUVSTANDIN1/CCP-ST").with(httpBasic("op-all", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rpt", org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.rt.receiptId", org.hamcrest.Matchers.is("REC-1")));
+    }
+
+    @Test
     void ritorna404SeInesistenteSenzaAudit() throws Exception {
         mvc.perform(get("/ricevute/" + DOM + "/IUVZZZ/CCP-Z").with(httpBasic("op-all", PASSWORD)))
                 .andExpect(status().isNotFound());
         assertThat(auditPerIuv("IUVZZZ")).isEmpty();
     }
 
-    /**
-     * Le RT legacy hanno {@code idRicevuta = "n/a"}. Lo slash rende il valore non
-     * trasportabile come singolo segmento di path senza abilitare l'encoded-slash
-     * a livello di servlet container (config di deployment). Il percorso robusto e
-     * sempre disponibile è il filtro query {@code ?idRicevuta=} (lo slash è lecito
-     * nella query string), previsto da scope B proprio per il lookup diretto.
-     */
-    @Test
-    void legacyIdRicevutaNaRaggiungibileViaFiltro() throws Exception {
-        newRpt(dom, "IUVLEGACY01", "n/a");
-        mvc.perform(get("/ricevute").queryParam("idRicevuta", "n/a")
-                        .with(httpBasic("op-all", PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$.results[0].iuv", org.hamcrest.Matchers.is("IUVLEGACY01")))
-                .andExpect(jsonPath("$.results[0].idRicevuta", org.hamcrest.Matchers.is("n/a")));
-    }
 
     @Test
     void acl404SuDominioNonVisibileSenzaAudit() throws Exception {

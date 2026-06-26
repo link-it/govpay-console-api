@@ -12,8 +12,7 @@ import it.govpay.console.model.Soggetto.TipoEnum;
  *
  * <p>Schema {@code Soggetto} allineato a V1 ({@code soggetto},
  * govpay-api-backoffice-v1.yaml:8306). Tutti i campi sono mappati dai campi
- * {@code debitore_*} della tabella {@code versamenti} (gia' denormalizzati
- * lato Versamento in V1 e in V2 slim).
+ * {@code debitore_*} della tabella {@code versamenti}.
  */
 @Component
 public class SoggettoMapper {

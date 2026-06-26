@@ -16,9 +16,7 @@ import it.govpay.console.pendenza.IuvUtils;
 
 /**
  * Mapper Versamento → {@link Avviso} per la variante {@code application/json}.
- * Allineato byte-per-byte al converter V1
- * (govpay-381/.../PendenzeConverter.toAvvisoRsModel + .stato derivato),
- * con qrcode/barcode generati da {@link IuvUtils}.
+ * qrcode/barcode generati da {@link IuvUtils}.
  */
 @Component
 public class AvvisoMapper {

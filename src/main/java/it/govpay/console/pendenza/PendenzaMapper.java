@@ -68,8 +68,8 @@ public class PendenzaMapper {
     }
 
     /**
-     * Mappa lo stato V1 nel corrispondente {@link StatoPendenza} V2, applicando
-     * la derivazione SCADUTA come fa V1 (vedi `PendenzeDAO`):
+     * Mappa lo stato nel corrispondente {@link StatoPendenza}, applicando
+     * la derivazione SCADUTA:
      * <ul>
      *   <li>{@code NON_ESEGUITO} + {@code dataScadenza < now} → {@link StatoPendenza#SCADUTA};</li>
      *   <li>{@code NON_ESEGUITO} + {@code dataScadenza >= now} (o null) → {@link StatoPendenza#NON_PAGATA};</li>
@@ -280,14 +280,13 @@ public class PendenzaMapper {
     }
 
     private static VocePendenzaBolloTelematico.TipoBolloEnum mapTipoBollo(String tipoBolloV1) {
-        // V1 codifica il bollo telematico con "01"; il modello V2 espone l'unica
-        // tipologia supportata "Imposta di bollo".
+        // il modello espone l'unica tipologia supportata "Imposta di bollo".
         return VocePendenzaBolloTelematico.TipoBolloEnum.IMPOSTA_DI_BOLLO;
     }
 
     /**
-     * Mappa la codifica DB a 1 char ({@code tipo_contabilita}) sull'enum V2.
-     * Codifica allineata a V1: 0=CAPITOLO, 1=SPECIALE, 2=SIOPE, 6/7/8=SRTP*, 9=ALTRO.
+     * Mappa la codifica DB a 1 char ({@code tipo_contabilita}) sull'enum.
+     * Codifica: 0=CAPITOLO, 1=SPECIALE, 2=SIOPE, 6/7/8=SRTP*, 9=ALTRO.
      */
     static TipoContabilita mapTipoContabilita(String codice) {
         if (codice == null) {

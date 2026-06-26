@@ -21,8 +21,6 @@ import jakarta.servlet.http.HttpServletRequest;
  * Servizio dell'endpoint {@code GET /pendenze/{idA2A}/{idPendenza}/informazioniDebitore}.
  *
  * <p>Espone i dati anagrafici/contatti del debitore associato a una pendenza.
- * Endpoint introdotto in V2 (V1 inglobava il soggetto nel dettaglio pendenza)
- * per minimizzare l'esposizione di dati personali (scope F della issue #9).
  *
  * <p>Ogni 200 viene tracciato in {@code gp_audit} con azione
  * {@link #AZIONE_AUDIT_VISUALIZZA}. L'audit viene scritto <i>dopo</i> il mapping

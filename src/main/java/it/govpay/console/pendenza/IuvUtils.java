@@ -16,11 +16,6 @@ import java.util.Locale;
  *       sistema pagoPA"</em> §2.1;</li>
  *   <li>Bar-Code: <em>"Guida Tecnica di Adesione PA 3.8"</em> p. 25.</li>
  * </ul>
- *
- * <p>In V1 le funzioni vivono accanto alla generazione di {@code Iuv},
- * {@code numeroAvviso} e PDF. In V2 console-api ci serve solo l'algoritmo
- * puro per popolare {@code qrcode}/{@code barcode} nello schema {@code Avviso}
- * (variante {@code application/json} di {@code /pendenze/{}/{}/avviso}).
  */
 public final class IuvUtils {
 

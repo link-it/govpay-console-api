@@ -130,13 +130,8 @@ public class AvvisoService {
     }
 
     private static String buildFilename(Versamento v) {
-        // V1 (govpay-381/.../AvvisiDAO.java:180-184):
-        //   pendenza con documento   -> <codDominio>_DOC_<codDocumento>.pdf
-        //   pendenza senza documento -> <codDominio>_<numeroAvviso>.pdf
-        //
-        // Divergenza esplicita V2: per pendenze con documento aggiungiamo
-        // come suffisso il codRata (fallback: numeroAvviso) per evitare la
-        // collisione di V1 sui file delle N rate dello stesso documento.
+        // Per pendenze con documento aggiungiamo come suffisso il codRata (fallback: numeroAvviso)
+    	// per evitare la collisione sui file delle N rate dello stesso documento.
         String dom = v.getDominio() != null ? v.getDominio().getCodDominio() : "AVV";
         if (v.getDocumento() != null && v.getDocumento().getCodDocumento() != null) {
             String rata = v.getCodRata() != null && !v.getCodRata().isBlank()

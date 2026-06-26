@@ -22,25 +22,20 @@ import it.govpay.stampe.client.model.PaymentNotice;
  * Mapping Versamento → {@link PaymentNotice} per la generazione PDF via
  * microservizio {@code govpay-stampe}.
  *
- * <p>Allineato all'endpoint {@code /avvisi} di V1
- * ({@code AvvisiDAO.getAvviso} → {@code printAvvisoVersamento} →
- * {@code AvvisoPagamentoV2Utils.fromVersamento}): genera il PDF dell'avviso
- * della singola pendenza anche quando la pendenza appartiene a un documento
- * multi-rata. I campi {@code numero_rata}, {@code tipo_soglia},
- * {@code giorni_soglia} di V1 non sono colonne fisiche su {@code versamenti}
+ * <p>Genera il PDF dell'avviso della singola pendenza anche quando la pendenza appartiene
+ * a un documento multi-rata. I campi {@code numero_rata}, {@code tipo_soglia},
+ * {@code giorni_soglia} non sono colonne fisiche su {@code versamenti}
  * — vivono solo nei DTO di input e non emergono mai in lettura da DB.
  *
  * <p><b>Limitazioni</b>:
  * <ul>
- *   <li><b>Default lingua da {@code proprieta} JSON</b>: V1 cerca un default in
- *       {@code versamento.proprietaPendenza.linguaSecondaria}; in V2 (per ora)
+ *   <li><b>Default lingua da {@code proprieta} JSON</b>: (per ora)
  *       applichiamo solo l'override esplicito utente.</li>
  * </ul>
  *
  * <p><b>Non in scope (issue successiva)</b>: endpoint
  * {@code GET /documenti/{...}/avviso} per il PDF aggregato dell'intero
- * documento multi-rata (V1: {@code AvvisiDAO.getDocumento} →
- * {@code AvvisoPagamentoV2Utils.fromDocumento}).
+ * documento multi-rata.
  */
 @Component
 public class AvvisoPdfPayloadMapper {
@@ -80,13 +75,11 @@ public class AvvisoPdfPayloadMapper {
     }
 
     /**
-     * Mappa l'enum V2 {@link LinguaSecondaria} sull'enum {@link Languages} del
+     * Mappa l'enum {@link LinguaSecondaria} sull'enum {@link Languages} del
      * client del microservizio. {@code null} o {@link LinguaSecondaria#NONE}
      * → {@code null} (avviso solo in italiano).
      *
-     * Nota: V1 cerca anche un default in
-     * {@code versamento.proprietaPendenza.linguaSecondaria} se l'utente non passa
-     * il parametro. In V2 (per ora) non parsifichiamo il JSON {@code proprieta}:
+     * Nota: (per ora) non parsifichiamo il JSON {@code proprieta}:
      * applichiamo solo l'override esplicito utente.
      */
     static Languages toClientLanguage(LinguaSecondaria input) {
@@ -105,8 +98,7 @@ public class AvvisoPdfPayloadMapper {
     /**
      * Costruisce {@link NoticeMetadataSecondLanguage} con {@code bilinguism=true}
      * e la lingua selezionata. Il {@code title} resta {@code null}: il rendering
-     * dei titoli localizzati e' competenza del microservizio
-     * {@code govpay-stampe} (template {@code LabelAvvisiProperties} di V1).
+     * dei titoli localizzati e' competenza del microservizio {@code govpay-stampe}.
      */
     private static NoticeMetadataSecondLanguage buildSecondLanguage(Languages lang) {
         NoticeMetadataSecondLanguage sl = new NoticeMetadataSecondLanguage();

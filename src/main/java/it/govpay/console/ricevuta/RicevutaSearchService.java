@@ -73,6 +73,7 @@ public class RicevutaSearchService {
 
         Specification<Rpt> spec = Specification.allOf(
                 Stream.of(
+                        RptSpecifications.conRicevuta(),
                         RptSpecifications.iuvExact(query.iuv()),
                         RptSpecifications.idDominioExact(query.idDominio()),
                         RptSpecifications.idRicevutaExact(query.idRicevuta()),

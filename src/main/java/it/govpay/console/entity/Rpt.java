@@ -15,7 +15,7 @@ import jakarta.persistence.Table;
 
 /**
  * RPT/RT (Richiesta Pagamento Telematico + Ricevuta Telematica) PagoPA.
- * Mappa la tabella {@code rpt} di V1 con i soli campi usati dall'endpoint
+ * Mappa la tabella {@code rpt} di con i soli campi usati dall'endpoint
  * {@code /pendenze/{idA2A}/{idPendenza}/ricevuta}:
  * <ul>
  *   <li>chiavi pagoPA: {@code iuv}, {@code ccp}, {@code codDominio};</li>

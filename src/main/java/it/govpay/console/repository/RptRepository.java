@@ -55,6 +55,8 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
             select r from Rpt r
              where r.versamento.applicazione.codApplicazione = :idA2A
                and r.versamento.codVersamentoEnte = :idPendenza
+               and r.xmlRt is not null
+               and r.dataMsgRicevuta is not null
              order by r.dataMsgRicevuta desc
             """)
     List<Rpt> findByPendenza(@Param("idA2A") String idA2A, @Param("idPendenza") String idPendenza);
@@ -64,6 +66,12 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
      * {@code idRicevuta} è il {@code ccp} di V1. La tupla è documentata come unica;
      * per robustezza su dati storici (es. più RT legacy con {@code ccp = 'n/a'}) si
      * ordina per {@code data_msg_ricevuta DESC} e si prende la prima.
+     *
+     * <p>Solo righe che sono effettivamente ricevute ({@code xml_rt IS NOT NULL} e
+     * {@code data_msg_ricevuta IS NOT NULL}): una {@code rpt} con sola richiesta, o
+     * senza data pagamento, non è una ricevuta → 404 sul dettaglio e sui
+     * sub-resource. Garantisce inoltre che {@code Ricevuta.dataPagamento} (required)
+     * sia sempre valorizzato.
      *
      * <p>L'EntityGraph carica le associazioni del {@code versamento} usate dal
      * mapper di dettaglio (pendenza ref, _links) e dal check di visibilità ACL.
@@ -75,6 +83,8 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
              where r.codDominio = :idDominio
                and r.iuv = :iuv
                and r.ccp = :idRicevuta
+               and r.xmlRt is not null
+               and r.dataMsgRicevuta is not null
              order by r.dataMsgRicevuta desc
             """)
     List<Rpt> findByKey(@Param("idDominio") String idDominio,

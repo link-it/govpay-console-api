@@ -63,4 +63,23 @@ public final class RptSpecifications {
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
         return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root.get("versamento"), operatore);
     }
+
+    /**
+     * Vincolo di dominio della collection {@code /ricevute}: la riga {@code rpt} è
+     * una ricevuta solo se la RT è effettivamente presente. Allineato al filtro V1
+     * "ricerco solo rpt con ricevuta" ({@code RptFilter}: {@code cod_msg_ricevuta IS
+     * NOT NULL}); qui usiamo {@code xml_rt IS NOT NULL}, più stretto, per garantire
+     * che {@code Ricevuta.rt} sia convertibile. Esclude le {@code rpt} con sola
+     * richiesta / pagamento non concluso.
+     *
+     * <p>Si richiede inoltre {@code data_msg_ricevuta IS NOT NULL}: la colonna è
+     * nullable a DB e non vincolata a {@code xml_rt}, mentre la collection ordina e
+     * pagina (cursor keyset) proprio su {@code dataPagamento}. Senza questo vincolo
+     * una riga con data nulla romperebbe l'ordinamento e la codifica del cursore.
+     */
+    public static Specification<Rpt> conRicevuta() {
+        return (root, q, cb) -> cb.and(
+                cb.isNotNull(root.get("xmlRt")),
+                cb.isNotNull(root.get("dataMsgRicevuta")));
+    }
 }

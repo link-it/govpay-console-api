@@ -9,15 +9,13 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 /**
- * Documento: raggruppatore di N versamenti per avvisi multi-rata. In V2 (slim)
- * mappiamo solo {@code id} e {@code codDocumento}: serve a costruire il filename
- * del PDF dell'avviso allineato a V1
- * ({@code {codDominio}_DOC_{codDocumento}.pdf} quando la pendenza appartiene
- * a un documento).
+ * Documento: raggruppatore di N versamenti per avvisi multi-rata. 
+ * Mappiamo solo {@code id} e {@code codDocumento}: serve a costruire il filename
+ * del PDF dell'avviso ({@code {codDominio}_DOC_{codDocumento}.pdf} quando la 
+ * pendenza appartiene a un documento).
  *
  * <p>L'endpoint dedicato al PDF aggregato del documento intero
- * ({@code /documenti/.../avviso} di V1) e' fuori scope dell'issue #9 V2:
- * verra' mappato in una issue dedicata.
+ * ({@code /documenti/.../avviso}) verra' mappato in futuro.
  */
 @Entity
 @Table(name = "documenti")

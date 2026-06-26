@@ -105,11 +105,14 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(jsonPath("$.results[0].idDominio", is(DOM_A)))
                 .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")))
                 .andExpect(jsonPath("$.results[0].idRicevuta", is("CCP-A1")))
+                .andExpect(jsonPath("$.results[0].dataPagamento").exists())
                 .andExpect(jsonPath("$.results[0].importo", is(10.0)))
                 .andExpect(jsonPath("$.results[0].codPsp", is("PSP-X")))
                 .andExpect(jsonPath("$.results[0].versione", is("2.0")))
                 .andExpect(jsonPath("$.results[0].stato", is("RT_ACCETTATA_PA")))
                 .andExpect(jsonPath("$.results[0].descrizioneStato", is("ok")))
+                // esattamente i 9 campi previsti, nessuno in piu'
+                .andExpect(jsonPath("$.results[0].*", hasSize(9)))
                 // nessun dato personale ne' campi V1 rinominati
                 .andExpect(jsonPath("$.results[0].ccp").doesNotExist())
                 .andExpect(jsonPath("$.results[0].esito").doesNotExist())
@@ -155,6 +158,62 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA3")));
+    }
+
+    @Test
+    void escludeRptConSolaRichiestaSenzaRt() throws Exception {
+        String p = utenteDominiStar("u-nort");
+        // riga rpt con sola richiesta (xml_rt null, pagamento non concluso) sul dominio A
+        newRptSenzaRt(domA, tvA, tvdA, "NORTIUV0001", "CCP-NORT");
+        // dominio A ha 3 RT reali dal setup: la riga senza RT non deve comparire.
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A).with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)))
+                .andExpect(jsonPath("$.results[*].iuv",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("NORTIUV0001"))));
+    }
+
+    @Test
+    void escludeRtSenzaDataPagamento() throws Exception {
+        String p = utenteDominiStar("u-nodata");
+        // RT presente (xml_rt) ma senza data pagamento: non ordinabile/cursorabile → esclusa.
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte("PEND-NODATA");
+        v.setImportoTotale(10.0);
+        v.setImportoPagato(10.0);
+        v.setStatoVersamento("ESEGUITO");
+        v.setDataCreazione(date(2026, 6, 19));
+        v.setDataOraUltimoAggiornamento(date(2026, 6, 19));
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setAnomalo(false);
+        v.setAck(true);
+        v.setTipo("DOVUTO");
+        v.setDominio(domA);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tvA);
+        v.setTipoVersamentoDominio(tvdA);
+        versamentoRepository.save(v);
+        Rpt r = new Rpt();
+        r.setIuv("NODATAIUV01");
+        r.setCcp("CCP-ND");
+        r.setCodDominio(DOM_A);
+        r.setXmlRt("<RT/>".getBytes());
+        r.setImportoTotalePagato(10.0);
+        r.setDataMsgRichiesta(date(2026, 6, 19));
+        r.setDataMsgRicevuta(null);
+        r.setVersione("SANP_240");
+        r.setStato("RT_ACCETTATA_PA");
+        r.setVersamento(v);
+        rptRepository.save(r);
+
+        // cursor mode: deve restare stabile (no NPE su encode) ed escludere la riga senza data
+        mvc.perform(get("/ricevute?cursor=&idDominio=" + DOM_A).with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)))
+                .andExpect(jsonPath("$.results[*].iuv",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("NODATAIUV01"))));
     }
 
     @Test
@@ -227,6 +286,24 @@ class RicevuteSearchIntegrationTest {
     void pageECursorMutuamenteEsclusiviRitorna400() throws Exception {
         String p = utenteDominiStar("u-mutex");
         mvc.perform(get("/ricevute?cursor=&page=2").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cursorConTotalFalseEAmmesso() throws Exception {
+        String p = utenteDominiStar("u-totfalse");
+        // total=false è il default: non confligge col cursor (un client generato puo' inviarlo)
+        mvc.perform(get("/ricevute?cursor=&total=false&limit=2").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.pagination").doesNotExist())
+                .andExpect(jsonPath("$.nextCursor").exists());
+    }
+
+    @Test
+    void cursorConTotalTrueRitorna400() throws Exception {
+        String p = utenteDominiStar("u-tottrue");
+        mvc.perform(get("/ricevute?cursor=&total=true").with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -311,6 +388,42 @@ class RicevuteSearchIntegrationTest {
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("ok");
         r.setCodPsp("PSP-X");
+        r.setVersamento(v);
+        rptRepository.save(r);
+    }
+
+    /** Riga {@code rpt} con sola richiesta: RT non ancora presente (xml_rt e data RT null). */
+    private void newRptSenzaRt(Dominio dominio, TipoVersamento tipo, TipoVersamentoDominio tipoDom,
+                               String iuv, String ccp) {
+        OffsetDateTime data = date(2026, 6, 19);
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte("PEND-" + ccp);
+        v.setImportoTotale(10.0);
+        v.setImportoPagato(0.0);
+        v.setStatoVersamento("NON_ESEGUITO");
+        v.setDataCreazione(data);
+        v.setDataOraUltimoAggiornamento(data);
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setAnomalo(false);
+        v.setAck(true);
+        v.setTipo("DOVUTO");
+        v.setDominio(dominio);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tipo);
+        v.setTipoVersamentoDominio(tipoDom);
+        versamentoRepository.save(v);
+
+        Rpt r = new Rpt();
+        r.setIuv(iuv);
+        r.setCcp(ccp);
+        r.setCodDominio(dominio.getCodDominio());
+        r.setXmlRpt("<RPT/>".getBytes());
+        r.setXmlRt(null);
+        r.setDataMsgRichiesta(data);
+        r.setVersione("SANP_240");
+        r.setStato("RPT_ATTIVATA");
         r.setVersamento(v);
         rptRepository.save(r);
     }

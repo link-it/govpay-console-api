@@ -19,8 +19,8 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 /**
- * Versamento (= "pendenza" nel dominio V2). Slim: solo i campi usati dagli
- * endpoint correnti. Aggiungere altri campi qui quando entreranno in gioco.
+ * Versamento (= "pendenza"). Slim: solo i campi usati dagli endpoint
+ * correnti. Aggiungere altri campi qui quando entreranno in gioco.
  */
 @Entity
 @Table(name = "versamenti")

@@ -264,12 +264,6 @@ paths:
 
         404 problem+json se la RT non esiste o se l'ACL dell'operatore non ne
         consente la visibilità (anti-leak). Il 404 non genera audit.
-
-        **Legacy**: per le RT storiche accettate senza RPT il `ccp` valeva la
-        stringa speciale `n/a`. Il valore contiene uno slash, quindi come segmento
-        di path (`idRicevuta=n%2Fa`) è raggiungibile solo se l'encoded-slash è
-        abilitato sul servlet container; in alternativa, sempre disponibile, lo si
-        recupera via `GET /ricevute?idRicevuta=n%2Fa` (filtro query).
       parameters:
         - $ref: '#/components/parameters/IdDominioPath'
         - $ref: '#/components/parameters/IuvPath'
@@ -312,9 +306,10 @@ paths:
           `Ricevuta.rpt`);
         - `application/xml` → XML originale della RPT, byte-per-byte dal DB.
 
-        Non è previsto il formato PDF: il microservizio govpay-stampe non stampa la
-        richiesta (coerente con V1, che su `/rpt` offre solo XML/JSON). Un `Accept:
-        application/pdf` ottiene 406.
+        Il formato PDF non è disponibile per la RPT: il servizio di stampa
+        (govpay-stampe) genera solo la ricevuta (RT), non la richiesta. La stampa
+        PDF è quindi offerta sul solo sub-resource `/rt`; un `Accept:
+        application/pdf` su `/rpt` ottiene 406.
 
         404 se la RPT non esiste, non è visibile (ACL anti-leak) o non è disponibile
         (RT acquisita in standin). Ogni 200 traccia `RICEVUTA_VISUALIZZA`
@@ -2356,21 +2351,28 @@ components:
       allOf:
         - $ref: '#/components/schemas/RicevutaSummary'
         - type: object
+          required:
+            - rt
+            - _links
           properties:
             rpt:
               type: object
               additionalProperties: true
+              nullable: true
               description: |
                 Conversione JSON della Richiesta di Pagamento Telematica inviata a
                 pagoPA (standard `ctRichiestaPagamentoTelematico` / paForNode a
-                seconda della versione). `null` se la RPT non è disponibile (RT
-                acquisita in standin).
+                seconda della versione). È `null` quando la RPT non è disponibile
+                (RT acquisita in standin, senza messaggio di richiesta): divergenza
+                voluta, l'unico campo del dettaglio che può mancare.
             rt:
               type: object
               additionalProperties: true
               description: |
                 Conversione JSON della Ricevuta Telematica restituita da pagoPA
-                (standard `ctRicevutaTelematica` / paForNode a seconda della versione).
+                (standard `ctRicevutaTelematica` / paForNode a seconda della
+                versione). Sempre presente: il dettaglio è esposto solo per RT
+                effettivamente disponibili.
             segnalazioni:
               type: array
               description: Eventuali eventi/note del Nodo associati alla RT.
@@ -2434,10 +2436,15 @@ components:
         (no anagrafica debitore, no causale), quindi la lista non genera audit GDPR.
         La tupla `idDominio`, `iuv`, `idRicevuta` identifica la RT per la
         navigazione ai sub-resource di dettaglio.
+
+        I campi sempre valorizzati sono `required`; `codPsp`, `versione`,
+        `descrizioneStato` e `importo` possono mancare (sorgenti nullable).
       required:
         - idDominio
         - iuv
         - idRicevuta
+        - dataPagamento
+        - stato
       properties:
         idDominio:
           type: string
@@ -3137,8 +3144,9 @@ components:
       required: false
       description: |
         Cursore opaque (base64) ricevuto in `nextCursor` di una precedente
-        risposta. Attiva la modalita' di paginazione cursor (keyset) con
-        ordinamento fisso `(dataOraUltimoAggiornamento DESC, id DESC)`.
+        risposta. Attiva la modalita' di paginazione cursor (keyset). In questa
+        modalita' l'ordinamento e' fisso e specifico della risorsa (documentato
+        nella singola operazione).
 
         Mutuamente esclusivo con `page` esplicito, `sort` esplicito e
         `total=true`. Cursor malformato → 400.
@@ -3239,9 +3247,7 @@ components:
       name: idRicevuta
       in: path
       required: true
-      description: |
-        Identificativo della ricevuta (era `ccp` in V1). Per dati storici è
-        accettato il valore legacy `n/a` (URL-encoded `n%2Fa`).
+      description: Identificativo della ricevuta.
       schema:
         type: string
 
