@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 
 class GovPayConsoleApplicationTest {
 
@@ -24,7 +24,7 @@ class GovPayConsoleApplicationTest {
         GovPayConsoleApplication application = new GovPayConsoleApplication();
         application.timeZone = "Europe/Rome";
 
-        Jackson2ObjectMapperBuilderCustomizer customizer = application.jsonCustomizer();
+        JsonMapperBuilderCustomizer customizer = application.jsonCustomizer();
 
         assertNotNull(customizer);
     }
