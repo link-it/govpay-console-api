@@ -33,6 +33,30 @@ public class Dominio {
     @Column(name = "gln", length = 35)
     private String gln;
 
+    @Column(name = "abilitato")
+    private Boolean abilitato;
+
+    @Column(name = "intermediato")
+    private Boolean intermediato;
+
+    @Column(name = "scarica_fr")
+    private Boolean scaricaFr;
+
+    @Column(name = "segregation_code")
+    private Integer segregationCode;
+
+    @Column(name = "iuv_prefix", length = 255)
+    private String iuvPrefix;
+
+    @Column(name = "cbill", length = 255)
+    private String cbill;
+
+    @Column(name = "aut_stampa_poste", length = 255)
+    private String autStampaPoste;
+
+    @Column(name = "tassonomia_pago_pa", length = 35)
+    private String tassonomiaPagoPa;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_stazione")
     private Stazione stazione;
@@ -83,6 +107,70 @@ public class Dominio {
 
     public void setGln(String gln) {
         this.gln = gln;
+    }
+
+    public Boolean getAbilitato() {
+        return abilitato;
+    }
+
+    public void setAbilitato(Boolean abilitato) {
+        this.abilitato = abilitato;
+    }
+
+    public Boolean getIntermediato() {
+        return intermediato;
+    }
+
+    public void setIntermediato(Boolean intermediato) {
+        this.intermediato = intermediato;
+    }
+
+    public Boolean getScaricaFr() {
+        return scaricaFr;
+    }
+
+    public void setScaricaFr(Boolean scaricaFr) {
+        this.scaricaFr = scaricaFr;
+    }
+
+    public Integer getSegregationCode() {
+        return segregationCode;
+    }
+
+    public void setSegregationCode(Integer segregationCode) {
+        this.segregationCode = segregationCode;
+    }
+
+    public String getIuvPrefix() {
+        return iuvPrefix;
+    }
+
+    public void setIuvPrefix(String iuvPrefix) {
+        this.iuvPrefix = iuvPrefix;
+    }
+
+    public String getCbill() {
+        return cbill;
+    }
+
+    public void setCbill(String cbill) {
+        this.cbill = cbill;
+    }
+
+    public String getAutStampaPoste() {
+        return autStampaPoste;
+    }
+
+    public void setAutStampaPoste(String autStampaPoste) {
+        this.autStampaPoste = autStampaPoste;
+    }
+
+    public String getTassonomiaPagoPa() {
+        return tassonomiaPagoPa;
+    }
+
+    public void setTassonomiaPagoPa(String tassonomiaPagoPa) {
+        this.tassonomiaPagoPa = tassonomiaPagoPa;
     }
 
     public Stazione getStazione() {

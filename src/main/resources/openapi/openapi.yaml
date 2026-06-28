@@ -30,6 +30,12 @@ tags:
     description: Anagrafica delle stazioni di un intermediario.
   - name: Connettori
     description: Connettori pagoPA di un intermediario (uno per canale).
+  - name: Entrate
+    description: Anagrafica di sistema delle tipologie di entrata.
+  - name: TipiPendenza
+    description: Anagrafica di sistema delle tipologie di pendenza.
+  - name: Domini
+    description: Anagrafica degli enti creditori (domini).
 
 paths:
 
@@ -1832,6 +1838,560 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /entrate:
+    get:
+      tags:
+        - Entrate
+      operationId: listEntrate
+      summary: Elenca le tipologie di entrata (paginate).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `idEntrata` — match parziale sul codice entrata;
+        - `descrizione` — match parziale.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
+        Con `?total=true` vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
+        prefisso per ASC); campi ammessi: `idEntrata`, `descrizione`.
+        Default `idEntrata` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdEntrataFilter'
+        - $ref: '#/components/parameters/Descrizione'
+      responses:
+        '200':
+          description: Lista paginata di tipologie di entrata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EntrataSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Entrate
+      operationId: createEntrata
+      summary: Crea una nuova tipologia di entrata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataCreate'
+      responses:
+        '201':
+          description: Tipologia di entrata creata.
+          headers:
+            Location:
+              description: URI della nuova tipologia di entrata.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entrata'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '409':
+          $ref: '#/components/responses/Problem409'
+
+  /entrate/{idEntrata}:
+    parameters:
+      - $ref: '#/components/parameters/IdEntrataPath'
+    get:
+      tags:
+        - Entrate
+      operationId: getEntrata
+      summary: Dettaglio di una tipologia di entrata.
+      description: |
+        Restituisce la tipologia di entrata identificata da `idEntrata`, con header
+        `ETag` da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio tipologia di entrata.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entrata'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Entrate
+      operationId: replaceEntrata
+      summary: Sostituisce una tipologia di entrata (full update).
+      description: |
+        Sostituisce integralmente la tipologia di entrata. Richiede l'header
+        `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataReplace'
+      responses:
+        '200':
+          description: Tipologia di entrata aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entrata'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Entrate
+      operationId: patchEntrata
+      summary: Modifica parziale di una tipologia di entrata (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902). Richiede l'header
+        `If-Match` con l'`ETag` corrente. La rappresentazione risultante viene
+        validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Tipologia di entrata aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entrata'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /tipiPendenza:
+    get:
+      tags:
+        - TipiPendenza
+      operationId: listTipiPendenza
+      summary: Elenca le tipologie di pendenza (paginate).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `idTipoPendenza` — match parziale;
+        - `descrizione` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
+        valorizza `hasNextPage` (modalita' Slice, senza COUNT). Con `?total=true`
+        vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo`; campi ammessi: `idTipoPendenza`,
+        `descrizione`. Default `idTipoPendenza` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdTipoPendenzaFilter'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di tipologie di pendenza.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipoPendenzaSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - TipiPendenza
+      operationId: createTipoPendenza
+      summary: Crea una nuova tipologia di pendenza.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaCreate'
+      responses:
+        '201':
+          description: Tipologia di pendenza creata.
+          headers:
+            Location:
+              description: URI della nuova tipologia di pendenza.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenza'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '409':
+          $ref: '#/components/responses/Problem409'
+
+  /tipiPendenza/{idTipoPendenza}:
+    parameters:
+      - $ref: '#/components/parameters/IdTipoPendenzaPath'
+    get:
+      tags:
+        - TipiPendenza
+      operationId: getTipoPendenza
+      summary: Dettaglio di una tipologia di pendenza.
+      description: |
+        Restituisce la tipologia di pendenza identificata da `idTipoPendenza`, con
+        header `ETag` da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio tipologia di pendenza.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenza'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - TipiPendenza
+      operationId: replaceTipoPendenza
+      summary: Sostituisce una tipologia di pendenza (full update).
+      description: |
+        Sostituisce integralmente la tipologia di pendenza. Richiede l'header
+        `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaReplace'
+      responses:
+        '200':
+          description: Tipologia di pendenza aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenza'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - TipiPendenza
+      operationId: patchTipoPendenza
+      summary: Modifica parziale di una tipologia di pendenza (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902). Richiede l'header
+        `If-Match` con l'`ETag` corrente. La rappresentazione risultante viene
+        validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Tipologia di pendenza aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenza'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /domini:
+    get:
+      tags:
+        - Domini
+      operationId: listDomini
+      summary: Elenca i domini (paginati).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `idDominio` — match parziale;
+        - `ragioneSociale` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
+        valorizza `hasNextPage` (modalita' Slice, senza COUNT). Con `?total=true`
+        vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo`; campi ammessi: `idDominio`,
+        `ragioneSociale`. Default `idDominio` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdDominioFilter'
+        - $ref: '#/components/parameters/RagioneSociale'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di domini.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DominioSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Domini
+      operationId: createDominio
+      summary: Crea un nuovo dominio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DominioCreate'
+      responses:
+        '201':
+          description: Dominio creato.
+          headers:
+            Location:
+              description: URI del nuovo dominio.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Domini
+      operationId: getDominio
+      summary: Dettaglio di un dominio.
+      description: |
+        Restituisce il dominio identificato da `idDominio`, con header `ETag` da
+        rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio dominio.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dominio'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Domini
+      operationId: replaceDominio
+      summary: Sostituisce un dominio (full update).
+      description: |
+        Sostituisce integralmente il dominio. Richiede l'header `If-Match` con
+        l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DominioReplace'
+      responses:
+        '200':
+          description: Dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Domini
+      operationId: patchDominio
+      summary: Modifica parziale di un dominio (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902). Richiede l'header
+        `If-Match` con l'`ETag` corrente. La rappresentazione risultante viene
+        validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -2769,6 +3329,743 @@ components:
         abilitato:
           type: boolean
 
+    EntrataSummary:
+      type: object
+      description: Proiezione leggera della tipologia di entrata, usata nelle liste paginate.
+      required:
+        - idEntrata
+      properties:
+        idEntrata:
+          type: string
+          description: Codice identificativo della tipologia di entrata.
+          maxLength: 255
+        descrizione:
+          type: string
+          maxLength: 255
+
+    Entrata:
+      type: object
+      description: Dettaglio canonico di una tipologia di entrata.
+      required:
+        - idEntrata
+        - descrizione
+        - tipoContabilita
+        - codiceContabilita
+      properties:
+        idEntrata:
+          type: string
+          description: Codice identificativo della tipologia di entrata.
+          maxLength: 255
+        descrizione:
+          type: string
+          maxLength: 255
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          description: Codifica del capitolo di bilancio.
+          maxLength: 255
+
+    EntrataCreate:
+      type: object
+      description: Body per la creazione di una tipologia di entrata.
+      required:
+        - idEntrata
+        - descrizione
+        - tipoContabilita
+        - codiceContabilita
+      properties:
+        idEntrata:
+          type: string
+          description: Codice identificativo della tipologia di entrata.
+          maxLength: 255
+        descrizione:
+          type: string
+          maxLength: 255
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
+    EntrataReplace:
+      type: object
+      description: Body per la sostituzione completa di una tipologia di entrata (`idEntrata` dal path).
+      required:
+        - descrizione
+        - tipoContabilita
+        - codiceContabilita
+      properties:
+        descrizione:
+          type: string
+          maxLength: 255
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
+    TipoTemplateTrasformazione:
+      type: string
+      description: Tipo di template applicato per la trasformazione.
+      enum:
+        - freemarker
+
+    TipoPendenzaForm:
+      type: object
+      description: Form di inserimento della pendenza sul portale di backoffice.
+      required:
+        - tipo
+        - definizione
+      properties:
+        tipo:
+          type: string
+          description: Linguaggio della form.
+          maxLength: 35
+        definizione:
+          type: object
+          description: Definizione della form nel linguaggio indicato in `tipo`.
+
+    TipoPendenzaFormPagamento:
+      type: object
+      description: Form di inserimento della pendenza sul portale di pagamento.
+      required:
+        - tipo
+        - definizione
+      properties:
+        tipo:
+          type: string
+          description: Linguaggio della form.
+          maxLength: 35
+        definizione:
+          type: object
+          description: Definizione della form nel linguaggio indicato in `tipo`.
+        impaginazione:
+          type: object
+          description: Definizione dell'impaginazione della form di pagamento.
+
+    TipoPendenzaTrasformazione:
+      type: object
+      description: Template di trasformazione dell'input in una pendenza GovPay.
+      required:
+        - tipo
+        - definizione
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        definizione:
+          type: object
+          description: Template di trasformazione.
+
+    TipoPendenzaPortaleBackoffice:
+      type: object
+      description: Configurazione del caricamento pendenze dal portale di backoffice.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        form:
+          $ref: '#/components/schemas/TipoPendenzaForm'
+        validazione:
+          type: object
+          description: JSON Schema per la validazione dell'input.
+        trasformazione:
+          $ref: '#/components/schemas/TipoPendenzaTrasformazione'
+        inoltro:
+          type: string
+          description: Identificativo dell'applicazione verso cui inoltrare la pendenza.
+          maxLength: 35
+
+    TipoPendenzaPortalePagamento:
+      type: object
+      description: Configurazione del caricamento pendenze dal portale di pagamento.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        form:
+          $ref: '#/components/schemas/TipoPendenzaFormPagamento'
+        validazione:
+          type: object
+          description: JSON Schema per la validazione dell'input.
+        trasformazione:
+          $ref: '#/components/schemas/TipoPendenzaTrasformazione'
+        inoltro:
+          type: string
+          description: Identificativo dell'applicazione verso cui inoltrare la pendenza.
+          maxLength: 35
+
+    TipoPendenzaPromemoriaScadenza:
+      type: object
+      description: Configurazione del promemoria di scadenza dell'avviso di pagamento.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: object
+          description: Template per l'oggetto del promemoria.
+        messaggio:
+          type: object
+          description: Template per il messaggio del promemoria.
+        preavviso:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Giorni prima della scadenza in cui spedire il promemoria.
+
+    TipoPendenzaPromemoriaAvvisoMail:
+      type: object
+      description: Configurazione del promemoria avviso di pagamento via mail.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: object
+        messaggio:
+          type: object
+        allegaPdf:
+          type: boolean
+          description: Indica se allegare alla mail il PDF dell'avviso.
+
+    TipoPendenzaPromemoriaRicevutaMail:
+      type: object
+      description: Configurazione del promemoria ricevuta di pagamento via mail.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: object
+        messaggio:
+          type: object
+        soloEseguiti:
+          type: boolean
+          description: Limita l'invio ai soli pagamenti eseguiti.
+        allegaPdf:
+          type: boolean
+          description: Indica se allegare alla mail il PDF della ricevuta.
+
+    TipoPendenzaPromemoriaAvvisoAppIo:
+      type: object
+      description: Configurazione del promemoria avviso di pagamento via app IO.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: object
+        messaggio:
+          type: object
+
+    TipoPendenzaPromemoriaRicevutaAppIo:
+      type: object
+      description: Configurazione del promemoria ricevuta di pagamento via app IO.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: object
+        messaggio:
+          type: object
+        soloEseguiti:
+          type: boolean
+          description: Limita l'invio ai soli pagamenti eseguiti.
+
+    TipoPendenzaAvvisaturaMail:
+      type: object
+      description: Configurazione dell'avvisatura via mail.
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaAvvisoMail'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaRicevutaMail'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaScadenza'
+
+    TipoPendenzaAvvisaturaAppIo:
+      type: object
+      description: Configurazione dell'avvisatura via app IO.
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaAvvisoAppIo'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaRicevutaAppIo'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaScadenza'
+
+    TipoPendenzaTracciatoCsv:
+      type: object
+      description: Configurazione del tracciato CSV per il caricamento massivo.
+      required:
+        - tipo
+        - intestazione
+        - richiesta
+        - risposta
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        intestazione:
+          type: string
+          description: Intestazione del file CSV di risposta.
+        richiesta:
+          type: object
+          description: Template per la trasformazione di un record da CSV a JSON.
+        risposta:
+          type: object
+          description: Template per la trasformazione di un record da JSON a CSV.
+
+    TipoPendenzaSummary:
+      type: object
+      description: Proiezione leggera della tipologia di pendenza, usata nelle liste paginate.
+      required:
+        - idTipoPendenza
+        - descrizione
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice identificativo della tipologia di pendenza.
+          maxLength: 35
+        descrizione:
+          type: string
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    TipoPendenzaReplace:
+      type: object
+      description: Body per la sostituzione completa di una tipologia di pendenza (`idTipoPendenza` dal path).
+      required:
+        - descrizione
+      properties:
+        descrizione:
+          type: string
+          maxLength: 255
+        codificaIUV:
+          type: string
+          description: Cifra identificativa negli IUV.
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+          description: Definisce come visualizzare la pendenza.
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenzaCreate:
+      type: object
+      description: Body per la creazione di una tipologia di pendenza.
+      required:
+        - idTipoPendenza
+        - descrizione
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice identificativo della tipologia di pendenza.
+          maxLength: 35
+        descrizione:
+          type: string
+          maxLength: 255
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenza:
+      type: object
+      description: Dettaglio canonico di una tipologia di pendenza.
+      required:
+        - idTipoPendenza
+        - descrizione
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice identificativo della tipologia di pendenza.
+          maxLength: 35
+        descrizione:
+          type: string
+          maxLength: 255
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+        abilitato:
+          type: boolean
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    IntermediarioRef:
+      type: object
+      description: Riferimento minimale a un intermediario pagoPA.
+      required:
+        - idIntermediario
+      properties:
+        idIntermediario:
+          type: string
+        denominazione:
+          type: string
+
+    DominioSummary:
+      type: object
+      description: Proiezione leggera del dominio, usata nelle liste paginate.
+      required:
+        - idDominio
+        - ragioneSociale
+      properties:
+        idDominio:
+          type: string
+          description: Codice fiscale dell'ente creditore (11 cifre).
+          pattern: '^[0-9]{11}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+
+    Dominio:
+      type: object
+      description: |
+        Dettaglio canonico di un dominio. Le sotto-risorse (unita' operative,
+        conti di accredito, entrate, tipi pendenza), il logo e i connettori di
+        notifica sono esposti su endpoint dedicati e non sono inclusi qui.
+      required:
+        - idDominio
+        - ragioneSociale
+      properties:
+        idDominio:
+          type: string
+          pattern: '^[0-9]{11}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        gln:
+          type: string
+          maxLength: 35
+          pattern: '^[0-9]{13}$'
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+        cbill:
+          type: string
+          maxLength: 5
+          pattern: '^[0-9A-Z]{5}$'
+        iuvPrefix:
+          type: string
+          maxLength: 255
+          pattern: '(\d*(%\([yYa{t|p}u]\))?)+'
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+        auxDigit:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3
+        segregationCode:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 49
+        tassonomiaPagoPA:
+          type: string
+          maxLength: 35
+        intermediato:
+          type: boolean
+        scaricaFr:
+          type: boolean
+        abilitato:
+          type: boolean
+        idStazione:
+          type: string
+          description: Codice della stazione pagoPA che intermedia il dominio.
+          maxLength: 35
+        riferimentoIntermediario:
+          description: |
+            Intermediario derivato dalla stazione del dominio. Sola lettura: per
+            cambiarlo si modifica `idStazione`.
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/IntermediarioRef'
+
+    DominioCreate:
+      type: object
+      description: |
+        Body per la creazione di un dominio. `gln` e `idStazione` sono
+        obbligatori solo per i domini intermediati (`intermediato` true o
+        assente) e devono essere assenti se `intermediato` e' false: il vincolo
+        e' applicato lato server (422).
+      required:
+        - idDominio
+        - ragioneSociale
+        - abilitato
+        - scaricaFr
+      properties:
+        idDominio:
+          type: string
+          pattern: '^[0-9]{11}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        gln:
+          type: string
+          maxLength: 35
+          pattern: '^[0-9]{13}$'
+        idStazione:
+          type: string
+          maxLength: 35
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+        cbill:
+          type: string
+          maxLength: 5
+          pattern: '^[0-9A-Z]{5}$'
+        iuvPrefix:
+          type: string
+          maxLength: 255
+          pattern: '(\d*(%\([yYa{t|p}u]\))?)+'
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+        auxDigit:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3
+        segregationCode:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 49
+        tassonomiaPagoPA:
+          type: string
+          maxLength: 35
+        intermediato:
+          type: boolean
+          default: true
+        scaricaFr:
+          type: boolean
+        abilitato:
+          type: boolean
+
+    DominioReplace:
+      type: object
+      description: |
+        Body per la sostituzione completa di un dominio (`idDominio` dal path).
+        `gln` e `idStazione` sono obbligatori solo per i domini intermediati
+        (`intermediato` true o assente) e devono essere assenti se `intermediato`
+        e' false: il vincolo e' applicato lato server (422).
+      required:
+        - ragioneSociale
+        - abilitato
+        - scaricaFr
+      properties:
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        gln:
+          type: string
+          maxLength: 35
+          pattern: '^[0-9]{13}$'
+        idStazione:
+          type: string
+          maxLength: 35
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+        cbill:
+          type: string
+          maxLength: 5
+          pattern: '^[0-9A-Z]{5}$'
+        iuvPrefix:
+          type: string
+          maxLength: 255
+          pattern: '(\d*(%\([yYa{t|p}u]\))?)+'
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+        auxDigit:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3
+        segregationCode:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 49
+        tassonomiaPagoPA:
+          type: string
+          maxLength: 35
+        intermediato:
+          type: boolean
+        scaricaFr:
+          type: boolean
+        abilitato:
+          type: boolean
+
     VersioneStazione:
       type: string
       description: Versione del protocollo pagoPA della stazione.
@@ -3091,6 +4388,18 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    Problem409:
+      description: Conflitto con lo stato corrente della risorsa.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem422:
+      description: Entita' non processabile (riferimento non risolvibile o vincolo semantico violato).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   parameters:
 
@@ -3276,6 +4585,64 @@ components:
       in: query
       required: false
       description: Match parziale sul codice intermediario.
+      schema:
+        type: string
+
+    IdEntrataPath:
+      name: idEntrata
+      in: path
+      required: true
+      description: Codice identificativo della tipologia di entrata.
+      schema:
+        type: string
+        maxLength: 255
+
+    IdEntrataFilter:
+      name: idEntrata
+      in: query
+      required: false
+      description: Match parziale sul codice entrata.
+      schema:
+        type: string
+
+    Descrizione:
+      name: descrizione
+      in: query
+      required: false
+      description: Match parziale sulla descrizione.
+      schema:
+        type: string
+
+    IdTipoPendenzaPath:
+      name: idTipoPendenza
+      in: path
+      required: true
+      description: Codice identificativo della tipologia di pendenza.
+      schema:
+        type: string
+        maxLength: 35
+
+    IdTipoPendenzaFilter:
+      name: idTipoPendenza
+      in: query
+      required: false
+      description: Match parziale sul codice della tipologia di pendenza.
+      schema:
+        type: string
+
+    IdDominioFilter:
+      name: idDominio
+      in: query
+      required: false
+      description: Match parziale sul codice del dominio.
+      schema:
+        type: string
+
+    RagioneSociale:
+      name: ragioneSociale
+      in: query
+      required: false
+      description: Match parziale sulla ragione sociale.
       schema:
         type: string
 
