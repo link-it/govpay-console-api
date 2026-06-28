@@ -25,6 +25,20 @@ public class TipoTributo {
     @Column(name = "cod_tributo", nullable = false, length = 255)
     private String codTributo;
 
+    @Column(name = "descrizione", length = 255)
+    private String descrizione;
+
+    /**
+     * Codifica del tipo contabilita' come singola cifra ({@code 0..9}), allineata
+     * alla colonna {@code tipo_contabilita VARCHAR(1)}. La conversione verso/da i
+     * nomi enum esposti dall'API e' a carico del mapper.
+     */
+    @Column(name = "tipo_contabilita", length = 1)
+    private String tipoContabilita;
+
+    @Column(name = "cod_contabilita", length = 255)
+    private String codContabilita;
+
     public Long getId() {
         return id;
     }
@@ -39,5 +53,29 @@ public class TipoTributo {
 
     public void setCodTributo(String codTributo) {
         this.codTributo = codTributo;
+    }
+
+    public String getDescrizione() {
+        return descrizione;
+    }
+
+    public void setDescrizione(String descrizione) {
+        this.descrizione = descrizione;
+    }
+
+    public String getTipoContabilita() {
+        return tipoContabilita;
+    }
+
+    public void setTipoContabilita(String tipoContabilita) {
+        this.tipoContabilita = tipoContabilita;
+    }
+
+    public String getCodContabilita() {
+        return codContabilita;
+    }
+
+    public void setCodContabilita(String codContabilita) {
+        this.codContabilita = codContabilita;
     }
 }

@@ -1,5 +1,6 @@
 package it.govpay.console.repository;
 
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 import it.govpay.console.entity.UnitaOperativa;
 
 public interface UnitaOperativaRepository extends JpaRepository<UnitaOperativa, Long> {
+
+    Optional<UnitaOperativa> findByDominio_IdAndCodUo(Long idDominio, String codUo);
 
     /**
      * Proietta gli id dei domini padre per un set di id di UO. Usato da
