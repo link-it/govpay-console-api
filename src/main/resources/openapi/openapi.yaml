@@ -2392,6 +2392,91 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /domini/{idDominio}/logo:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Domini
+      operationId: getDominioLogo
+      summary: Logo dell'ente creditore.
+      description: |
+        Ritorna il logo binario del dominio. Il `Content-Type` viene determinato
+        dal contenuto (`image/png` o `image/jpeg`). `404` se il dominio non esiste
+        o non ha un logo.
+      responses:
+        '200':
+          description: Logo del dominio.
+          headers:
+            Cache-Control:
+              description: Direttiva di cache del logo.
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Domini
+      operationId: replaceDominioLogo
+      summary: Carica o sostituisce il logo dell'ente creditore.
+      description: |
+        Carica il logo binario del dominio. Formati accettati: `image/png`,
+        `image/jpeg`. Il tipo effettivo viene verificato dal contenuto: un payload
+        non riconosciuto come immagine supportata produce `415`. Dimensione massima
+        configurabile (default 256 KB): oltre il limite produce `413`.
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Logo aggiornato.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '413':
+          $ref: '#/components/responses/Problem413'
+        '415':
+          $ref: '#/components/responses/Problem415'
+    delete:
+      tags:
+        - Domini
+      operationId: deleteDominioLogo
+      summary: Rimuove il logo dell'ente creditore.
+      description: |
+        Rimuove il logo del dominio. Operazione idempotente: ritorna `204` anche se
+        il dominio non aveva un logo. Necessaria perche' il logo e' isolato fuori
+        dalla rappresentazione del dominio e non puo' essere azzerato via PUT/PATCH
+        del dominio.
+      responses:
+        '204':
+          description: Logo rimosso (o gia' assente).
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
 components:
   schemas:
 
@@ -4396,6 +4481,18 @@ components:
             $ref: '#/components/schemas/Problem'
     Problem422:
       description: Entita' non processabile (riferimento non risolvibile o vincolo semantico violato).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem413:
+      description: Payload troppo grande.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem415:
+      description: Tipo di contenuto non supportato.
       content:
         application/problem+json:
           schema:

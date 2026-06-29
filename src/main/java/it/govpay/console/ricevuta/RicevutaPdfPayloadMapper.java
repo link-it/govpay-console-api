@@ -1,9 +1,9 @@
 package it.govpay.console.ricevuta;
 
-import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
+import it.govpay.console.dominio.LogoMimeDetector;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.SingoloVersamento;
@@ -81,7 +82,12 @@ public class RicevutaPdfPayloadMapper {
 
     private static String creditorLogoOf(Dominio d) {
         if (d != null && d.getLogo() != null && d.getLogo().length > 0) {
-            return new String(d.getLogo(), StandardCharsets.US_ASCII);
+            byte[] logo = d.getLogo();
+            String contentType = LogoMimeDetector.detect(logo);
+            if (contentType == null) {
+                contentType = "image/png";
+            }
+            return "data:" + contentType + ";base64," + Base64.getEncoder().encodeToString(logo);
         }
         return "";
     }

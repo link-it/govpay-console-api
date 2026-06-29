@@ -62,9 +62,11 @@ public class Dominio {
     private Stazione stazione;
 
     /**
-     * Logo dell'ente creditore in base64 ASCII (es. {@code data:image/png;base64,...}).
-     * Usato per il PDF della ricevuta (campo {@code creditor_logo} del payload del
-     * microservizio {@code govpay-stampe}).
+     * Logo dell'ente creditore come byte grezzi dell'immagine (PNG/JPEG). Il
+     * content-type non e' persistito: viene ricavato dai magic bytes a ogni
+     * lettura. Esposto via endpoint binario {@code /domini/{id}/logo}; per il PDF
+     * della ricevuta (campo {@code creditor_logo} del payload {@code govpay-stampe})
+     * viene codificato in data-URI base64.
      */
     @Column(name = "logo", columnDefinition = "BYTEA")
     private byte[] logo;
