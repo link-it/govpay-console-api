@@ -36,6 +36,8 @@ tags:
     description: Anagrafica di sistema delle tipologie di pendenza.
   - name: Domini
     description: Anagrafica degli enti creditori (domini).
+  - name: UnitaOperative
+    description: Unita' operative (articolazioni interne) di un dominio.
 
 paths:
 
@@ -2477,6 +2479,204 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /domini/{idDominio}/unitaOperative:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - UnitaOperative
+      operationId: listUnitaOperative
+      summary: Elenca le unita' operative di un dominio (paginate).
+      description: |
+        Elenca le unita' operative del dominio. L'unita' operativa speciale `EC`,
+        che porta l'anagrafica propria dell'ente creditore, e' gestita tramite il
+        CRUD del dominio e non compare in questa lista.
+
+        Filtri opzionali e ortogonali (AND):
+        - `ragioneSociale` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
+        valorizza `hasNextPage` (Slice, senza COUNT). Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages` (Page).
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idUnitaOperativa`, `ragioneSociale`. Default `idUnitaOperativa` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/RagioneSociale'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di unita' operative.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UnitaOperativaSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - UnitaOperative
+      operationId: createUnitaOperativa
+      summary: Crea una nuova unita' operativa per il dominio.
+      description: |
+        Crea l'unita' operativa identificata da `idUnitaOperativa`, univoco
+        all'interno del dominio. Il codice `EC` e' riservato all'anagrafica del
+        dominio e non puo' essere usato (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitaOperativaCreate'
+      responses:
+        '201':
+          description: Unita' operativa creata.
+          headers:
+            Location:
+              description: URI della nuova unita' operativa.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/unitaOperative/{idUnitaOperativa}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdUnitaOperativaPath'
+    get:
+      tags:
+        - UnitaOperative
+      operationId: getUnitaOperativa
+      summary: Dettaglio di una unita' operativa.
+      description: |
+        Restituisce l'unita' operativa, con header `ETag` da rispedire come
+        `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio unita' operativa.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - UnitaOperative
+      operationId: replaceUnitaOperativa
+      summary: Sostituisce una unita' operativa (full update).
+      description: |
+        Sostituisce integralmente l'unita' operativa. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitaOperativaReplace'
+      responses:
+        '200':
+          description: Unita' operativa aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - UnitaOperative
+      operationId: patchUnitaOperativa
+      summary: Modifica parziale di una unita' operativa (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        La rappresentazione risultante viene validata come in una sostituzione
+        completa. `idUnitaOperativa` non e' modificabile.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Unita' operativa aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -4229,6 +4429,183 @@ components:
         abilitato:
           type: boolean
 
+    UnitaOperativaSummary:
+      type: object
+      description: Proiezione leggera dell'unita' operativa, usata nelle liste paginate.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          description: Codice identificativo dell'unita' operativa, univoco nel dominio.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+
+    UnitaOperativa:
+      type: object
+      description: Dettaglio canonico di una unita' operativa.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
+    UnitaOperativaCreate:
+      type: object
+      description: Body per la creazione di una unita' operativa.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          description: Codice identificativo, univoco nel dominio. Il valore `EC` e' riservato.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
+    UnitaOperativaReplace:
+      type: object
+      description: Body per la sostituzione completa di una unita' operativa (`idUnitaOperativa` dal path).
+      required:
+        - ragioneSociale
+        - abilitato
+      properties:
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
     TipoAutenticazioneConnettore:
       type: string
       description: |
@@ -4748,6 +5125,15 @@ components:
       in: path
       required: true
       description: Codice identificativo della stazione.
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    IdUnitaOperativaPath:
+      name: idUnitaOperativa
+      in: path
+      required: true
+      description: Codice identificativo dell'unita' operativa (univoco nel dominio).
       schema:
         type: string
         pattern: '^[a-zA-Z0-9\-_]{1,35}$'
