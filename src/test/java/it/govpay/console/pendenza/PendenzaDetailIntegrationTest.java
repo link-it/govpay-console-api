@@ -174,6 +174,7 @@ class PendenzaDetailIntegrationTest {
         IbanAccredito iban = new IbanAccredito();
         iban.setPostale(false);
         iban.setCodIban("IT60X0542811101000000123456");
+        iban.setDominio(domNonVisibile);
         em.persist(iban);
         SingoloVersamento vIncasso = newVoce(pendenzaVoci, "VOCE-INCASSO", 2, 20.0);
         vIncasso.setIbanAccredito(iban);
@@ -191,6 +192,7 @@ class PendenzaDetailIntegrationTest {
         IbanAccredito ibanAmbiguo = new IbanAccredito();
         ibanAmbiguo.setPostale(false);
         ibanAmbiguo.setCodIban("IT60X0542811101000000999999");
+        ibanAmbiguo.setDominio(domNonVisibile);
         em.persist(ibanAmbiguo);
         SingoloVersamento vAmbigua = newVoce(pendenzaVoci, "VOCE-AMBIGUA", 4, 0.0);
         vAmbigua.setTipoBollo("01");
