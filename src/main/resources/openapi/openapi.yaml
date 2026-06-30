@@ -40,6 +40,8 @@ tags:
     description: Unita' operative (articolazioni interne) di un dominio.
   - name: ContiAccredito
     description: Conti di accredito (IBAN) di un dominio.
+  - name: EntrateDominio
+    description: Entrate (tributi) configurate per un dominio.
 
 paths:
 
@@ -2870,6 +2872,209 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /domini/{idDominio}/entrate:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - EntrateDominio
+      operationId: listEntrateDominio
+      summary: Elenca le entrate di un dominio (paginate).
+      description: |
+        Elenca le entrate configurate per il dominio (associazioni a una entrata
+        globale). Filtri opzionali e ortogonali (AND):
+        - `idEntrata` — match parziale sul codice entrata;
+        - `descrizione` — match parziale (sulla descrizione dell'entrata globale);
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idEntrata`, `descrizione`. Default `idEntrata` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdEntrataFilter'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di entrate del dominio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EntrataDominioSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - EntrateDominio
+      operationId: createEntrataDominio
+      summary: Crea una nuova entrata per il dominio.
+      description: |
+        Associa al dominio l'entrata globale identificata da `idEntrata`, con
+        eventuali override di contabilita' e conti di accredito/appoggio.
+        L'entrata globale deve esistere (→ 422). I conti `ibanAccredito` e
+        `ibanAppoggio`, se indicati, devono appartenere al dominio (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataDominioCreate'
+      responses:
+        '201':
+          description: Entrata del dominio creata.
+          headers:
+            Location:
+              description: URI della nuova entrata.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/entrate/{idEntrata}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdEntrataPath'
+    get:
+      tags:
+        - EntrateDominio
+      operationId: getEntrataDominio
+      summary: Dettaglio di una entrata del dominio.
+      description: |
+        Restituisce l'entrata del dominio, con header `ETag` da rispedire come
+        `If-Match` nelle operazioni di modifica. Include `tipoEntrata`, il
+        riferimento all'entrata globale.
+      responses:
+        '200':
+          description: Dettaglio entrata del dominio.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - EntrateDominio
+      operationId: replaceEntrataDominio
+      summary: Sostituisce una entrata del dominio (full update).
+      description: |
+        Sostituisce integralmente l'entrata del dominio. Richiede l'header
+        `If-Match`. I conti `ibanAccredito`/`ibanAppoggio` indicati devono
+        appartenere al dominio (→ 422).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataDominioReplace'
+      responses:
+        '200':
+          description: Entrata del dominio aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - EntrateDominio
+      operationId: patchEntrataDominio
+      summary: Modifica parziale di una entrata del dominio (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        La rappresentazione risultante viene validata come in una sostituzione
+        completa. `idEntrata` e `tipoEntrata` non sono modificabili.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Entrata del dominio aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -3877,6 +4082,101 @@ components:
         descrizione:
           type: string
           maxLength: 255
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
+    EntrataDominioSummary:
+      type: object
+      description: Proiezione leggera dell'entrata di un dominio, usata nelle liste paginate.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          description: Codice dell'entrata (dell'entrata globale associata).
+          maxLength: 255
+        descrizione:
+          type: string
+          description: Descrizione dell'entrata globale associata.
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    EntrataDominio:
+      type: object
+      description: Dettaglio canonico di una entrata configurata per un dominio.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          maxLength: 255
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          description: IBAN di accredito (conto del dominio).
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          description: IBAN di appoggio (conto del dominio).
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          description: Codifica del capitolo di bilancio specifica del dominio.
+          maxLength: 255
+        tipoEntrata:
+          description: Riferimento all'entrata globale associata (sola lettura).
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/Entrata'
+
+    EntrataDominioCreate:
+      type: object
+      description: Body per la creazione di una entrata di dominio.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          description: Codice dell'entrata globale da associare. Deve esistere.
+          maxLength: 255
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
+    EntrataDominioReplace:
+      type: object
+      description: Body per la sostituzione completa di una entrata di dominio (`idEntrata` dal path).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
         tipoContabilita:
           $ref: '#/components/schemas/TipoContabilita'
         codiceContabilita:

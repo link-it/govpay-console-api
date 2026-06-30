@@ -166,6 +166,7 @@ class PendenzaDetailIntegrationTest {
         em.persist(tipoTributo);
         Tributo tributo = new Tributo();
         tributo.setTipoTributo(tipoTributo);
+        tributo.setDominio(domVisibile);
         em.persist(tributo);
         SingoloVersamento vEntrata = newVoce(pendenzaVoci, "VOCE-ENTRATA", 1, 20.0);
         vEntrata.setTributo(tributo);
