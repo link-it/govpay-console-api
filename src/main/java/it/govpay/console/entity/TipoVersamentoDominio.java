@@ -12,20 +12,24 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 /**
- * Configurazione per-dominio di un {@link TipoVersamento}. In V1 il converter
- * popola il {@code TipoPendenzaRef} via questo livello (non direttamente dal
- * {@link TipoVersamento} globale), per ereditare gli eventuali override
- * specifici del dominio.
+ * Configurazione per-dominio di un {@link TipoVersamento}: porta gli stessi
+ * campi di configurazione del globale (ereditati da {@link AbstractTipoVersamento})
+ * come override per il dominio, piu' la {@code app_io_api_key} specifica e i
+ * riferimenti a dominio e tipo versamento globale. Univoco per
+ * {@code (id_dominio, id_tipo_versamento)}.
  */
 @Entity
 @Table(name = "tipi_vers_domini")
 @SequenceGenerator(name = "seq_tipi_vers_domini", sequenceName = "seq_tipi_vers_domini", allocationSize = 1)
-public class TipoVersamentoDominio {
+public class TipoVersamentoDominio extends AbstractTipoVersamento {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_tipi_vers_domini")
     @Column(name = "id")
     private Long id;
+
+    @Column(name = "app_io_api_key", length = 255)
+    private String appIoApiKey;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_dominio", nullable = false)
@@ -41,6 +45,14 @@ public class TipoVersamentoDominio {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getAppIoApiKey() {
+        return appIoApiKey;
+    }
+
+    public void setAppIoApiKey(String appIoApiKey) {
+        this.appIoApiKey = appIoApiKey;
     }
 
     public Dominio getDominio() {

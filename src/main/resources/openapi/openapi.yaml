@@ -42,6 +42,8 @@ tags:
     description: Conti di accredito (IBAN) di un dominio.
   - name: EntrateDominio
     description: Entrate (tributi) configurate per un dominio.
+  - name: TipiPendenzaDominio
+    description: Tipi pendenza configurati per un dominio.
 
 paths:
 
@@ -3075,6 +3077,203 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /domini/{idDominio}/tipiPendenza:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - TipiPendenzaDominio
+      operationId: listTipiPendenzaDominio
+      summary: Elenca i tipi pendenza di un dominio (paginati).
+      description: |
+        Elenca i tipi pendenza configurati per il dominio (associazioni a un tipo
+        pendenza globale, con override per-dominio). Filtri opzionali e ortogonali
+        (AND):
+        - `idTipoPendenza` — match parziale;
+        - `descrizione` — match parziale (sulla descrizione del tipo pendenza globale);
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idTipoPendenza`, `descrizione`. Default `idTipoPendenza` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdTipoPendenzaFilter'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di tipi pendenza del dominio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipoPendenzaDominioSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - TipiPendenzaDominio
+      operationId: createTipoPendenzaDominio
+      summary: Crea un nuovo tipo pendenza per il dominio.
+      description: |
+        Associa al dominio il tipo pendenza globale identificato da
+        `idTipoPendenza`, con la configurazione per-dominio. Il tipo pendenza
+        globale deve esistere (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaDominioCreate'
+      responses:
+        '201':
+          description: Tipo pendenza del dominio creato.
+          headers:
+            Location:
+              description: URI del nuovo tipo pendenza.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/tipiPendenza/{idTipoPendenza}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdTipoPendenzaPath'
+    get:
+      tags:
+        - TipiPendenzaDominio
+      operationId: getTipoPendenzaDominio
+      summary: Dettaglio di un tipo pendenza del dominio.
+      description: |
+        Restituisce il tipo pendenza del dominio, con header `ETag` da rispedire
+        come `If-Match`. Include `tipoPendenza`, il riferimento al tipo pendenza
+        globale.
+      responses:
+        '200':
+          description: Dettaglio tipo pendenza del dominio.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - TipiPendenzaDominio
+      operationId: replaceTipoPendenzaDominio
+      summary: Sostituisce un tipo pendenza del dominio (full update).
+      description: |
+        Sostituisce integralmente la configurazione per-dominio. Richiede l'header
+        `If-Match`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaDominioReplace'
+      responses:
+        '200':
+          description: Tipo pendenza del dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - TipiPendenzaDominio
+      operationId: patchTipoPendenzaDominio
+      summary: Modifica parziale di un tipo pendenza del dominio (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        `idTipoPendenza` e `tipoPendenza` non sono modificabili.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Tipo pendenza del dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -4527,6 +4726,132 @@ components:
           $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
         avvisaturaAppIO:
           $ref: '#/components/schemas/TipoPendenzaAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenzaDominioAvvisaturaAppIo:
+      type: object
+      description: |
+        Configurazione dell'avvisatura via app IO specifica del dominio. Estende
+        quella globale con la `apiKey` del servizio IO del dominio.
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaAvvisoAppIo'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaRicevutaAppIo'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaScadenza'
+        apiKey:
+          type: string
+          description: API key del servizio App IO del dominio.
+          maxLength: 255
+
+    TipoPendenzaDominioSummary:
+      type: object
+      description: Proiezione leggera del tipo pendenza di un dominio, usata nelle liste paginate.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice del tipo pendenza (del tipo pendenza globale associato).
+          maxLength: 35
+        descrizione:
+          type: string
+          description: Descrizione del tipo pendenza globale associato.
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    TipoPendenzaDominio:
+      type: object
+      description: Dettaglio canonico di un tipo pendenza configurato per un dominio.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          maxLength: 35
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+        abilitato:
+          type: boolean
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+        tipoPendenza:
+          description: Riferimento al tipo pendenza globale associato (sola lettura).
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/TipoPendenza'
+
+    TipoPendenzaDominioCreate:
+      type: object
+      description: Body per la creazione di un tipo pendenza di dominio.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice del tipo pendenza globale da associare. Deve esistere.
+          maxLength: 35
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenzaDominioReplace:
+      type: object
+      description: Body per la sostituzione completa di un tipo pendenza di dominio (`idTipoPendenza` dal path).
+      properties:
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
         visualizzazione:
           type: object
         tracciatoCsv:
