@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -139,6 +140,26 @@ public class ProblemExceptionHandler {
     @ExceptionHandler({ AvvisoMbtException.class, UnprocessableEntityException.class })
     public ResponseEntity<Problem> handleUnprocessable(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(PayloadTooLargeException.class)
+    public ResponseEntity<Problem> handlePayloadTooLarge(PayloadTooLargeException ex, HttpServletRequest request) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(UnsupportedMediaTypeException.class)
+    public ResponseEntity<Problem> handleUnsupportedMediaType(UnsupportedMediaTypeException ex,
+                                                              HttpServletRequest request) {
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Problem> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex,
+                                                               HttpServletRequest request) {
+        String detail = "Content-Type non supportato"
+                + (ex.getContentType() != null ? " (" + ex.getContentType() + ")" : "")
+                + ": tipi ammessi " + ex.getSupportedMediaTypes() + ".";
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE, detail, request, null, ex);
     }
 
     @ExceptionHandler(StampeUnavailableException.class)

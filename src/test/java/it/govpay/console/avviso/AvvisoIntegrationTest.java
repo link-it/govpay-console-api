@@ -348,6 +348,7 @@ class AvvisoIntegrationTest {
         IbanAccredito ibanPostale = new IbanAccredito();
         ibanPostale.setPostale(true);
         ibanPostale.setCodIban("IT60X0542811101000000123456");
+        ibanPostale.setDominio(domA);
         ibanAccreditoRepository.save(ibanPostale);
 
         Versamento v = newPendenzaConAvviso("PEND-POST", "012345678901234567");

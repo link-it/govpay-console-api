@@ -1,47 +1,51 @@
-package it.govpay.console.tipopendenza;
+package it.govpay.console.tipopendenzadominio;
 
 import org.springframework.stereotype.Component;
 
-import it.govpay.console.entity.TipoVersamento;
-import it.govpay.console.model.TipoPendenza;
-import it.govpay.console.model.TipoPendenzaAvvisaturaAppIo;
+import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.model.TipoPendenzaAvvisaturaMail;
+import it.govpay.console.model.TipoPendenzaDominio;
+import it.govpay.console.model.TipoPendenzaDominioAvvisaturaAppIo;
+import it.govpay.console.model.TipoPendenzaDominioSummary;
 import it.govpay.console.model.TipoPendenzaPortaleBackoffice;
 import it.govpay.console.model.TipoPendenzaPortalePagamento;
 import it.govpay.console.model.TipoPendenzaPromemoriaAvvisoAppIo;
 import it.govpay.console.model.TipoPendenzaPromemoriaRicevutaAppIo;
 import it.govpay.console.model.TipoPendenzaPromemoriaScadenza;
-import it.govpay.console.model.TipoPendenzaSummary;
 import it.govpay.console.model.TipoPendenzaTracciatoCsv;
+import it.govpay.console.tipopendenza.TipoPendenzaMapper;
+import it.govpay.console.tipopendenza.TipoVersamentoConfigMapper;
 
 /**
- * Mappa l'entity {@link TipoVersamento} (tabella flat con ~55 colonne) verso e
- * dalle proiezioni V2 annidate. La parte di configurazione condivisa con i tipi
- * pendenza di dominio e' delegata a {@link TipoVersamentoConfigMapper}; qui
- * restano l'assemblaggio del dettaglio globale e l'avvisatura App IO (variante
- * globale, senza {@code apiKey}).
+ * Mappa l'entity {@link TipoVersamentoDominio} (configurazione per-dominio) verso
+ * e dalle proiezioni V2. La parte di configurazione condivisa col globale e'
+ * delegata a {@link TipoVersamentoConfigMapper}; l'avvisatura App IO ha la
+ * variante di dominio (con {@code apiKey}). Il riferimento al tipo pendenza
+ * globale e' costruito con {@link TipoPendenzaMapper}.
  */
 @Component
-public class TipoPendenzaMapper {
+public class TipoPendenzaDominioMapper {
 
     private final TipoVersamentoConfigMapper config;
+    private final TipoPendenzaMapper tipoPendenzaMapper;
 
-    public TipoPendenzaMapper(TipoVersamentoConfigMapper config) {
+    public TipoPendenzaDominioMapper(TipoVersamentoConfigMapper config,
+                                     TipoPendenzaMapper tipoPendenzaMapper) {
         this.config = config;
+        this.tipoPendenzaMapper = tipoPendenzaMapper;
     }
 
-    public TipoPendenzaSummary toSummary(TipoVersamento e) {
-        TipoPendenzaSummary dto = new TipoPendenzaSummary();
-        dto.setIdTipoPendenza(e.getCodTipoVersamento());
-        dto.setDescrizione(e.getDescrizione());
+    public TipoPendenzaDominioSummary toSummary(TipoVersamentoDominio e) {
+        TipoPendenzaDominioSummary dto = new TipoPendenzaDominioSummary();
+        dto.setIdTipoPendenza(e.getTipoVersamento().getCodTipoVersamento());
+        dto.setDescrizione(e.getTipoVersamento().getDescrizione());
         dto.setAbilitato(e.getAbilitato());
         return dto;
     }
 
-    public TipoPendenza toDetail(TipoVersamento e) {
-        TipoPendenza dto = new TipoPendenza();
-        dto.setIdTipoPendenza(e.getCodTipoVersamento());
-        dto.setDescrizione(e.getDescrizione());
+    public TipoPendenzaDominio toDetail(TipoVersamentoDominio e) {
+        TipoPendenzaDominio dto = new TipoPendenzaDominio();
+        dto.setIdTipoPendenza(e.getTipoVersamento().getCodTipoVersamento());
         dto.setCodificaIUV(e.getCodificaIuv());
         dto.setPagaTerzi(e.getPagaTerzi());
         dto.setAbilitato(e.getAbilitato());
@@ -51,11 +55,12 @@ public class TipoPendenzaMapper {
         dto.setAvvisaturaAppIO(buildAvvisaturaAppIo(e));
         dto.setVisualizzazione(config.textToObj(e.getVisualizzazioneDefinizione()));
         dto.setTracciatoCsv(config.buildTracciatoCsv(e));
+        dto.setTipoPendenza(tipoPendenzaMapper.toDetail(e.getTipoVersamento()));
         return dto;
     }
 
-    private TipoPendenzaAvvisaturaAppIo buildAvvisaturaAppIo(TipoVersamento e) {
-        TipoPendenzaAvvisaturaAppIo appio = new TipoPendenzaAvvisaturaAppIo();
+    private TipoPendenzaDominioAvvisaturaAppIo buildAvvisaturaAppIo(TipoVersamentoDominio e) {
+        TipoPendenzaDominioAvvisaturaAppIo appio = new TipoPendenzaDominioAvvisaturaAppIo();
 
         TipoPendenzaPromemoriaAvvisoAppIo avv = new TipoPendenzaPromemoriaAvvisoAppIo();
         avv.setAbilitato(Boolean.TRUE.equals(e.getAvvAppIoPromAvvAbilitato()));
@@ -76,27 +81,22 @@ public class TipoPendenzaMapper {
                 e.getAvvAppIoPromScadAbilitato(), e.getAvvAppIoPromScadTipo(),
                 e.getAvvAppIoPromScadOggetto(), e.getAvvAppIoPromScadMessaggio(),
                 e.getAvvAppIoPromScadPreavviso()));
+        appio.setApiKey(e.getAppIoApiKey());
         return appio;
     }
 
-    /**
-     * Scrive la parte modificabile sull'entity. Le colonne NOT NULL della
-     * tabella ({@code paga_terzi, abilitato, *_abilitato}) ricevono sempre un
-     * valore: i flag annidati assenti diventano {@code false}.
-     */
-    public void applyWritable(TipoVersamento e,
-            String descrizione,
+    /** Scrive la parte modificabile (no {@code descrizione}: vive sul globale). */
+    public void applyWritable(TipoVersamentoDominio e,
             String codificaIUV,
             Boolean pagaTerzi,
             Boolean abilitato,
             TipoPendenzaPortaleBackoffice bo,
             TipoPendenzaPortalePagamento pag,
             TipoPendenzaAvvisaturaMail mail,
-            TipoPendenzaAvvisaturaAppIo appio,
+            TipoPendenzaDominioAvvisaturaAppIo appio,
             Object visualizzazione,
             TipoPendenzaTracciatoCsv csv) {
 
-        e.setDescrizione(descrizione);
         e.setCodificaIuv(codificaIUV);
         e.setPagaTerzi(pagaTerzi != null ? pagaTerzi : Boolean.FALSE);
         e.setAbilitato(abilitato != null ? abilitato : Boolean.TRUE);
@@ -109,7 +109,7 @@ public class TipoPendenzaMapper {
         config.writeTracciatoCsv(e, csv);
     }
 
-    private void writeAvvisaturaAppIo(TipoVersamento e, TipoPendenzaAvvisaturaAppIo appio) {
+    private void writeAvvisaturaAppIo(TipoVersamentoDominio e, TipoPendenzaDominioAvvisaturaAppIo appio) {
         TipoPendenzaPromemoriaAvvisoAppIo avv = appio != null ? appio.getPromemoriaAvviso() : null;
         e.setAvvAppIoPromAvvAbilitato(avv != null && Boolean.TRUE.equals(avv.getAbilitato()));
         e.setAvvAppIoPromAvvTipo(avv != null ? config.enumToText(avv.getTipo()) : null);
@@ -129,5 +129,7 @@ public class TipoPendenzaMapper {
         e.setAvvAppIoPromScadTipo(scad != null ? config.enumToText(scad.getTipo()) : null);
         e.setAvvAppIoPromScadOggetto(scad != null ? config.objToText(scad.getOggetto()) : null);
         e.setAvvAppIoPromScadMessaggio(scad != null ? config.objToText(scad.getMessaggio()) : null);
+
+        e.setAppIoApiKey(appio != null ? appio.getApiKey() : null);
     }
 }

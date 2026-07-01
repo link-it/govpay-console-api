@@ -62,12 +62,35 @@ public class Dominio {
     private Stazione stazione;
 
     /**
-     * Logo dell'ente creditore in base64 ASCII (es. {@code data:image/png;base64,...}).
-     * Usato per il PDF della ricevuta (campo {@code creditor_logo} del payload del
-     * microservizio {@code govpay-stampe}).
+     * Logo dell'ente creditore, persistito come byte UTF-8 del testo Base64
+     * dell'immagine (PNG/JPEG) e non come byte grezzi: la codifica on-disk e'
+     * gestita in {@code DominioLogoCodec}. Il content-type non e' persistito:
+     * viene ricavato dai magic bytes dell'immagine decodificata a ogni lettura.
+     * Esposto via endpoint binario {@code /domini/{id}/logo}; per il PDF della
+     * ricevuta (campo {@code creditor_logo} del payload {@code govpay-stampe})
+     * viene codificato in data-URI base64.
      */
     @Column(name = "logo", columnDefinition = "BYTEA")
     private byte[] logo;
+
+    /**
+     * Riferimenti {@code cod_connettore} ai connettori di notifica pagamenti del
+     * dominio, uno per canale. La configurazione vera e' nelle proprieta' EAV
+     * {@code connettori} sotto lo stesso {@code cod_connettore}. Il canale
+     * Maggioli JPPA non ha una colonna qui: il suo riferimento vive in
+     * {@code jppa_config} (vedi {@code JppaConfig}).
+     */
+    @Column(name = "cod_connettore_my_pivot", length = 255)
+    private String codConnettoreMyPivot;
+
+    @Column(name = "cod_connettore_secim", length = 255)
+    private String codConnettoreSecim;
+
+    @Column(name = "cod_connettore_gov_pay", length = 255)
+    private String codConnettoreGovPay;
+
+    @Column(name = "cod_connettore_hyper_sic_apk", length = 255)
+    private String codConnettoreHyperSicApk;
 
     public Long getId() {
         return id;
@@ -187,5 +210,37 @@ public class Dominio {
 
     public void setLogo(byte[] logo) {
         this.logo = logo;
+    }
+
+    public String getCodConnettoreMyPivot() {
+        return codConnettoreMyPivot;
+    }
+
+    public void setCodConnettoreMyPivot(String codConnettoreMyPivot) {
+        this.codConnettoreMyPivot = codConnettoreMyPivot;
+    }
+
+    public String getCodConnettoreSecim() {
+        return codConnettoreSecim;
+    }
+
+    public void setCodConnettoreSecim(String codConnettoreSecim) {
+        this.codConnettoreSecim = codConnettoreSecim;
+    }
+
+    public String getCodConnettoreGovPay() {
+        return codConnettoreGovPay;
+    }
+
+    public void setCodConnettoreGovPay(String codConnettoreGovPay) {
+        this.codConnettoreGovPay = codConnettoreGovPay;
+    }
+
+    public String getCodConnettoreHyperSicApk() {
+        return codConnettoreHyperSicApk;
+    }
+
+    public void setCodConnettoreHyperSicApk(String codConnettoreHyperSicApk) {
+        this.codConnettoreHyperSicApk = codConnettoreHyperSicApk;
     }
 }

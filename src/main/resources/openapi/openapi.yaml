@@ -36,6 +36,16 @@ tags:
     description: Anagrafica di sistema delle tipologie di pendenza.
   - name: Domini
     description: Anagrafica degli enti creditori (domini).
+  - name: UnitaOperative
+    description: Unita' operative (articolazioni interne) di un dominio.
+  - name: ContiAccredito
+    description: Conti di accredito (IBAN) di un dominio.
+  - name: EntrateDominio
+    description: Entrate (tributi) configurate per un dominio.
+  - name: TipiPendenzaDominio
+    description: Tipi pendenza configurati per un dominio.
+  - name: Connettori Dominio
+    description: Connettori di notifica pagamenti (export tracciati) di un dominio.
 
 paths:
 
@@ -2392,6 +2402,1256 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /domini/{idDominio}/logo:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Domini
+      operationId: getDominioLogo
+      summary: Logo dell'ente creditore.
+      description: |
+        Ritorna il logo binario del dominio. Il `Content-Type` viene determinato
+        dal contenuto (`image/png` o `image/jpeg`). `404` se il dominio non esiste
+        o non ha un logo.
+      responses:
+        '200':
+          description: Logo del dominio.
+          headers:
+            Cache-Control:
+              description: Direttiva di cache del logo.
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Domini
+      operationId: replaceDominioLogo
+      summary: Carica o sostituisce il logo dell'ente creditore.
+      description: |
+        Carica il logo binario del dominio. Formati accettati: `image/png`,
+        `image/jpeg`. Il tipo effettivo viene verificato dal contenuto: un payload
+        non riconosciuto come immagine supportata produce `415`. Dimensione massima
+        configurabile (default 256 KB): oltre il limite produce `413`.
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Logo aggiornato.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '413':
+          $ref: '#/components/responses/Problem413'
+        '415':
+          $ref: '#/components/responses/Problem415'
+    delete:
+      tags:
+        - Domini
+      operationId: deleteDominioLogo
+      summary: Rimuove il logo dell'ente creditore.
+      description: |
+        Rimuove il logo del dominio. Operazione idempotente: ritorna `204` anche se
+        il dominio non aveva un logo. Necessaria perche' il logo e' isolato fuori
+        dalla rappresentazione del dominio e non puo' essere azzerato via PUT/PATCH
+        del dominio.
+      responses:
+        '204':
+          description: Logo rimosso (o gia' assente).
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /domini/{idDominio}/unitaOperative:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - UnitaOperative
+      operationId: listUnitaOperative
+      summary: Elenca le unita' operative di un dominio (paginate).
+      description: |
+        Elenca le unita' operative del dominio. L'unita' operativa speciale `EC`,
+        che porta l'anagrafica propria dell'ente creditore, e' gestita tramite il
+        CRUD del dominio e non compare in questa lista.
+
+        Filtri opzionali e ortogonali (AND):
+        - `ragioneSociale` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
+        valorizza `hasNextPage` (Slice, senza COUNT). Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages` (Page).
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idUnitaOperativa`, `ragioneSociale`. Default `idUnitaOperativa` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/RagioneSociale'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di unita' operative.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UnitaOperativaSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - UnitaOperative
+      operationId: createUnitaOperativa
+      summary: Crea una nuova unita' operativa per il dominio.
+      description: |
+        Crea l'unita' operativa identificata da `idUnitaOperativa`, univoco
+        all'interno del dominio. Il codice `EC` e' riservato all'anagrafica del
+        dominio e non puo' essere usato (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitaOperativaCreate'
+      responses:
+        '201':
+          description: Unita' operativa creata.
+          headers:
+            Location:
+              description: URI della nuova unita' operativa.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/unitaOperative/{idUnitaOperativa}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdUnitaOperativaPath'
+    get:
+      tags:
+        - UnitaOperative
+      operationId: getUnitaOperativa
+      summary: Dettaglio di una unita' operativa.
+      description: |
+        Restituisce l'unita' operativa, con header `ETag` da rispedire come
+        `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio unita' operativa.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - UnitaOperative
+      operationId: replaceUnitaOperativa
+      summary: Sostituisce una unita' operativa (full update).
+      description: |
+        Sostituisce integralmente l'unita' operativa. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitaOperativaReplace'
+      responses:
+        '200':
+          description: Unita' operativa aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - UnitaOperative
+      operationId: patchUnitaOperativa
+      summary: Modifica parziale di una unita' operativa (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        La rappresentazione risultante viene validata come in una sostituzione
+        completa. `idUnitaOperativa` non e' modificabile.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Unita' operativa aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitaOperativa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /domini/{idDominio}/contiAccredito:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - ContiAccredito
+      operationId: listContiAccredito
+      summary: Elenca i conti di accredito di un dominio (paginati).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `descrizione` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
+        valorizza `hasNextPage` (Slice, senza COUNT). Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages` (Page).
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `ibanAccredito`, `descrizione`. Default `ibanAccredito` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di conti di accredito.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ContoAccreditoSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - ContiAccredito
+      operationId: createContoAccredito
+      summary: Crea un nuovo conto di accredito per il dominio.
+      description: |
+        Crea il conto di accredito identificato da `ibanAccredito`, univoco
+        all'interno del dominio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContoAccreditoCreate'
+      responses:
+        '201':
+          description: Conto di accredito creato.
+          headers:
+            Location:
+              description: URI del nuovo conto di accredito.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContoAccredito'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+
+  /domini/{idDominio}/contiAccredito/{ibanAccredito}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IbanAccreditoPath'
+    get:
+      tags:
+        - ContiAccredito
+      operationId: getContoAccredito
+      summary: Dettaglio di un conto di accredito.
+      description: |
+        Restituisce il conto di accredito, con header `ETag` da rispedire come
+        `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio conto di accredito.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContoAccredito'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - ContiAccredito
+      operationId: replaceContoAccredito
+      summary: Sostituisce un conto di accredito (full update).
+      description: |
+        Sostituisce integralmente il conto di accredito. Richiede l'header
+        `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContoAccreditoReplace'
+      responses:
+        '200':
+          description: Conto di accredito aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContoAccredito'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - ContiAccredito
+      operationId: patchContoAccredito
+      summary: Modifica parziale di un conto di accredito (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        La rappresentazione risultante viene validata come in una sostituzione
+        completa. `ibanAccredito` non e' modificabile.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Conto di accredito aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContoAccredito'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /domini/{idDominio}/entrate:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - EntrateDominio
+      operationId: listEntrateDominio
+      summary: Elenca le entrate di un dominio (paginate).
+      description: |
+        Elenca le entrate configurate per il dominio (associazioni a una entrata
+        globale). Filtri opzionali e ortogonali (AND):
+        - `idEntrata` — match parziale sul codice entrata;
+        - `descrizione` — match parziale (sulla descrizione dell'entrata globale);
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idEntrata`, `descrizione`. Default `idEntrata` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdEntrataFilter'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di entrate del dominio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EntrataDominioSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - EntrateDominio
+      operationId: createEntrataDominio
+      summary: Crea una nuova entrata per il dominio.
+      description: |
+        Associa al dominio l'entrata globale identificata da `idEntrata`, con
+        eventuali override di contabilita' e conti di accredito/appoggio.
+        L'entrata globale deve esistere (→ 422). I conti `ibanAccredito` e
+        `ibanAppoggio`, se indicati, devono appartenere al dominio (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataDominioCreate'
+      responses:
+        '201':
+          description: Entrata del dominio creata.
+          headers:
+            Location:
+              description: URI della nuova entrata.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/entrate/{idEntrata}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdEntrataPath'
+    get:
+      tags:
+        - EntrateDominio
+      operationId: getEntrataDominio
+      summary: Dettaglio di una entrata del dominio.
+      description: |
+        Restituisce l'entrata del dominio, con header `ETag` da rispedire come
+        `If-Match` nelle operazioni di modifica. Include `tipoEntrata`, il
+        riferimento all'entrata globale.
+      responses:
+        '200':
+          description: Dettaglio entrata del dominio.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - EntrateDominio
+      operationId: replaceEntrataDominio
+      summary: Sostituisce una entrata del dominio (full update).
+      description: |
+        Sostituisce integralmente l'entrata del dominio. Richiede l'header
+        `If-Match`. I conti `ibanAccredito`/`ibanAppoggio` indicati devono
+        appartenere al dominio (→ 422).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntrataDominioReplace'
+      responses:
+        '200':
+          description: Entrata del dominio aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - EntrateDominio
+      operationId: patchEntrataDominio
+      summary: Modifica parziale di una entrata del dominio (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        La rappresentazione risultante viene validata come in una sostituzione
+        completa. `idEntrata` e `tipoEntrata` non sono modificabili.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Entrata del dominio aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrataDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /domini/{idDominio}/tipiPendenza:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - TipiPendenzaDominio
+      operationId: listTipiPendenzaDominio
+      summary: Elenca i tipi pendenza di un dominio (paginati).
+      description: |
+        Elenca i tipi pendenza configurati per il dominio (associazioni a un tipo
+        pendenza globale, con override per-dominio). Filtri opzionali e ortogonali
+        (AND):
+        - `idTipoPendenza` — match parziale;
+        - `descrizione` — match parziale (sulla descrizione del tipo pendenza globale);
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Con `?total=true` vengono
+        aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` DESC, `+`/nessuno ASC); campi
+        ammessi: `idTipoPendenza`, `descrizione`. Default `idTipoPendenza` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdTipoPendenzaFilter'
+        - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di tipi pendenza del dominio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipoPendenzaDominioSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - TipiPendenzaDominio
+      operationId: createTipoPendenzaDominio
+      summary: Crea un nuovo tipo pendenza per il dominio.
+      description: |
+        Associa al dominio il tipo pendenza globale identificato da
+        `idTipoPendenza`, con la configurazione per-dominio. Il tipo pendenza
+        globale deve esistere (→ 422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaDominioCreate'
+      responses:
+        '201':
+          description: Tipo pendenza del dominio creato.
+          headers:
+            Location:
+              description: URI del nuovo tipo pendenza.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /domini/{idDominio}/tipiPendenza/{idTipoPendenza}:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+      - $ref: '#/components/parameters/IdTipoPendenzaPath'
+    get:
+      tags:
+        - TipiPendenzaDominio
+      operationId: getTipoPendenzaDominio
+      summary: Dettaglio di un tipo pendenza del dominio.
+      description: |
+        Restituisce il tipo pendenza del dominio, con header `ETag` da rispedire
+        come `If-Match`. Include `tipoPendenza`, il riferimento al tipo pendenza
+        globale.
+      responses:
+        '200':
+          description: Dettaglio tipo pendenza del dominio.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - TipiPendenzaDominio
+      operationId: replaceTipoPendenzaDominio
+      summary: Sostituisce un tipo pendenza del dominio (full update).
+      description: |
+        Sostituisce integralmente la configurazione per-dominio. Richiede l'header
+        `If-Match`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoPendenzaDominioReplace'
+      responses:
+        '200':
+          description: Tipo pendenza del dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - TipiPendenzaDominio
+      operationId: patchTipoPendenzaDominio
+      summary: Modifica parziale di un tipo pendenza del dominio (JSON Patch).
+      description: |
+        Applica operazioni JSON Patch (RFC 6902). Richiede l'header `If-Match`.
+        `idTipoPendenza` e `tipoPendenza` non sono modificabili.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Tipo pendenza del dominio aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoPendenzaDominio'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /domini/{idDominio}/connettori/mypivot:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioMypivot
+      summary: Connettore di notifica pagamenti MyPivot del dominio (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore MyPivot.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioMypivot'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioMypivot
+      summary: Sostituisce la configurazione del connettore MyPivot (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioMypivot'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioMypivot'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/secim:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioSecim
+      summary: Connettore di notifica pagamenti Secim del dominio (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore Secim.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioSecim'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioSecim
+      summary: Sostituisce la configurazione del connettore Secim (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioSecim'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioSecim'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/govpay:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioGovpay
+      summary: Connettore di notifica pagamenti GovPay del dominio (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore GovPay.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioGovpay'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioGovpay
+      summary: Sostituisce la configurazione del connettore GovPay (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioGovpay'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioGovpay'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/govpay/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: putCredenzialiConnettoreDominioGovpay
+      summary: Imposta le credenziali del connettore GovPay (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+  /domini/{idDominio}/connettori/hypersic-apk:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioHypersicApk
+      summary: Connettore di notifica pagamenti HyperSIC APKappa del dominio (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore HyperSIC APKappa.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioHypersicApk'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioHypersicApk
+      summary: Sostituisce la configurazione del connettore HyperSIC APKappa (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioHypersicApk'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioHypersicApk'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/maggioli-jppa:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioMaggioliJppa
+      summary: Connettore di notifica pagamenti Maggioli JPPA del dominio (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore Maggioli JPPA.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioMaggioliJppa'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioMaggioliJppa
+      summary: Sostituisce la configurazione del connettore Maggioli JPPA (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioMaggioliJppa'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioMaggioliJppa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/maggioli-jppa/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: putCredenzialiConnettoreDominioMaggioliJppa
+      summary: Imposta le credenziali del connettore Maggioli JPPA (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
 components:
   schemas:
 
@@ -3405,6 +4665,101 @@ components:
           type: string
           maxLength: 255
 
+    EntrataDominioSummary:
+      type: object
+      description: Proiezione leggera dell'entrata di un dominio, usata nelle liste paginate.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          description: Codice dell'entrata (dell'entrata globale associata).
+          maxLength: 255
+        descrizione:
+          type: string
+          description: Descrizione dell'entrata globale associata.
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    EntrataDominio:
+      type: object
+      description: Dettaglio canonico di una entrata configurata per un dominio.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          maxLength: 255
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          description: IBAN di accredito (conto del dominio).
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          description: IBAN di appoggio (conto del dominio).
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          description: Codifica del capitolo di bilancio specifica del dominio.
+          maxLength: 255
+        tipoEntrata:
+          description: Riferimento all'entrata globale associata (sola lettura).
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/Entrata'
+
+    EntrataDominioCreate:
+      type: object
+      description: Body per la creazione di una entrata di dominio.
+      required:
+        - idEntrata
+        - abilitato
+      properties:
+        idEntrata:
+          type: string
+          description: Codice dell'entrata globale da associare. Deve esistere.
+          maxLength: 255
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
+    EntrataDominioReplace:
+      type: object
+      description: Body per la sostituzione completa di una entrata di dominio (`idEntrata` dal path).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        ibanAccredito:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        ibanAppoggio:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        tipoContabilita:
+          $ref: '#/components/schemas/TipoContabilita'
+        codiceContabilita:
+          type: string
+          maxLength: 255
+
     TipoTemplateTrasformazione:
       type: string
       description: Tipo di template applicato per la trasformazione.
@@ -3749,6 +5104,132 @@ components:
           $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
         avvisaturaAppIO:
           $ref: '#/components/schemas/TipoPendenzaAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenzaDominioAvvisaturaAppIo:
+      type: object
+      description: |
+        Configurazione dell'avvisatura via app IO specifica del dominio. Estende
+        quella globale con la `apiKey` del servizio IO del dominio.
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaAvvisoAppIo'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaRicevutaAppIo'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TipoPendenzaPromemoriaScadenza'
+        apiKey:
+          type: string
+          description: API key del servizio App IO del dominio.
+          maxLength: 255
+
+    TipoPendenzaDominioSummary:
+      type: object
+      description: Proiezione leggera del tipo pendenza di un dominio, usata nelle liste paginate.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice del tipo pendenza (del tipo pendenza globale associato).
+          maxLength: 35
+        descrizione:
+          type: string
+          description: Descrizione del tipo pendenza globale associato.
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    TipoPendenzaDominio:
+      type: object
+      description: Dettaglio canonico di un tipo pendenza configurato per un dominio.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          maxLength: 35
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+        abilitato:
+          type: boolean
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+        tipoPendenza:
+          description: Riferimento al tipo pendenza globale associato (sola lettura).
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/TipoPendenza'
+
+    TipoPendenzaDominioCreate:
+      type: object
+      description: Body per la creazione di un tipo pendenza di dominio.
+      required:
+        - idTipoPendenza
+      properties:
+        idTipoPendenza:
+          type: string
+          description: Codice del tipo pendenza globale da associare. Deve esistere.
+          maxLength: 35
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
+        visualizzazione:
+          type: object
+        tracciatoCsv:
+          $ref: '#/components/schemas/TipoPendenzaTracciatoCsv'
+
+    TipoPendenzaDominioReplace:
+      type: object
+      description: Body per la sostituzione completa di un tipo pendenza di dominio (`idTipoPendenza` dal path).
+      properties:
+        codificaIUV:
+          type: string
+          pattern: '^[0-9]{1,3}$'
+        pagaTerzi:
+          type: boolean
+          default: false
+        abilitato:
+          type: boolean
+          default: true
+        portaleBackoffice:
+          $ref: '#/components/schemas/TipoPendenzaPortaleBackoffice'
+        portalePagamento:
+          $ref: '#/components/schemas/TipoPendenzaPortalePagamento'
+        avvisaturaMail:
+          $ref: '#/components/schemas/TipoPendenzaAvvisaturaMail'
+        avvisaturaAppIO:
+          $ref: '#/components/schemas/TipoPendenzaDominioAvvisaturaAppIo'
         visualizzazione:
           type: object
         tracciatoCsv:
@@ -4144,6 +5625,281 @@ components:
         abilitato:
           type: boolean
 
+    UnitaOperativaSummary:
+      type: object
+      description: Proiezione leggera dell'unita' operativa, usata nelle liste paginate.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          description: Codice identificativo dell'unita' operativa, univoco nel dominio.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+
+    UnitaOperativa:
+      type: object
+      description: Dettaglio canonico di una unita' operativa.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
+    UnitaOperativaCreate:
+      type: object
+      description: Body per la creazione di una unita' operativa.
+      required:
+        - idUnitaOperativa
+        - ragioneSociale
+        - abilitato
+      properties:
+        idUnitaOperativa:
+          type: string
+          description: Codice identificativo, univoco nel dominio. Il valore `EC` e' riservato.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
+    UnitaOperativaReplace:
+      type: object
+      description: Body per la sostituzione completa di una unita' operativa (`idUnitaOperativa` dal path).
+      required:
+        - ragioneSociale
+        - abilitato
+      properties:
+        ragioneSociale:
+          type: string
+          maxLength: 70
+        abilitato:
+          type: boolean
+        indirizzo:
+          type: string
+          maxLength: 70
+        civico:
+          type: string
+          maxLength: 16
+        cap:
+          type: string
+          maxLength: 16
+        localita:
+          type: string
+          maxLength: 35
+        provincia:
+          type: string
+          maxLength: 35
+        nazione:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+        email:
+          type: string
+          maxLength: 255
+        pec:
+          type: string
+          maxLength: 255
+        tel:
+          type: string
+          maxLength: 255
+        fax:
+          type: string
+          maxLength: 255
+        web:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          maxLength: 255
+
+    ContoAccreditoSummary:
+      type: object
+      description: Proiezione leggera del conto di accredito, usata nelle liste paginate.
+      required:
+        - ibanAccredito
+        - abilitato
+      properties:
+        ibanAccredito:
+          type: string
+          description: IBAN del conto di accredito, univoco nel dominio.
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        descrizione:
+          type: string
+          maxLength: 255
+        abilitato:
+          type: boolean
+
+    ContoAccredito:
+      type: object
+      description: Dettaglio canonico di un conto di accredito.
+      required:
+        - ibanAccredito
+        - postale
+        - abilitato
+      properties:
+        ibanAccredito:
+          type: string
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        bic:
+          type: string
+          maxLength: 255
+        postale:
+          type: boolean
+        abilitato:
+          type: boolean
+        descrizione:
+          type: string
+          maxLength: 255
+        intestatario:
+          type: string
+          maxLength: 255
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+
+    ContoAccreditoCreate:
+      type: object
+      description: Body per la creazione di un conto di accredito.
+      required:
+        - ibanAccredito
+        - postale
+        - abilitato
+      properties:
+        ibanAccredito:
+          type: string
+          description: IBAN del conto, univoco nel dominio.
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        bic:
+          type: string
+          maxLength: 255
+        postale:
+          type: boolean
+        abilitato:
+          type: boolean
+        descrizione:
+          type: string
+          maxLength: 255
+        intestatario:
+          type: string
+          maxLength: 255
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+
+    ContoAccreditoReplace:
+      type: object
+      description: Body per la sostituzione completa di un conto di accredito (`ibanAccredito` dal path).
+      required:
+        - postale
+        - abilitato
+      properties:
+        bic:
+          type: string
+          maxLength: 255
+        postale:
+          type: boolean
+        abilitato:
+          type: boolean
+        descrizione:
+          type: string
+          maxLength: 255
+        intestatario:
+          type: string
+          maxLength: 255
+        autStampaPosteItaliane:
+          type: string
+          maxLength: 255
+
     TipoAutenticazioneConnettore:
       type: string
       description: |
@@ -4298,6 +6054,241 @@ components:
         auth:
           $ref: '#/components/schemas/ConnettoreAuth'
 
+    TipoConnettoreNotifica:
+      type: string
+      description: Modalita' di consegna del tracciato di notifica pagamenti.
+      enum:
+        - EMAIL
+        - FILESYSTEM
+
+    TipoConnettoreNotificaGovpay:
+      type: string
+      description: Modalita' di consegna del connettore GovPay (include la consegna REST).
+      enum:
+        - EMAIL
+        - FILESYSTEM
+        - REST
+
+    ContenutoNotificaGovpay:
+      type: string
+      description: Tipo di contenuto inviato al servizio REST GovPay.
+      enum:
+        - SINTESI_PAGAMENTI
+        - SINTESI_FLUSSI_RENDICONTAZIONE
+        - RPP
+        - FLUSSI_RENDICONTAZIONE
+
+    ConnettoreDominioMypivot:
+      type: object
+      description: Connettore di notifica pagamenti MyPivot del dominio. Le credenziali non sono incluse.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        codiceIPA:
+          type: string
+          description: Codice IPA dell'ente.
+        tipoConnettore:
+          $ref: '#/components/schemas/TipoConnettoreNotifica'
+        versioneCsv:
+          type: string
+          description: Versione del CSV prodotto.
+        emailIndirizzi:
+          type: array
+          items:
+            type: string
+          description: Indirizzi email a cui inviare il tracciato.
+        emailSubject:
+          type: string
+        emailAllegato:
+          type: boolean
+          description: Se true il tracciato e' inviato come allegato, altrimenti come link di download.
+        downloadBaseUrl:
+          type: string
+          description: URL base del link di download del tracciato.
+        fileSystemPath:
+          type: string
+          description: Path in cui salvare il tracciato.
+        tipiPendenza:
+          type: array
+          items:
+            type: string
+          description: Codici dei tipi pendenza da includere nel tracciato.
+        intervalloCreazioneTracciato:
+          type: integer
+          format: int32
+          description: Intervallo di creazione del tracciato, in ore.
+
+    ConnettoreDominioSecim:
+      type: object
+      description: Connettore di notifica pagamenti SECIM del dominio. Le credenziali non sono incluse.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        codiceCliente:
+          type: string
+        codiceIstituto:
+          type: string
+        tipoConnettore:
+          $ref: '#/components/schemas/TipoConnettoreNotifica'
+        versioneCsv:
+          type: string
+          description: Versione del CSV prodotto.
+        emailIndirizzi:
+          type: array
+          items:
+            type: string
+          description: Indirizzi email a cui inviare il tracciato.
+        emailSubject:
+          type: string
+        emailAllegato:
+          type: boolean
+          description: Se true il tracciato e' inviato come allegato, altrimenti come link di download.
+        downloadBaseUrl:
+          type: string
+          description: URL base del link di download del tracciato.
+        fileSystemPath:
+          type: string
+          description: Path in cui salvare il tracciato.
+        tipiPendenza:
+          type: array
+          items:
+            type: string
+          description: Codici dei tipi pendenza da includere nel tracciato.
+        intervalloCreazioneTracciato:
+          type: integer
+          format: int32
+          description: Intervallo di creazione del tracciato, in ore.
+
+    ConnettoreDominioGovpay:
+      type: object
+      description: Connettore di notifica pagamenti GovPay del dominio (supporta la consegna REST). Le credenziali non sono incluse.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipoConnettore:
+          $ref: '#/components/schemas/TipoConnettoreNotificaGovpay'
+        versioneZip:
+          type: string
+          description: Versione del file zip prodotto.
+        emailIndirizzi:
+          type: array
+          items:
+            type: string
+          description: Indirizzi email a cui inviare il tracciato.
+        emailSubject:
+          type: string
+        emailAllegato:
+          type: boolean
+          description: Se true il tracciato e' inviato come allegato, altrimenti come link di download.
+        downloadBaseUrl:
+          type: string
+          description: URL base del link di download del tracciato.
+        fileSystemPath:
+          type: string
+          description: Path in cui salvare il tracciato.
+        tipiPendenza:
+          type: array
+          items:
+            type: string
+          description: Codici dei tipi pendenza da includere nel tracciato.
+        url:
+          type: string
+          description: URL base del servizio REST di ricezione dei dati.
+        versioneApi:
+          type: string
+          description: Versione delle API di integrazione.
+          enum:
+            - 'REST v1'
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+        contenuti:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContenutoNotificaGovpay'
+          description: Contenuti inviati al servizio REST.
+        intervalloCreazioneTracciato:
+          type: integer
+          format: int32
+          description: Intervallo di creazione del tracciato, in ore.
+
+    ConnettoreDominioHypersicApk:
+      type: object
+      description: Connettore di notifica pagamenti HyperSIC APKappa del dominio. Le credenziali non sono incluse.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipoConnettore:
+          $ref: '#/components/schemas/TipoConnettoreNotifica'
+        versioneCsv:
+          type: string
+          description: Versione del CSV prodotto.
+        emailIndirizzi:
+          type: array
+          items:
+            type: string
+          description: Indirizzi email a cui inviare il tracciato.
+        emailSubject:
+          type: string
+        emailAllegato:
+          type: boolean
+          description: Se true il tracciato e' inviato come allegato, altrimenti come link di download.
+        downloadBaseUrl:
+          type: string
+          description: URL base del link di download del tracciato.
+        fileSystemPath:
+          type: string
+          description: Path in cui salvare il tracciato.
+        tipiPendenza:
+          type: array
+          items:
+            type: string
+          description: Codici dei tipi pendenza da includere nel tracciato.
+        intervalloCreazioneTracciato:
+          type: integer
+          format: int32
+          description: Intervallo di creazione del tracciato, in ore.
+
+    ConnettoreDominioMaggioliJppa:
+      type: object
+      description: Connettore di notifica pagamenti Maggioli JPPA del dominio. Le credenziali non sono incluse.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        inviaTracciatoEsito:
+          type: boolean
+          description: Se true invia il tracciato di esito.
+        fileSystemPath:
+          type: string
+          description: Path in cui salvare il tracciato.
+        emailIndirizzi:
+          type: array
+          items:
+            type: string
+          description: Indirizzi email a cui inviare il tracciato.
+        emailSubject:
+          type: string
+        emailAllegato:
+          type: boolean
+          description: Se true il tracciato e' inviato come allegato, altrimenti come link di download.
+        downloadBaseUrl:
+          type: string
+          description: URL base del link di download del tracciato.
+        url:
+          type: string
+          description: URL base del servizio REST di ricezione dei dati.
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
     ConnettoreCredenziali:
       type: object
       description: |
@@ -4396,6 +6387,18 @@ components:
             $ref: '#/components/schemas/Problem'
     Problem422:
       description: Entita' non processabile (riferimento non risolvibile o vincolo semantico violato).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem413:
+      description: Payload troppo grande.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem415:
+      description: Tipo di contenuto non supportato.
       content:
         application/problem+json:
           schema:
@@ -4654,6 +6657,24 @@ components:
       schema:
         type: string
         pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    IdUnitaOperativaPath:
+      name: idUnitaOperativa
+      in: path
+      required: true
+      description: Codice identificativo dell'unita' operativa (univoco nel dominio).
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    IbanAccreditoPath:
+      name: ibanAccredito
+      in: path
+      required: true
+      description: IBAN del conto di accredito (univoco nel dominio).
+      schema:
+        type: string
+        pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
 
     CodStazione:
       name: codStazione

@@ -4,14 +4,18 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import it.govpay.console.entity.UnitaOperativa;
 
-public interface UnitaOperativaRepository extends JpaRepository<UnitaOperativa, Long> {
+public interface UnitaOperativaRepository
+        extends JpaRepository<UnitaOperativa, Long>, JpaSpecificationExecutor<UnitaOperativa> {
 
     Optional<UnitaOperativa> findByDominio_IdAndCodUo(Long idDominio, String codUo);
+
+    boolean existsByDominio_IdAndCodUo(Long idDominio, String codUo);
 
     /**
      * Proietta gli id dei domini padre per un set di id di UO. Usato da
