@@ -73,6 +73,25 @@ public class Dominio {
     @Column(name = "logo", columnDefinition = "BYTEA")
     private byte[] logo;
 
+    /**
+     * Riferimenti {@code cod_connettore} ai connettori di notifica pagamenti del
+     * dominio, uno per canale. La configurazione vera e' nelle proprieta' EAV
+     * {@code connettori} sotto lo stesso {@code cod_connettore}. Il canale
+     * Maggioli JPPA non ha una colonna qui: il suo riferimento vive in
+     * {@code jppa_config} (vedi {@code JppaConfig}).
+     */
+    @Column(name = "cod_connettore_my_pivot", length = 255)
+    private String codConnettoreMyPivot;
+
+    @Column(name = "cod_connettore_secim", length = 255)
+    private String codConnettoreSecim;
+
+    @Column(name = "cod_connettore_gov_pay", length = 255)
+    private String codConnettoreGovPay;
+
+    @Column(name = "cod_connettore_hyper_sic_apk", length = 255)
+    private String codConnettoreHyperSicApk;
+
     public Long getId() {
         return id;
     }
@@ -191,5 +210,37 @@ public class Dominio {
 
     public void setLogo(byte[] logo) {
         this.logo = logo;
+    }
+
+    public String getCodConnettoreMyPivot() {
+        return codConnettoreMyPivot;
+    }
+
+    public void setCodConnettoreMyPivot(String codConnettoreMyPivot) {
+        this.codConnettoreMyPivot = codConnettoreMyPivot;
+    }
+
+    public String getCodConnettoreSecim() {
+        return codConnettoreSecim;
+    }
+
+    public void setCodConnettoreSecim(String codConnettoreSecim) {
+        this.codConnettoreSecim = codConnettoreSecim;
+    }
+
+    public String getCodConnettoreGovPay() {
+        return codConnettoreGovPay;
+    }
+
+    public void setCodConnettoreGovPay(String codConnettoreGovPay) {
+        this.codConnettoreGovPay = codConnettoreGovPay;
+    }
+
+    public String getCodConnettoreHyperSicApk() {
+        return codConnettoreHyperSicApk;
+    }
+
+    public void setCodConnettoreHyperSicApk(String codConnettoreHyperSicApk) {
+        this.codConnettoreHyperSicApk = codConnettoreHyperSicApk;
     }
 }
