@@ -49,18 +49,19 @@ public class DominioLogoService {
     @Transactional(readOnly = true)
     public void getLogo(String idDominio, HttpServletResponse response) {
         Dominio dominio = load(idDominio);
-        byte[] logo = dominio.getLogo();
-        if (logo == null || logo.length == 0) {
+        byte[] stored = dominio.getLogo();
+        if (stored == null || stored.length == 0) {
             throw new NotFoundException("Il dominio '" + idDominio + "' non ha un logo.");
         }
-        String contentType = LogoMimeDetector.detect(logo);
+        byte[] image = DominioLogoCodec.decode(stored);
+        String contentType = LogoMimeDetector.detect(image);
         if (contentType == null) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
         response.setContentType(contentType);
         response.setHeader(HttpHeaders.CACHE_CONTROL, "max-age=" + cacheMaxAgeSeconds);
         try {
-            response.getOutputStream().write(logo);
+            response.getOutputStream().write(image);
             response.flushBuffer();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -86,7 +87,7 @@ public class DominioLogoService {
                     + supportedTypesLabel() + ".");
         }
 
-        dominio.setLogo(content);
+        dominio.setLogo(DominioLogoCodec.encode(content));
         repository.save(dominio);
 
         audit(AZIONE_AUDIT_MODIFICA, dominio, contentType, request);

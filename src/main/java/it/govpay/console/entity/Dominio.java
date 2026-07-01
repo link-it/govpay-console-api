@@ -62,10 +62,12 @@ public class Dominio {
     private Stazione stazione;
 
     /**
-     * Logo dell'ente creditore come byte grezzi dell'immagine (PNG/JPEG). Il
-     * content-type non e' persistito: viene ricavato dai magic bytes a ogni
-     * lettura. Esposto via endpoint binario {@code /domini/{id}/logo}; per il PDF
-     * della ricevuta (campo {@code creditor_logo} del payload {@code govpay-stampe})
+     * Logo dell'ente creditore, persistito come byte UTF-8 del testo Base64
+     * dell'immagine (PNG/JPEG) e non come byte grezzi: la codifica on-disk e'
+     * gestita in {@code DominioLogoCodec}. Il content-type non e' persistito:
+     * viene ricavato dai magic bytes dell'immagine decodificata a ogni lettura.
+     * Esposto via endpoint binario {@code /domini/{id}/logo}; per il PDF della
+     * ricevuta (campo {@code creditor_logo} del payload {@code govpay-stampe})
      * viene codificato in data-URI base64.
      */
     @Column(name = "logo", columnDefinition = "BYTEA")

@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 
 import javax.imageio.ImageIO;
 
@@ -104,6 +105,35 @@ class DominioLogoControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(IMAGE_PNG))
                 .andExpect(header().string("Cache-Control", "max-age=86400"))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        Assertions.assertThat(body).isEqualTo(png);
+    }
+
+    @Test
+    void putStoresBase64TextInColumn() throws Exception {
+        byte[] png = image("png");
+
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(IMAGE_PNG).content(png))
+                .andExpect(status().isOk());
+
+        byte[] stored = dominioRepository.findByCodDominio(ID_DOMINIO).orElseThrow().getLogo();
+        String expected = Base64.getEncoder().encodeToString(png);
+        Assertions.assertThat(new String(stored, StandardCharsets.UTF_8)).isEqualTo(expected);
+    }
+
+    @Test
+    void getDecodesLegacyBase64TextColumn() throws Exception {
+        // Formato storico (nessuna migrazione): la colonna contiene i byte UTF-8 del testo Base64.
+        byte[] png = image("png");
+        Dominio d = dominioRepository.findByCodDominio(ID_DOMINIO).orElseThrow();
+        d.setLogo(Base64.getEncoder().encodeToString(png).getBytes(StandardCharsets.UTF_8));
+        dominioRepository.save(d);
+
+        byte[] body = mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(IMAGE_PNG))
                 .andReturn().getResponse().getContentAsByteArray();
 
         Assertions.assertThat(body).isEqualTo(png);
