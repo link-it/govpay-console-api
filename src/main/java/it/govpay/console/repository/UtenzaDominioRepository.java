@@ -9,4 +9,6 @@ import it.govpay.console.entity.UtenzaDominio;
 public interface UtenzaDominioRepository extends JpaRepository<UtenzaDominio, Long> {
 
     List<UtenzaDominio> findByIdUtenza(Long idUtenza);
+
+    void deleteByIdUtenza(Long idUtenza);
 }

@@ -112,14 +112,18 @@ public class PendenzaMapper {
         if (dominio == null) {
             return null;
         }
-        return new DominioRef(dominio.getCodDominio(), dominio.getRagioneSociale());
+        DominioRef ref = new DominioRef(dominio.getCodDominio());
+        ref.setRagioneSociale(dominio.getRagioneSociale());
+        return ref;
     }
 
     static TipoPendenzaRef mapTipoPendenza(TipoVersamento t) {
         if (t == null) {
             return null;
         }
-        return new TipoPendenzaRef(t.getCodTipoVersamento(), t.getDescrizione());
+        TipoPendenzaRef ref = new TipoPendenzaRef(t.getCodTipoVersamento());
+        ref.setDescrizione(t.getDescrizione());
+        return ref;
     }
 
     /**

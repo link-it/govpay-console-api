@@ -9,4 +9,6 @@ import it.govpay.console.entity.Utenza;
 public interface UtenzaRepository extends JpaRepository<Utenza, Long> {
 
     Optional<Utenza> findByPrincipal(String principal);
+
+    boolean existsByPrincipal(String principal);
 }
