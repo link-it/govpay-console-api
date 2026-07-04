@@ -52,6 +52,8 @@ tags:
     description: Connettore del servizio di integrazione esposto da un'applicazione verso GovPay.
   - name: Ruoli
     description: Anagrafica dei ruoli (ACL riusate da applicazioni e operatori).
+  - name: Operatori
+    description: Anagrafica degli operatori (utenti della console).
 
 paths:
 
@@ -4126,6 +4128,196 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /operatori:
+    get:
+      tags:
+        - Operatori
+      operationId: listOperatori
+      summary: Elenca gli operatori (paginati).
+      description: |
+        Filtri opzionali e ortogonali (AND): `principal` (match parziale),
+        `nome` (match parziale), `abilitato` (match esatto). Paginazione offset
+        `?page=N&limit=L` con `hasNextPage` (Slice) e `?total=true` per i totali.
+        Ordinamento via `?sort=` (campi: `principal`, `nome`; prefisso `-` per DESC).
+        Default `principal` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Principal'
+        - $ref: '#/components/parameters/Nome'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di operatori.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OperatoreSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Operatori
+      operationId: createOperatore
+      summary: Crea un nuovo operatore.
+      description: |
+        Crea l'operatore identificato da `principal`. I riferimenti in
+        `domini`/`tipiPendenza`/`ruoli` devono esistere (altrimenti 404); il
+        valore speciale `*` (tutti) e' ammesso per `domini`/`tipiPendenza`. La
+        password non e' impostabile qui (vedi endpoint dedicato).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatoreCreate'
+      responses:
+        '201':
+          description: Operatore creato.
+          headers:
+            Location:
+              description: URI del nuovo operatore.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /operatori/{principal}:
+    parameters:
+      - $ref: '#/components/parameters/PrincipalPath'
+    get:
+      tags:
+        - Operatori
+      operationId: getOperatore
+      summary: Dettaglio di un operatore.
+      description: |
+        Restituisce l'operatore identificato da `principal`, con header `ETag`
+        da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio operatore.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Operatori
+      operationId: replaceOperatore
+      summary: Sostituisce un operatore (full update).
+      description: |
+        Sostituisce integralmente l'operatore. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatoreReplace'
+      responses:
+        '200':
+          description: Operatore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Operatori
+      operationId: patchOperatore
+      summary: Modifica parziale di un operatore (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) all'operatore.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Operatore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -4959,6 +5151,132 @@ components:
           type: array
           minItems: 1
           description: ACL associate al ruolo (almeno una).
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreSummary:
+      type: object
+      description: Proiezione leggera dell'operatore, usata nelle liste paginate.
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          description: Identificativo di autenticazione dell'operatore (username).
+          maxLength: 4000
+        nome:
+          type: string
+          description: Nome (display name) dell'operatore.
+          maxLength: 35
+        abilitato:
+          type: boolean
+
+    Operatore:
+      type: object
+      description: |
+        Dettaglio canonico di un operatore (utente della console). Stessa forma
+        di `Applicazione` (associazioni domini/tipiPendenza/ruoli/acl), ma
+        identificato dal `principal` e con un `nome` invece della codifica avvisi
+        e del connettore. I domini/tipiPendenza espongono il placeholder `*`
+        ("Tutti") in caso di autorizzazione totale; l'autodeterminazione
+        (`trusted`) non si applica agli operatori.
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          maxLength: 4000
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+        domini:
+          type: array
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreCreate:
+      type: object
+      description: |
+        Body per la creazione di un operatore. Non contiene la password
+        (impostata tramite endpoint dedicato, vedi #45).
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          maxLength: 4000
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+          default: true
+        domini:
+          type: array
+          description: 'Domini autorizzati. Usare `idDominio: "*"` per autorizzare tutti i domini.'
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          description: 'Tipi pendenza autorizzati. Usare `idTipoPendenza: "*"` per autorizzare tutti i tipi pendenza.'
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreReplace:
+      type: object
+      description: Body per la sostituzione completa di un operatore (`principal` dal path).
+      required:
+        - nome
+        - abilitato
+      properties:
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+          default: true
+        domini:
+          type: array
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
           items:
             $ref: '#/components/schemas/Acl'
 
@@ -7543,6 +7861,23 @@ components:
       in: query
       required: false
       description: Match parziale sull'identificativo del ruolo.
+      schema:
+        type: string
+
+    PrincipalPath:
+      name: principal
+      in: path
+      required: true
+      description: Identificativo di autenticazione dell'operatore (username).
+      schema:
+        type: string
+        maxLength: 4000
+
+    Nome:
+      name: nome
+      in: query
+      required: false
+      description: Match parziale sul nome (display name) dell'operatore.
       schema:
         type: string
 

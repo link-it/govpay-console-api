@@ -23,32 +23,20 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Applicazione;
-import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.UtenzaTipoVersamento;
-import it.govpay.console.common.DirittiCodec;
 import it.govpay.console.intermediario.JsonPatchApplier;
-import it.govpay.console.model.Acl;
 import it.govpay.console.model.ApplicazioneCreate;
 import it.govpay.console.model.ApplicazioneReplace;
 import it.govpay.console.model.CodificaAvvisi;
-import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListApplicazioni200Response;
 import it.govpay.console.model.Pagination;
-import it.govpay.console.model.RuoloRef;
 import it.govpay.console.model.TipoPendenzaRef;
-import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
-import it.govpay.console.repository.TipoVersamentoRepository;
-import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.utenza.UtenzaAssociazioniWriter;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -85,11 +73,7 @@ public class ApplicazioneService {
 
     private final ApplicazioneRepository applicazioneRepository;
     private final UtenzaRepository utenzaRepository;
-    private final AclRepository aclRepository;
-    private final UtenzaDominioRepository utenzaDominioRepository;
-    private final UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
-    private final DominioRepository dominioRepository;
-    private final TipoVersamentoRepository tipoVersamentoRepository;
+    private final UtenzaAssociazioniWriter writer;
     private final ApplicazioneMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -100,22 +84,14 @@ public class ApplicazioneService {
 
     public ApplicazioneService(ApplicazioneRepository applicazioneRepository,
                                UtenzaRepository utenzaRepository,
-                               AclRepository aclRepository,
-                               UtenzaDominioRepository utenzaDominioRepository,
-                               UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository,
-                               DominioRepository dominioRepository,
-                               TipoVersamentoRepository tipoVersamentoRepository,
+                               UtenzaAssociazioniWriter writer,
                                ApplicazioneMapper mapper,
                                CurrentOperatorService currentOperatorService,
                                AuditService auditService,
                                ObjectMapper objectMapper) {
         this.applicazioneRepository = applicazioneRepository;
         this.utenzaRepository = utenzaRepository;
-        this.aclRepository = aclRepository;
-        this.utenzaDominioRepository = utenzaDominioRepository;
-        this.utenzaTipoVersamentoRepository = utenzaTipoVersamentoRepository;
-        this.dominioRepository = dominioRepository;
-        this.tipoVersamentoRepository = tipoVersamentoRepository;
+        this.writer = writer;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
@@ -181,13 +157,14 @@ public class ApplicazioneService {
             throw new ConflictException("Esiste gia' un'applicazione con idA2A '" + idA2A + "'.");
         }
         String principal = validatePrincipal(body.getPrincipal());
-        if (utenzaRepository.existsByPrincipal(principal)) {
+        if (utenzaRepository.existsByPrincipalOriginale(principal)) {
             throw new ConflictException("Il principal '" + principal + "' e' gia' associato a un'altra utenza.");
         }
 
-        DominiResolution dom = resolveDomini(body.getDomini());
-        TipiResolution tipi = resolveTipiPendenza(body.getTipiPendenza());
-        String ruoliCsv = validateRuoliToCsv(body.getRuoli());
+        TrustedSplit split = splitAutodeterminazione(body.getTipiPendenza());
+        UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());
+        UtenzaAssociazioniWriter.TipiResolution tipi = writer.resolveTipiPendenza(split.tipi());
+        String ruoliCsv = writer.validateRuoliToCsv(body.getRuoli());
         boolean abilitato = body.getAbilitato() == null || Boolean.TRUE.equals(body.getAbilitato());
 
         Utenza utenza = new Utenza();
@@ -203,13 +180,13 @@ public class ApplicazioneService {
         Applicazione app = new Applicazione();
         app.setCodApplicazione(idA2A);
         app.setUtenza(savedUtenza);
-        app.setTrusted(tipi.trusted());
+        app.setTrusted(split.trusted());
         app.setFirmaRicevuta(FIRMA_RICEVUTA_NESSUNA);
         applyCodificaAvvisi(app, body.getCodificaAvvisi());
         app.setCodConnettoreIntegrazione(null);
         Applicazione savedApp = applicazioneRepository.save(app);
 
-        writeChildren(savedUtenza.getId(), dom, tipi, buildAclEntities(body.getAcl(), savedUtenza.getId()));
+        writer.writeChildren(savedUtenza.getId(), dom, tipi, writer.buildAclEntities(body.getAcl(), savedUtenza.getId()));
 
         audit(AZIONE_AUDIT_CREATE, savedApp, request);
 
@@ -270,13 +247,14 @@ public class ApplicazioneService {
         }
 
         Utenza utenza = app.getUtenza();
-        if (!principal.equals(utenza.getPrincipal()) && utenzaRepository.existsByPrincipal(principal)) {
+        if (!principal.equals(utenza.getPrincipalOriginale()) && utenzaRepository.existsByPrincipalOriginale(principal)) {
             throw new ConflictException("Il principal '" + principal + "' e' gia' associato a un'altra utenza.");
         }
 
-        DominiResolution dom = resolveDomini(body.getDomini());
-        TipiResolution tipi = resolveTipiPendenza(body.getTipiPendenza());
-        String ruoliCsv = validateRuoliToCsv(body.getRuoli());
+        TrustedSplit split = splitAutodeterminazione(body.getTipiPendenza());
+        UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());
+        UtenzaAssociazioniWriter.TipiResolution tipi = writer.resolveTipiPendenza(split.tipi());
+        String ruoliCsv = writer.validateRuoliToCsv(body.getRuoli());
 
         utenza.setPrincipal(principal);
         utenza.setPrincipalOriginale(principal);
@@ -286,92 +264,39 @@ public class ApplicazioneService {
         utenza.setAutorizzazioneTipiVersStar(tipi.star());
         utenzaRepository.save(utenza);
 
-        app.setTrusted(tipi.trusted());
+        app.setTrusted(split.trusted());
         applyCodificaAvvisi(app, body.getCodificaAvvisi());
         applicazioneRepository.save(app);
 
-        deleteChildren(utenza.getId());
-        entityManager.flush();
-        writeChildren(utenza.getId(), dom, tipi, buildAclEntities(body.getAcl(), utenza.getId()));
+        writer.deleteChildrenAndFlush(utenza.getId());
+        writer.writeChildren(utenza.getId(), dom, tipi, writer.buildAclEntities(body.getAcl(), utenza.getId()));
 
         audit(AZIONE_AUDIT_MODIFICA, app, request);
         return ok(app);
     }
 
-    // --- risoluzione e validazione riferimenti -------------------------------
-
-    private DominiResolution resolveDomini(List<DominioRef> domini) {
-        boolean star = false;
-        List<Long> ids = new ArrayList<>();
-        if (domini != null) {
-            for (DominioRef ref : domini) {
-                String id = ref == null ? null : ref.getIdDominio();
-                if (id == null || id.isBlank()) {
-                    throw new UnprocessableEntityException("Ogni elemento di 'domini' deve avere 'idDominio' valorizzato.");
-                }
-                if (ApplicazioneMapper.STAR_ID.equals(id)) {
-                    star = true;
-                    continue;
-                }
-                Dominio d = dominioRepository.findByCodDominio(id)
-                        .orElseThrow(() -> new NotFoundException("Dominio riferito non trovato: " + id));
-                ids.add(d.getId());
-            }
-        }
-        if (star) {
-            ids.clear();
-        }
-        return new DominiResolution(star, ids);
-    }
-
-    private TipiResolution resolveTipiPendenza(List<TipoPendenzaRef> tipiPendenza) {
-        boolean star = false;
+    /**
+     * Estrae il valore speciale {@code autodeterminazione} (specifico delle
+     * applicazioni → flag {@code trusted}) dalla lista dei tipi pendenza, che
+     * viene poi risolta dal writer condiviso come normali riferimenti.
+     */
+    private static TrustedSplit splitAutodeterminazione(List<TipoPendenzaRef> tipiPendenza) {
         boolean trusted = false;
-        List<Long> ids = new ArrayList<>();
+        List<TipoPendenzaRef> tipi = new ArrayList<>();
         if (tipiPendenza != null) {
             for (TipoPendenzaRef ref : tipiPendenza) {
                 String id = ref == null ? null : ref.getIdTipoPendenza();
-                if (id == null || id.isBlank()) {
-                    throw new UnprocessableEntityException(
-                            "Ogni elemento di 'tipiPendenza' deve avere 'idTipoPendenza' valorizzato.");
-                }
-                if (ApplicazioneMapper.STAR_ID.equals(id)) {
-                    star = true;
-                    continue;
-                }
                 if (ApplicazioneMapper.AUTODETERMINAZIONE_ID.equals(id)) {
                     trusted = true;
-                    continue;
+                } else {
+                    tipi.add(ref);
                 }
-                TipoVersamento t = tipoVersamentoRepository.findByCodTipoVersamento(id)
-                        .orElseThrow(() -> new NotFoundException("Tipo pendenza riferito non trovato: " + id));
-                ids.add(t.getId());
             }
         }
-        if (star) {
-            ids.clear();
-        }
-        return new TipiResolution(star, trusted, ids);
+        return new TrustedSplit(trusted, tipi);
     }
 
-    private String validateRuoliToCsv(List<RuoloRef> ruoli) {
-        if (ruoli == null || ruoli.isEmpty()) {
-            return null;
-        }
-        java.util.Set<String> catalogo = new java.util.HashSet<>(aclRepository.findRuoliCatalogo());
-        List<String> ids = new ArrayList<>();
-        for (RuoloRef ref : ruoli) {
-            String id = ref == null ? null : ref.getId();
-            if (id == null || id.isBlank()) {
-                throw new UnprocessableEntityException("Ogni elemento di 'ruoli' deve avere 'id' valorizzato.");
-            }
-            String trimmed = id.trim();
-            if (!catalogo.contains(trimmed)) {
-                throw new NotFoundException("Ruolo riferito non trovato: " + trimmed);
-            }
-            ids.add(trimmed);
-        }
-        return String.join(",", ids);
+    private record TrustedSplit(boolean trusted, List<TipoPendenzaRef> tipi) {
     }
 
     private static String validatePrincipal(String principal) {
@@ -409,65 +334,6 @@ public class ApplicazioneService {
         app.setCodApplicazioneIuv(blankToNull(codificaIuv));
         app.setRegExp(blankToNull(regExpIuv));
         app.setAutoIuv(Boolean.TRUE.equals(codifica.getGenerazioneIuvInterna()));
-    }
-
-    private List<it.govpay.console.entity.Acl> buildAclEntities(List<Acl> aclList, long idUtenza) {
-        List<it.govpay.console.entity.Acl> out = new ArrayList<>();
-        if (aclList == null) {
-            return out;
-        }
-        for (Acl a : aclList) {
-            if (a.getServizio() == null) {
-                throw new UnprocessableEntityException("Ogni elemento di 'acl' deve avere 'servizio' valorizzato.");
-            }
-            if (a.getAutorizzazioni() == null || a.getAutorizzazioni().isEmpty()) {
-                throw new UnprocessableEntityException(
-                        "Ogni elemento di 'acl' deve avere almeno un'autorizzazione (R e/o W).");
-            }
-            it.govpay.console.entity.Acl entity = new it.govpay.console.entity.Acl();
-            entity.setServizio(a.getServizio().getValue());
-            entity.setDiritti(DirittiCodec.serialize(a.getAutorizzazioni()));
-            entity.setRuolo(a.getRuolo());
-            entity.setIdUtenza(idUtenza);
-            out.add(entity);
-        }
-        return out;
-    }
-
-    // --- persistenza figli ---------------------------------------------------
-
-    private void writeChildren(long idUtenza, DominiResolution dom, TipiResolution tipi,
-                               List<it.govpay.console.entity.Acl> aclEntities) {
-        if (!aclEntities.isEmpty()) {
-            aclRepository.saveAll(aclEntities);
-        }
-        if (!dom.star() && !dom.idDomini().isEmpty()) {
-            List<UtenzaDominio> rows = new ArrayList<>();
-            for (Long idDominio : dom.idDomini()) {
-                UtenzaDominio ud = new UtenzaDominio();
-                ud.setIdUtenza(idUtenza);
-                ud.setIdDominio(idDominio);
-                ud.setIdUo(null);
-                rows.add(ud);
-            }
-            utenzaDominioRepository.saveAll(rows);
-        }
-        if (!tipi.star() && !tipi.idTipiVersamento().isEmpty()) {
-            List<UtenzaTipoVersamento> rows = new ArrayList<>();
-            for (Long idTipoVersamento : tipi.idTipiVersamento()) {
-                UtenzaTipoVersamento utv = new UtenzaTipoVersamento();
-                utv.setIdUtenza(idUtenza);
-                utv.setIdTipoVersamento(idTipoVersamento);
-                rows.add(utv);
-            }
-            utenzaTipoVersamentoRepository.saveAll(rows);
-        }
-    }
-
-    private void deleteChildren(long idUtenza) {
-        aclRepository.deleteByIdUtenza(idUtenza);
-        utenzaDominioRepository.deleteByIdUtenza(idUtenza);
-        utenzaTipoVersamentoRepository.deleteByIdUtenza(idUtenza);
     }
 
     // --- helper comuni -------------------------------------------------------
@@ -540,11 +406,5 @@ public class ApplicazioneService {
             path = path == null ? root.get(part) : path.get(part);
         }
         return path;
-    }
-
-    private record DominiResolution(boolean star, List<Long> idDomini) {
-    }
-
-    private record TipiResolution(boolean star, boolean trusted, List<Long> idTipiVersamento) {
     }
 }
