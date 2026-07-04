@@ -20,4 +20,11 @@ public interface AclRepository extends JpaRepository<Acl, Long> {
      */
     @Query("select distinct a.ruolo from Acl a where a.idUtenza is null and a.ruolo is not null")
     List<String> findRuoliCatalogo();
+
+    /** Righe ACL di definizione di un ruolo (id_utenza IS NULL). */
+    List<Acl> findByRuoloAndIdUtenzaIsNull(String ruolo);
+
+    boolean existsByRuoloAndIdUtenzaIsNull(String ruolo);
+
+    void deleteByRuoloAndIdUtenzaIsNull(String ruolo);
 }

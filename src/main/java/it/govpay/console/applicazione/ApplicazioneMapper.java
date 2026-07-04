@@ -11,11 +11,13 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import it.govpay.console.common.DirittiCodec;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.model.Acl;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ApplicazioneLinks;
 import it.govpay.console.model.ApplicazioneSummary;
 import it.govpay.console.model.CodificaAvvisi;
@@ -45,8 +47,8 @@ public class ApplicazioneMapper {
     static final String AUTODETERMINAZIONE_ID = "autodeterminazione";
     static final String AUTODETERMINAZIONE_LABEL = "Autodeterminazione delle Pendenze";
 
-    private static final Map<String, Acl.ServizioEnum> SERVIZIO_LOOKUP = Arrays.stream(Acl.ServizioEnum.values())
-            .collect(Collectors.toMap(Acl.ServizioEnum::getValue, e -> e));
+    private static final Map<String, AclServizio> SERVIZIO_LOOKUP = Arrays.stream(AclServizio.values())
+            .collect(Collectors.toMap(AclServizio::getValue, e -> e));
 
     private final AclRepository aclRepository;
     private final UtenzaDominioRepository utenzaDominioRepository;
@@ -192,31 +194,15 @@ public class ApplicazioneMapper {
     }
 
     private static Acl toAcl(it.govpay.console.entity.Acl entity) {
-        Acl.ServizioEnum servizio = SERVIZIO_LOOKUP.get(entity.getServizio());
+        AclServizio servizio = SERVIZIO_LOOKUP.get(entity.getServizio());
         if (servizio == null) {
             return null; // servizio fuori dall'enum noto → skip
         }
         Acl acl = new Acl();
         acl.setServizio(servizio);
-        acl.setAutorizzazioni(parseDiritti(entity.getDiritti()));
+        acl.setAutorizzazioni(DirittiCodec.parse(entity.getDiritti()));
         acl.setRuolo(entity.getRuolo());
         return acl;
-    }
-
-    private static List<Acl.AutorizzazioniEnum> parseDiritti(String diritti) {
-        if (diritti == null || diritti.isBlank()) {
-            return List.of();
-        }
-        List<Acl.AutorizzazioniEnum> out = new ArrayList<>();
-        for (String d : diritti.split(",")) {
-            String t = d.trim().toUpperCase();
-            if ("R".equals(t)) {
-                out.add(Acl.AutorizzazioniEnum.R);
-            } else if ("W".equals(t)) {
-                out.add(Acl.AutorizzazioniEnum.W);
-            }
-        }
-        return out;
     }
 
     private static boolean notBlank(String s) {

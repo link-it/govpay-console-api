@@ -28,6 +28,7 @@ import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.UtenzaTipoVersamento;
+import it.govpay.console.common.DirittiCodec;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.Acl;
 import it.govpay.console.model.ApplicazioneCreate;
@@ -419,25 +420,18 @@ public class ApplicazioneService {
             if (a.getServizio() == null) {
                 throw new UnprocessableEntityException("Ogni elemento di 'acl' deve avere 'servizio' valorizzato.");
             }
+            if (a.getAutorizzazioni() == null || a.getAutorizzazioni().isEmpty()) {
+                throw new UnprocessableEntityException(
+                        "Ogni elemento di 'acl' deve avere almeno un'autorizzazione (R e/o W).");
+            }
             it.govpay.console.entity.Acl entity = new it.govpay.console.entity.Acl();
             entity.setServizio(a.getServizio().getValue());
-            entity.setDiritti(dirittiToCsv(a.getAutorizzazioni()));
+            entity.setDiritti(DirittiCodec.serialize(a.getAutorizzazioni()));
             entity.setRuolo(a.getRuolo());
             entity.setIdUtenza(idUtenza);
             out.add(entity);
         }
         return out;
-    }
-
-    private static String dirittiToCsv(List<Acl.AutorizzazioniEnum> autorizzazioni) {
-        if (autorizzazioni == null || autorizzazioni.isEmpty()) {
-            return "";
-        }
-        List<String> values = new ArrayList<>();
-        for (Acl.AutorizzazioniEnum a : autorizzazioni) {
-            values.add(a.getValue());
-        }
-        return String.join(",", values);
     }
 
     // --- persistenza figli ---------------------------------------------------

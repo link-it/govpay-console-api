@@ -50,6 +50,8 @@ tags:
     description: Anagrafica delle applicazioni (autenticazione A2A).
   - name: Connettore Integrazione
     description: Connettore del servizio di integrazione esposto da un'applicazione verso GovPay.
+  - name: Ruoli
+    description: Anagrafica dei ruoli (ACL riusate da applicazioni e operatori).
 
 paths:
 
@@ -3947,6 +3949,183 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /ruoli:
+    get:
+      tags:
+        - Ruoli
+      operationId: listRuoli
+      summary: Elenca i ruoli (paginati).
+      description: |
+        Filtro opzionale `idRuolo` (match parziale). **Paginazione** offset
+        `?page=N&limit=L` con `hasNextPage` (Slice) e `?total=true` per i totali.
+        Ordinamento via `?sort=idRuolo` (prefisso `-` per DESC). Default `idRuolo` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdRuoloFilter'
+      responses:
+        '200':
+          description: Lista paginata di ruoli.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RuoloSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Ruoli
+      operationId: createRuolo
+      summary: Crea un nuovo ruolo.
+      description: |
+        Crea il ruolo identificato da `idRuolo` con le ACL associate (almeno una).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuoloCreate'
+      responses:
+        '201':
+          description: Ruolo creato.
+          headers:
+            Location:
+              description: URI del nuovo ruolo.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '409':
+          $ref: '#/components/responses/Problem409'
+
+  /ruoli/{idRuolo}:
+    parameters:
+      - $ref: '#/components/parameters/IdRuoloPath'
+    get:
+      tags:
+        - Ruoli
+      operationId: getRuolo
+      summary: Dettaglio di un ruolo.
+      description: |
+        Restituisce il ruolo identificato da `idRuolo`, con header `ETag` da
+        rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio ruolo.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Ruoli
+      operationId: replaceRuolo
+      summary: Sostituisce un ruolo (full update).
+      description: |
+        Sostituisce integralmente le ACL del ruolo. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuoloReplace'
+      responses:
+        '200':
+          description: Ruolo aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Ruoli
+      operationId: patchRuolo
+      summary: Modifica parziale di un ruolo (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) al ruolo.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Ruolo aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -4670,30 +4849,41 @@ components:
           description: Identificativo del ruolo (es. nome del role configurato).
           example: AMMINISTRATORE
 
+    AclServizio:
+      type: string
+      description: |
+        Servizio oggetto dell'autorizzazione (label V1). Include l'intero set
+        V1 `it.govpay.model.Acl.Servizio`: i 9 servizi di backoffice piu' i 3
+        servizi API (`API Pagamenti`/`API Pendenze`/`API Ragioneria`).
+      enum:
+        - "Anagrafica PagoPA"
+        - "Anagrafica Creditore"
+        - "Anagrafica Applicazioni"
+        - "Anagrafica Ruoli"
+        - "Pagamenti"
+        - "Pendenze"
+        - "Rendicontazioni e Incassi"
+        - "Giornale degli Eventi"
+        - "Configurazione e manutenzione"
+        - "API Pagamenti"
+        - "API Pendenze"
+        - "API Ragioneria"
+
     Acl:
       type: object
       required:
         - servizio
         - autorizzazioni
       description: |
-        Entry ACL appiattita: per ciascun servizio elencato, l'utenza ha la lista
-        di autorizzazioni associate. Replica lo schema V1 `aclPost`.
+        Entry ACL appiattita: per ciascun servizio elencato, l'utenza (o il ruolo)
+        ha la lista di autorizzazioni associate. Replica lo schema V1 `aclPost`.
       properties:
         servizio:
-          type: string
-          description: Servizio oggetto dell'autorizzazione.
-          enum:
-            - "Anagrafica PagoPA"
-            - "Anagrafica Creditore"
-            - "Anagrafica Applicazioni"
-            - "Anagrafica Ruoli"
-            - "Pagamenti"
-            - "Pendenze"
-            - "Rendicontazioni e Incassi"
-            - "Giornale degli Eventi"
-            - "Configurazione e manutenzione"
+          $ref: '#/components/schemas/AclServizio'
         autorizzazioni:
           type: array
+          minItems: 1
+          description: Almeno un'autorizzazione (R e/o W).
           items:
             type: string
             enum:
@@ -4709,6 +4899,68 @@ components:
             valorizzato solo se l'ACL deriva da un ruolo del catalogo invece
             che da un'ACL diretta sull'utenza).
           example: AMMINISTRATORE
+
+    RuoloSummary:
+      type: object
+      description: Proiezione leggera del ruolo, usata nelle liste paginate.
+      required:
+        - idRuolo
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+
+    Ruolo:
+      type: object
+      description: |
+        Ruolo del catalogo: un identificativo associato a un insieme di ACL
+        (servizio + autorizzazioni). I ruoli sono riusati da applicazioni e
+        operatori.
+      required:
+        - idRuolo
+        - acl
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+        acl:
+          type: array
+          description: ACL associate al ruolo.
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    RuoloCreate:
+      type: object
+      description: Body per la creazione di un ruolo.
+      required:
+        - idRuolo
+        - acl
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+        acl:
+          type: array
+          minItems: 1
+          description: ACL associate al ruolo (almeno una).
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    RuoloReplace:
+      type: object
+      description: Body per la sostituzione completa di un ruolo (`idRuolo` dal path).
+      required:
+        - acl
+      properties:
+        acl:
+          type: array
+          minItems: 1
+          description: ACL associate al ruolo (almeno una).
+          items:
+            $ref: '#/components/schemas/Acl'
 
     Profilo:
       type: object
@@ -7274,6 +7526,23 @@ components:
       in: query
       required: false
       description: Match parziale sull'identificativo di autenticazione (principal).
+      schema:
+        type: string
+
+    IdRuoloPath:
+      name: idRuolo
+      in: path
+      required: true
+      description: Identificativo del ruolo.
+      schema:
+        type: string
+        maxLength: 255
+
+    IdRuoloFilter:
+      name: idRuolo
+      in: query
+      required: false
+      description: Match parziale sull'identificativo del ruolo.
       schema:
         type: string
 
