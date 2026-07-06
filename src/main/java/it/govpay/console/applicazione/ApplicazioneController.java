@@ -12,6 +12,7 @@ import it.govpay.console.model.ApplicazioneCreate;
 import it.govpay.console.model.ApplicazioneReplace;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListApplicazioni200Response;
+import it.govpay.console.model.RichiestaCambioPassword;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -67,5 +68,11 @@ public class ApplicazioneController implements ApplicazioniApi {
                                                           String ifMatch,
                                                           List<JsonPatchOperation> jsonPatchOperation) {
         return service.patch(idA2A, jsonPatchOperation, ifMatch, currentRequest);
+    }
+
+    @Override
+    public ResponseEntity<Void> putPasswordApplicazione(String idA2A,
+                                                        RichiestaCambioPassword richiestaCambioPassword) {
+        return service.putPassword(idA2A, richiestaCambioPassword, currentRequest);
     }
 }

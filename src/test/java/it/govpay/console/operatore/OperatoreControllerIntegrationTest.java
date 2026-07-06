@@ -376,6 +376,102 @@ class OperatoreControllerIntegrationTest {
                 .andExpect(status().isPreconditionFailed());
     }
 
+    // --- Password (PUT /password) ---
+
+    @Test
+    void putPasswordValidReturns204AndStoresHash() throws Exception {
+        grantScrittura("Anagrafica Ruoli");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        String hash = utenzaRepository.findByPrincipal("op-alfa").orElseThrow().getPassword();
+        org.assertj.core.api.Assertions.assertThat(hash).startsWith("$6$");
+        org.assertj.core.api.Assertions.assertThat(encoder.matches("NuovaPassword01", hash)).isTrue();
+    }
+
+    @Test
+    void putPasswordWithDirittoViaRuoloReturns204() throws Exception {
+        // il diritto arriva dalla ACL di definizione del ruolo OPERATORE
+        // (id_utenza IS NULL), non da una ACL diretta dell'utenza
+        Acl acl = new Acl();
+        acl.setRuolo("OPERATORE");
+        acl.setServizio("Anagrafica Ruoli");
+        acl.setDiritti("W");
+        acl.setIdUtenza(null);
+        aclRepository.save(acl);
+
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void putPasswordViolatingPolicyReturns400WithDetail() throws Exception {
+        grantScrittura("Anagrafica Ruoli");
+        String body = """
+                {"nuovaPassword":"corta1"}""";
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("almeno 8 caratteri")))
+                .andExpect(jsonPath("$.detail", containsString("almeno una lettera maiuscola")));
+    }
+
+    @Test
+    void putPasswordMissingFieldReturns400() throws Exception {
+        grantScrittura("Anagrafica Ruoli");
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void putPasswordWithoutDirittoReturns403() throws Exception {
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Ruoli")));
+    }
+
+    @Test
+    void putPasswordUnknownOperatoreReturns404() throws Exception {
+        grantScrittura("Anagrafica Ruoli");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/operatori/op-none/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void putPasswordWritesAudit() throws Exception {
+        grantScrittura("Anagrafica Ruoli");
+        long before = countAudit("OPERATORE_CAMBIO_PASSWORD");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        org.assertj.core.api.Assertions.assertThat(countAudit("OPERATORE_CAMBIO_PASSWORD")).isEqualTo(before + 1);
+    }
+
+    private void grantScrittura(String servizio) {
+        Utenza utenza = utenzaRepository.findByPrincipal(PRINCIPAL).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(utenza.getId());
+        acl.setServizio(servizio);
+        acl.setDiritti("RW");
+        aclRepository.save(acl);
+    }
+
     private String currentEtag(String principal) throws Exception {
         return mvc.perform(get("/operatori/" + principal).with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
