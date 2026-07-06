@@ -21,12 +21,17 @@ DELETE FROM applicazioni WHERE id = 4001;
 DELETE FROM domini WHERE id = 3001;
 DELETE FROM operatori WHERE nome = 'Op Fixture';
 DELETE FROM utenze WHERE principal = 'op-fixture';
+DELETE FROM utenze WHERE id = 4501;
 
 INSERT INTO domini (id, cod_dominio, ragione_sociale, aux_digit)
 VALUES (3001, '12345678901', 'Comune Fixture', 0);
 
-INSERT INTO applicazioni (id, cod_applicazione)
-VALUES (4001, 'APP-FIXTURE');
+-- Utenza tecnica dell'applicazione fixture (id_utenza NOT NULL su applicazioni).
+INSERT INTO utenze (id, principal, principal_originale, abilitato, autorizzazione_domini_star, autorizzazione_tipi_vers_star)
+VALUES (4501, 'app-fixture', 'app-fixture', true, false, false);
+
+INSERT INTO applicazioni (id, cod_applicazione, id_utenza, trusted, auto_iuv, firma_ricevuta)
+VALUES (4001, 'APP-FIXTURE', 4501, false, false, '0');
 
 INSERT INTO tipi_versamento (id, cod_tipo_versamento, descrizione)
 VALUES (5001, 'TARI', 'TARI Fixture');

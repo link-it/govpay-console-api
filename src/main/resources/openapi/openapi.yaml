@@ -46,6 +46,14 @@ tags:
     description: Tipi pendenza configurati per un dominio.
   - name: Connettori Dominio
     description: Connettori di notifica pagamenti (export tracciati) di un dominio.
+  - name: Applicazioni
+    description: Anagrafica delle applicazioni (autenticazione A2A).
+  - name: Connettore Integrazione
+    description: Connettore del servizio di integrazione esposto da un'applicazione verso GovPay.
+  - name: Ruoli
+    description: Anagrafica dei ruoli (ACL riusate da applicazioni e operatori).
+  - name: Operatori
+    description: Anagrafica degli operatori (utenti della console).
 
 paths:
 
@@ -3652,6 +3660,664 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /applicazioni:
+    get:
+      tags:
+        - Applicazioni
+      operationId: listApplicazioni
+      summary: Elenca le applicazioni (paginate).
+      description: |
+        Filtri opzionali e ortogonali (AND):
+        - `idA2A` — match parziale;
+        - `principal` — match parziale;
+        - `abilitato` — match esatto.
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
+        Con `?total=true` vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC); campi ammessi:
+        `idA2A`, `principal`. Default `idA2A` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdA2AFilter'
+        - $ref: '#/components/parameters/Principal'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di applicazioni.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ApplicazioneSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Applicazioni
+      operationId: createApplicazione
+      summary: Crea una nuova applicazione.
+      description: |
+        Crea l'applicazione identificata da `idA2A`. I riferimenti in
+        `domini`/`tipiPendenza`/`ruoli` devono esistere (altrimenti 404); i valori
+        speciali `*` (tutti) e `autodeterminazione` sono ammessi per
+        `domini`/`tipiPendenza`. La password non e' impostabile qui (vedi endpoint
+        dedicato).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicazioneCreate'
+      responses:
+        '201':
+          description: Applicazione creata.
+          headers:
+            Location:
+              description: URI della nuova applicazione.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Applicazione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /applicazioni/{idA2A}:
+    parameters:
+      - $ref: '#/components/parameters/IdA2APath'
+    get:
+      tags:
+        - Applicazioni
+      operationId: getApplicazione
+      summary: Dettaglio di un'applicazione.
+      description: |
+        Restituisce l'applicazione identificata da `idA2A`, con header `ETag`
+        da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio applicazione.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Applicazione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Applicazioni
+      operationId: replaceApplicazione
+      summary: Sostituisce un'applicazione (full update).
+      description: |
+        Sostituisce integralmente l'applicazione. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente per la concorrenza ottimistica.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicazioneReplace'
+      responses:
+        '200':
+          description: Applicazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Applicazione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Applicazioni
+      operationId: patchApplicazione
+      summary: Modifica parziale di un'applicazione (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) all'applicazione.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Applicazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Applicazione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /applicazioni/{idA2A}/connettore-integrazione:
+    parameters:
+      - $ref: '#/components/parameters/IdA2APath'
+    get:
+      tags:
+        - Connettore Integrazione
+      operationId: getConnettoreIntegrazione
+      summary: Connettore del servizio di integrazione dell'applicazione (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti.
+      responses:
+        '200':
+          description: Connettore di integrazione.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntegrazioneApplicazione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettore Integrazione
+      operationId: replaceConnettoreIntegrazione
+      summary: Sostituisce la configurazione del connettore di integrazione (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreIntegrazioneApplicazione'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreIntegrazioneApplicazione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /applicazioni/{idA2A}/connettore-integrazione/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdA2APath'
+    put:
+      tags:
+        - Connettore Integrazione
+      operationId: putCredenzialiConnettoreIntegrazione
+      summary: Imposta le credenziali del connettore di integrazione (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /ruoli:
+    get:
+      tags:
+        - Ruoli
+      operationId: listRuoli
+      summary: Elenca i ruoli (paginati).
+      description: |
+        Filtro opzionale `idRuolo` (match parziale). **Paginazione** offset
+        `?page=N&limit=L` con `hasNextPage` (Slice) e `?total=true` per i totali.
+        Ordinamento via `?sort=idRuolo` (prefisso `-` per DESC). Default `idRuolo` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/IdRuoloFilter'
+      responses:
+        '200':
+          description: Lista paginata di ruoli.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RuoloSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Ruoli
+      operationId: createRuolo
+      summary: Crea un nuovo ruolo.
+      description: |
+        Crea il ruolo identificato da `idRuolo` con le ACL associate (almeno una).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuoloCreate'
+      responses:
+        '201':
+          description: Ruolo creato.
+          headers:
+            Location:
+              description: URI del nuovo ruolo.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '409':
+          $ref: '#/components/responses/Problem409'
+
+  /ruoli/{idRuolo}:
+    parameters:
+      - $ref: '#/components/parameters/IdRuoloPath'
+    get:
+      tags:
+        - Ruoli
+      operationId: getRuolo
+      summary: Dettaglio di un ruolo.
+      description: |
+        Restituisce il ruolo identificato da `idRuolo`, con header `ETag` da
+        rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio ruolo.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Ruoli
+      operationId: replaceRuolo
+      summary: Sostituisce un ruolo (full update).
+      description: |
+        Sostituisce integralmente le ACL del ruolo. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuoloReplace'
+      responses:
+        '200':
+          description: Ruolo aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Ruoli
+      operationId: patchRuolo
+      summary: Modifica parziale di un ruolo (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) al ruolo.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Ruolo aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruolo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /operatori:
+    get:
+      tags:
+        - Operatori
+      operationId: listOperatori
+      summary: Elenca gli operatori (paginati).
+      description: |
+        Filtri opzionali e ortogonali (AND): `principal` (match parziale),
+        `nome` (match parziale), `abilitato` (match esatto). Paginazione offset
+        `?page=N&limit=L` con `hasNextPage` (Slice) e `?total=true` per i totali.
+        Ordinamento via `?sort=` (campi: `principal`, `nome`; prefisso `-` per DESC).
+        Default `principal` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Principal'
+        - $ref: '#/components/parameters/Nome'
+        - $ref: '#/components/parameters/Abilitato'
+      responses:
+        '200':
+          description: Lista paginata di operatori.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OperatoreSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+    post:
+      tags:
+        - Operatori
+      operationId: createOperatore
+      summary: Crea un nuovo operatore.
+      description: |
+        Crea l'operatore identificato da `principal`. I riferimenti in
+        `domini`/`tipiPendenza`/`ruoli` devono esistere (altrimenti 404); il
+        valore speciale `*` (tutti) e' ammesso per `domini`/`tipiPendenza`. La
+        password non e' impostabile qui (vedi endpoint dedicato).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatoreCreate'
+      responses:
+        '201':
+          description: Operatore creato.
+          headers:
+            Location:
+              description: URI del nuovo operatore.
+              schema:
+                type: string
+            ETag:
+              description: Validatore di concorrenza della rappresentazione creata.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+
+  /operatori/{principal}:
+    parameters:
+      - $ref: '#/components/parameters/PrincipalPath'
+    get:
+      tags:
+        - Operatori
+      operationId: getOperatore
+      summary: Dettaglio di un operatore.
+      description: |
+        Restituisce l'operatore identificato da `principal`, con header `ETag`
+        da rispedire come `If-Match` nelle operazioni di modifica.
+      responses:
+        '200':
+          description: Dettaglio operatore.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della rappresentazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Operatori
+      operationId: replaceOperatore
+      summary: Sostituisce un operatore (full update).
+      description: |
+        Sostituisce integralmente l'operatore. Richiede l'header `If-Match`
+        con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatoreReplace'
+      responses:
+        '200':
+          description: Operatore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Operatori
+      operationId: patchOperatore
+      summary: Modifica parziale di un operatore (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) all'operatore.
+        Richiede l'header `If-Match` con l'`ETag` corrente. La rappresentazione
+        risultante viene validata come in una sostituzione completa.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Operatore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operatore'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -3744,25 +4410,32 @@ components:
 
     DominioRef:
       type: object
+      description: |
+        Riferimento a un dominio. In lettura `ragioneSociale` e' sempre
+        valorizzata dal server; in scrittura e' significativo solo `idDominio`
+        (la label, se presente, viene ignorata).
       required:
         - idDominio
-        - ragioneSociale
       properties:
         idDominio:
           type: string
-          description: Codice dominio (es. P.IVA 11 cifre).
+          description: Codice dominio (es. P.IVA 11 cifre). Il valore `*` indica "tutti i domini".
           example: "12345678901"
         ragioneSociale:
           type: string
 
     TipoPendenzaRef:
       type: object
+      description: |
+        Riferimento a un tipo pendenza. In lettura `descrizione` e' sempre
+        valorizzata dal server; in scrittura e' significativo solo
+        `idTipoPendenza` (la label, se presente, viene ignorata).
       required:
         - idTipoPendenza
-        - descrizione
       properties:
         idTipoPendenza:
           type: string
+          description: Codice del tipo pendenza. Il valore `*` indica "tutti i tipi pendenza".
           example: "TARI"
         descrizione:
           type: string
@@ -4368,30 +5041,41 @@ components:
           description: Identificativo del ruolo (es. nome del role configurato).
           example: AMMINISTRATORE
 
+    AclServizio:
+      type: string
+      description: |
+        Servizio oggetto dell'autorizzazione (label V1). Include l'intero set
+        V1 `it.govpay.model.Acl.Servizio`: i 9 servizi di backoffice piu' i 3
+        servizi API (`API Pagamenti`/`API Pendenze`/`API Ragioneria`).
+      enum:
+        - "Anagrafica PagoPA"
+        - "Anagrafica Creditore"
+        - "Anagrafica Applicazioni"
+        - "Anagrafica Ruoli"
+        - "Pagamenti"
+        - "Pendenze"
+        - "Rendicontazioni e Incassi"
+        - "Giornale degli Eventi"
+        - "Configurazione e manutenzione"
+        - "API Pagamenti"
+        - "API Pendenze"
+        - "API Ragioneria"
+
     Acl:
       type: object
       required:
         - servizio
         - autorizzazioni
       description: |
-        Entry ACL appiattita: per ciascun servizio elencato, l'utenza ha la lista
-        di autorizzazioni associate. Replica lo schema V1 `aclPost`.
+        Entry ACL appiattita: per ciascun servizio elencato, l'utenza (o il ruolo)
+        ha la lista di autorizzazioni associate. Replica lo schema V1 `aclPost`.
       properties:
         servizio:
-          type: string
-          description: Servizio oggetto dell'autorizzazione.
-          enum:
-            - "Anagrafica PagoPA"
-            - "Anagrafica Creditore"
-            - "Anagrafica Applicazioni"
-            - "Anagrafica Ruoli"
-            - "Pagamenti"
-            - "Pendenze"
-            - "Rendicontazioni e Incassi"
-            - "Giornale degli Eventi"
-            - "Configurazione e manutenzione"
+          $ref: '#/components/schemas/AclServizio'
         autorizzazioni:
           type: array
+          minItems: 1
+          description: Almeno un'autorizzazione (R e/o W).
           items:
             type: string
             enum:
@@ -4407,6 +5091,194 @@ components:
             valorizzato solo se l'ACL deriva da un ruolo del catalogo invece
             che da un'ACL diretta sull'utenza).
           example: AMMINISTRATORE
+
+    RuoloSummary:
+      type: object
+      description: Proiezione leggera del ruolo, usata nelle liste paginate.
+      required:
+        - idRuolo
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+
+    Ruolo:
+      type: object
+      description: |
+        Ruolo del catalogo: un identificativo associato a un insieme di ACL
+        (servizio + autorizzazioni). I ruoli sono riusati da applicazioni e
+        operatori.
+      required:
+        - idRuolo
+        - acl
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+        acl:
+          type: array
+          description: ACL associate al ruolo.
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    RuoloCreate:
+      type: object
+      description: Body per la creazione di un ruolo.
+      required:
+        - idRuolo
+        - acl
+      properties:
+        idRuolo:
+          type: string
+          description: Identificativo del ruolo.
+          example: AMMINISTRATORE
+        acl:
+          type: array
+          minItems: 1
+          description: ACL associate al ruolo (almeno una).
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    RuoloReplace:
+      type: object
+      description: Body per la sostituzione completa di un ruolo (`idRuolo` dal path).
+      required:
+        - acl
+      properties:
+        acl:
+          type: array
+          minItems: 1
+          description: ACL associate al ruolo (almeno una).
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreSummary:
+      type: object
+      description: Proiezione leggera dell'operatore, usata nelle liste paginate.
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          description: Identificativo di autenticazione dell'operatore (username).
+          maxLength: 4000
+        nome:
+          type: string
+          description: Nome (display name) dell'operatore.
+          maxLength: 35
+        abilitato:
+          type: boolean
+
+    Operatore:
+      type: object
+      description: |
+        Dettaglio canonico di un operatore (utente della console). Stessa forma
+        di `Applicazione` (associazioni domini/tipiPendenza/ruoli/acl), ma
+        identificato dal `principal` e con un `nome` invece della codifica avvisi
+        e del connettore. I domini/tipiPendenza espongono il placeholder `*`
+        ("Tutti") in caso di autorizzazione totale; l'autodeterminazione
+        (`trusted`) non si applica agli operatori.
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          maxLength: 4000
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+        domini:
+          type: array
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreCreate:
+      type: object
+      description: |
+        Body per la creazione di un operatore. Non contiene la password
+        (impostata tramite endpoint dedicato, vedi #45).
+      required:
+        - principal
+        - nome
+        - abilitato
+      properties:
+        principal:
+          type: string
+          maxLength: 4000
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+          default: true
+        domini:
+          type: array
+          description: 'Domini autorizzati. Usare `idDominio: "*"` per autorizzare tutti i domini.'
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          description: 'Tipi pendenza autorizzati. Usare `idTipoPendenza: "*"` per autorizzare tutti i tipi pendenza.'
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    OperatoreReplace:
+      type: object
+      description: Body per la sostituzione completa di un operatore (`principal` dal path).
+      required:
+        - nome
+        - abilitato
+      properties:
+        nome:
+          type: string
+          maxLength: 35
+        abilitato:
+          type: boolean
+          default: true
+        domini:
+          type: array
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
 
     Profilo:
       type: object
@@ -4588,6 +5460,256 @@ components:
           maxLength: 4000
         abilitato:
           type: boolean
+
+    CodificaAvvisi:
+      type: object
+      description: |
+        Configurazione della codifica IUV per gli avvisi generati dall'applicazione.
+      properties:
+        codificaIuv:
+          type: string
+          description: Prefisso applicativo dello IUV (colonna `cod_applicazione_iuv`).
+          pattern: '^[0-9]{1,3}$'
+          maxLength: 3
+          example: "34"
+        regExpIuv:
+          type: string
+          description: Espressione regolare che i numeri avviso dell'applicazione devono rispettare.
+          maxLength: 1024
+        generazioneIuvInterna:
+          type: boolean
+          description: Se true lo IUV e' generato internamente da GovPay (colonna `auto_iuv`).
+
+    ApplicazioneSummary:
+      type: object
+      description: Proiezione leggera dell'applicazione, usata nelle liste paginate.
+      required:
+        - idA2A
+        - principal
+        - abilitato
+      properties:
+        idA2A:
+          type: string
+          description: Codice identificativo dell'applicazione.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        principal:
+          type: string
+          description: Identificativo di autenticazione dell'applicazione.
+          maxLength: 4000
+        abilitato:
+          type: boolean
+
+    ApplicazioneLinks:
+      type: object
+      description: Hyperlink in stile HAL relativi all'applicazione.
+      properties:
+        connettoreIntegrazione:
+          $ref: '#/components/schemas/Link'
+
+    Applicazione:
+      type: object
+      description: |
+        Dettaglio canonico di un'applicazione (autenticazione A2A).
+
+        Le collezioni `domini`, `tipiPendenza` e `ruoli` sono esposte come array
+        di Ref; quando l'applicazione ha autorizzazione "star" (tutti i domini /
+        tutti i tipi pendenza) la collezione contiene un singolo elemento
+        placeholder con id `*` e label `Tutti` (compatibilita' V1). Il tipo
+        pendenza placeholder `autodeterminazione` indica l'autodeterminazione
+        delle pendenze (flag `trusted`).
+
+        Il connettore del servizio di integrazione non e' incluso qui: e'
+        gestito dalla sub-resource `connettore-integrazione` (vedi `_links`).
+      required:
+        - idA2A
+        - principal
+        - abilitato
+      properties:
+        idA2A:
+          type: string
+          description: Codice identificativo dell'applicazione.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        principal:
+          type: string
+          description: Identificativo di autenticazione dell'applicazione.
+          maxLength: 4000
+        abilitato:
+          type: boolean
+        codificaAvvisi:
+          $ref: '#/components/schemas/CodificaAvvisi'
+        domini:
+          type: array
+          description: Domini su cui l'applicazione e' abilitata a operare.
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          description: Tipi pendenza su cui l'applicazione e' abilitata a operare.
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          description: Ruoli assegnati all'applicazione.
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          description: ACL appiattite dell'applicazione (servizio + autorizzazioni R/W).
+          items:
+            $ref: '#/components/schemas/Acl'
+        _links:
+          $ref: '#/components/schemas/ApplicazioneLinks'
+
+    ApplicazioneCreate:
+      type: object
+      description: |
+        Body per la creazione di un'applicazione. Non contiene la password
+        (impostata tramite endpoint dedicato, vedi #45).
+      required:
+        - idA2A
+        - principal
+        - abilitato
+      properties:
+        idA2A:
+          type: string
+          description: Codice identificativo dell'applicazione.
+          pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        principal:
+          type: string
+          maxLength: 4000
+        abilitato:
+          type: boolean
+          default: true
+        codificaAvvisi:
+          $ref: '#/components/schemas/CodificaAvvisi'
+        domini:
+          type: array
+          description: |
+            Domini autorizzati. Usare `idDominio: "*"` per autorizzare tutti i domini.
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          description: |
+            Tipi pendenza autorizzati. Usare `idTipoPendenza: "*"` per autorizzare
+            tutti i tipi pendenza, `autodeterminazione` per abilitare
+            l'autodeterminazione delle pendenze.
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    ApplicazioneReplace:
+      type: object
+      description: Body per la sostituzione completa di un'applicazione (`idA2A` dal path).
+      required:
+        - principal
+        - abilitato
+      properties:
+        principal:
+          type: string
+          maxLength: 4000
+        abilitato:
+          type: boolean
+          default: true
+        codificaAvvisi:
+          $ref: '#/components/schemas/CodificaAvvisi'
+        domini:
+          type: array
+          items:
+            $ref: '#/components/schemas/DominioRef'
+        tipiPendenza:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoPendenzaRef'
+        ruoli:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuoloRef'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acl'
+
+    ConnettoreIntegrazioneApplicazione:
+      type: object
+      description: |
+        Connettore del servizio di integrazione esposto dall'applicazione verso
+        GovPay. Il servizio e' unico e offre entrambe le operazioni (verifica
+        sincrona delle pendenze e notifica degli esiti). Lo slot esiste sempre:
+        se non configurato, la GET restituisce `abilitato=false` con i campi
+        vuoti; la disabilitazione avviene tramite `abilitato=false` (niente
+        POST/DELETE).
+
+        Le credenziali (password HTTP Basic e password di keystore/truststore SSL)
+        non sono incluse: si impostano tramite l'endpoint dedicato `.../credenziali`
+        e non sono mai restituite dalle GET.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+          description: URL base del servizio di integrazione dell'applicazione.
+          maxLength: 255
+        versione:
+          type: string
+          description: Versione delle API di integrazione esposte dall'applicazione.
+          enum:
+            - REST_V1
+            - REST_V2
+        tipoAutenticazione:
+          type: string
+          description: Modalita' di autenticazione verso il servizio di integrazione.
+          enum:
+            - NONE
+            - BASIC
+            - SSL
+        username:
+          type: string
+          description: Username HTTP Basic (significativo con `tipoAutenticazione=BASIC`).
+          maxLength: 255
+        sslTipo:
+          $ref: '#/components/schemas/SslTipo'
+        ksLocation:
+          type: string
+          description: Path del keystore (significativo con `tipoAutenticazione=SSL`).
+          maxLength: 255
+        ksType:
+          type: string
+          description: Tipo del keystore (es. JKS, PKCS12).
+          maxLength: 255
+        tsLocation:
+          type: string
+          description: Path del truststore (significativo con `tipoAutenticazione=SSL`).
+          maxLength: 255
+        tsType:
+          type: string
+          description: Tipo del truststore (es. JKS, PKCS12).
+          maxLength: 255
+        sslType:
+          type: string
+          description: Protocollo SSL/TLS (es. TLSv1.2).
+          maxLength: 255
+        connectTimeoutMs:
+          type: integer
+          format: int32
+          description: |
+            Timeout di connessione in millisecondi. Proprieta' introdotta in V2
+            (non presente nel core V1).
+        readTimeoutMs:
+          type: integer
+          format: int32
+          description: |
+            Timeout di lettura in millisecondi. Proprieta' introdotta in V2
+            (non presente nel core V1).
 
     EntrataSummary:
       type: object
@@ -6699,4 +7821,63 @@ components:
       description: Match esatto sullo stato di abilitazione.
       schema:
         type: boolean
+
+    IdA2APath:
+      name: idA2A
+      in: path
+      required: true
+      description: Codice identificativo dell'applicazione (autenticazione A2A).
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+
+    IdA2AFilter:
+      name: idA2A
+      in: query
+      required: false
+      description: Match parziale sul codice applicazione.
+      schema:
+        type: string
+
+    Principal:
+      name: principal
+      in: query
+      required: false
+      description: Match parziale sull'identificativo di autenticazione (principal).
+      schema:
+        type: string
+
+    IdRuoloPath:
+      name: idRuolo
+      in: path
+      required: true
+      description: Identificativo del ruolo.
+      schema:
+        type: string
+        maxLength: 255
+
+    IdRuoloFilter:
+      name: idRuolo
+      in: query
+      required: false
+      description: Match parziale sull'identificativo del ruolo.
+      schema:
+        type: string
+
+    PrincipalPath:
+      name: principal
+      in: path
+      required: true
+      description: Identificativo di autenticazione dell'operatore (username).
+      schema:
+        type: string
+        maxLength: 4000
+
+    Nome:
+      name: nome
+      in: query
+      required: false
+      description: Match parziale sul nome (display name) dell'operatore.
+      schema:
+        type: string
 
