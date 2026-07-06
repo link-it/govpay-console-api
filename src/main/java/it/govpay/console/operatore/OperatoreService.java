@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -23,15 +24,19 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListOperatori200Response;
 import it.govpay.console.model.OperatoreCreate;
 import it.govpay.console.model.OperatoreReplace;
 import it.govpay.console.model.Pagination;
+import it.govpay.console.model.RichiestaCambioPassword;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.utenza.PasswordPolicy;
 import it.govpay.console.utenza.UtenzaAssociazioniWriter;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -68,6 +73,7 @@ public class OperatoreService {
 
     public static final String AZIONE_AUDIT_CREATE = "OPERATORE_CREATE";
     public static final String AZIONE_AUDIT_MODIFICA = "OPERATORE_MODIFICA";
+    public static final String AZIONE_AUDIT_CAMBIO_PASSWORD = "OPERATORE_CAMBIO_PASSWORD";
 
     private static final int MAX_PRINCIPAL = 4000;
     private static final int MAX_NOME = 35;
@@ -79,6 +85,8 @@ public class OperatoreService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
+    private final PasswordEncoder passwordEncoder;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -89,7 +97,9 @@ public class OperatoreService {
                             OperatoreMapper mapper,
                             CurrentOperatorService currentOperatorService,
                             AuditService auditService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            AclAuthorizer aclAuthorizer,
+                            PasswordEncoder passwordEncoder) {
         this.operatoreRepository = operatoreRepository;
         this.utenzaRepository = utenzaRepository;
         this.writer = writer;
@@ -97,6 +107,8 @@ public class OperatoreService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -252,6 +264,21 @@ public class OperatoreService {
 
         audit(AZIONE_AUDIT_MODIFICA, op, utenza.getPrincipalOriginale(), request);
         return ok(op);
+    }
+
+    @Transactional
+    public ResponseEntity<Void> putPassword(String principal, RichiestaCambioPassword body,
+                                            HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
+        Operatore op = load(principal);
+        PasswordPolicy.validate(body.getNuovaPassword());
+
+        Utenza utenza = utenzaOf(op);
+        utenza.setPassword(passwordEncoder.encode(body.getNuovaPassword()));
+        utenzaRepository.save(utenza);
+
+        audit(AZIONE_AUDIT_CAMBIO_PASSWORD, op, utenza.getPrincipalOriginale(), request);
+        return ResponseEntity.noContent().build();
     }
 
     private static String validatePrincipal(String principal) {

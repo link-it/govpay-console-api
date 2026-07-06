@@ -479,6 +479,76 @@ class ApplicazioneControllerIntegrationTest {
                 .andExpect(status().isPreconditionFailed());
     }
 
+    // --- Password (PUT /password) ---
+
+    @Test
+    void putPasswordValidReturns204AndStoresHash() throws Exception {
+        grantScrittura("Anagrafica Applicazioni");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/applicazioni/APP-001/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        String hash = utenzaRepository.findByPrincipal("p-app1").orElseThrow().getPassword();
+        org.assertj.core.api.Assertions.assertThat(hash).startsWith("$6$");
+        org.assertj.core.api.Assertions.assertThat(encoder.matches("NuovaPassword01", hash)).isTrue();
+    }
+
+    @Test
+    void putPasswordViolatingPolicyReturns400WithDetail() throws Exception {
+        grantScrittura("Anagrafica Applicazioni");
+        String body = """
+                {"nuovaPassword":"soloominuscole"}""";
+        mvc.perform(put("/applicazioni/APP-001/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("almeno una lettera maiuscola")))
+                .andExpect(jsonPath("$.detail", containsString("almeno una cifra")));
+    }
+
+    @Test
+    void putPasswordWithoutDirittoReturns403() throws Exception {
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/applicazioni/APP-001/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Applicazioni")));
+    }
+
+    @Test
+    void putPasswordUnknownApplicazioneReturns404() throws Exception {
+        grantScrittura("Anagrafica Applicazioni");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/applicazioni/APP-NONE/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void putPasswordWritesAudit() throws Exception {
+        grantScrittura("Anagrafica Applicazioni");
+        long before = countAudit("APPLICAZIONE_CAMBIO_PASSWORD");
+        String body = """
+                {"nuovaPassword":"NuovaPassword01"}""";
+        mvc.perform(put("/applicazioni/APP-001/password").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        org.assertj.core.api.Assertions.assertThat(countAudit("APPLICAZIONE_CAMBIO_PASSWORD")).isEqualTo(before + 1);
+    }
+
+    private void grantScrittura(String servizio) {
+        Utenza utenza = utenzaRepository.findByPrincipal(PRINCIPAL).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(utenza.getId());
+        acl.setServizio(servizio);
+        acl.setDiritti("RW");
+        aclRepository.save(acl);
+    }
+
     private String currentEtag(String cod) throws Exception {
         return mvc.perform(get("/applicazioni/" + cod).with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())

@@ -12,6 +12,7 @@ import it.govpay.console.model.ListOperatori200Response;
 import it.govpay.console.model.Operatore;
 import it.govpay.console.model.OperatoreCreate;
 import it.govpay.console.model.OperatoreReplace;
+import it.govpay.console.model.RichiestaCambioPassword;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -61,5 +62,11 @@ public class OperatoreController implements OperatoriApi {
     public ResponseEntity<Operatore> patchOperatore(String principal, String ifMatch,
                                                     List<JsonPatchOperation> jsonPatchOperation) {
         return service.patch(principal, jsonPatchOperation, ifMatch, currentRequest);
+    }
+
+    @Override
+    public ResponseEntity<Void> putPasswordOperatore(String principal,
+                                                     RichiestaCambioPassword richiestaCambioPassword) {
+        return service.putPassword(principal, richiestaCambioPassword, currentRequest);
     }
 }

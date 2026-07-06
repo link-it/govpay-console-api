@@ -3857,6 +3857,39 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /applicazioni/{idA2A}/password:
+    parameters:
+      - $ref: '#/components/parameters/IdA2APath'
+    put:
+      tags:
+        - Applicazioni
+      operationId: putPasswordApplicazione
+      summary: Imposta la password dell'applicazione.
+      description: |
+        Imposta la password dell'utenza associata all'applicazione (usata per
+        l'autenticazione HTTP Basic). La password e' validata server-side
+        (almeno 8 caratteri con una lettera minuscola, una maiuscola e una
+        cifra, nessun carattere di spaziatura, massimo 255 caratteri) e
+        memorizzata cifrata: non e' recuperabile in lettura. Richiede il
+        diritto di scrittura sul servizio `Anagrafica Applicazioni`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RichiestaCambioPassword'
+      responses:
+        '204':
+          description: Password aggiornata.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
   /applicazioni/{idA2A}/connettore-integrazione:
     parameters:
       - $ref: '#/components/parameters/IdA2APath'
@@ -4317,6 +4350,39 @@ paths:
           $ref: '#/components/responses/Problem422'
         '428':
           $ref: '#/components/responses/Problem428'
+
+  /operatori/{principal}/password:
+    parameters:
+      - $ref: '#/components/parameters/PrincipalPath'
+    put:
+      tags:
+        - Operatori
+      operationId: putPasswordOperatore
+      summary: Imposta la password dell'operatore.
+      description: |
+        Imposta la password dell'utenza dell'operatore (usata per il login con
+        username e password). La password e' validata server-side (almeno 8
+        caratteri con una lettera minuscola, una maiuscola e una cifra, nessun
+        carattere di spaziatura, massimo 255 caratteri) e memorizzata cifrata:
+        non e' recuperabile in lettura. Richiede il diritto di scrittura sul
+        servizio `Anagrafica Ruoli`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RichiestaCambioPassword'
+      responses:
+        '204':
+          description: Password aggiornata.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
 
 components:
   schemas:
@@ -5216,7 +5282,7 @@ components:
       type: object
       description: |
         Body per la creazione di un operatore. Non contiene la password
-        (impostata tramite endpoint dedicato, vedi #45).
+        (impostata tramite `PUT /operatori/{principal}/password`).
       required:
         - principal
         - nome
@@ -5341,6 +5407,21 @@ components:
         password:
           type: string
           format: password
+
+    RichiestaCambioPassword:
+      type: object
+      description: |
+        Body per l'impostazione della password di un'utenza (applicazione o
+        operatore). La policy e' verificata server-side: almeno 8 caratteri
+        con una lettera minuscola, una maiuscola e una cifra, nessun carattere
+        di spaziatura, lunghezza massima 255 caratteri.
+      required:
+        - nuovaPassword
+      properties:
+        nuovaPassword:
+          type: string
+          format: password
+          example: NuovaPassword01
 
     MetodoAutenticazione:
       type: object
@@ -5564,7 +5645,7 @@ components:
       type: object
       description: |
         Body per la creazione di un'applicazione. Non contiene la password
-        (impostata tramite endpoint dedicato, vedi #45).
+        (impostata tramite `PUT /applicazioni/{idA2A}/password`).
       required:
         - idA2A
         - principal
@@ -7479,6 +7560,12 @@ components:
             $ref: '#/components/schemas/Problem'
     Problem401:
       description: Autenticazione mancante o non valida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem403:
+      description: Utenza autenticata priva dei diritti richiesti dall'operazione.
       content:
         application/problem+json:
           schema:

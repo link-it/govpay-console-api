@@ -17,6 +17,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -25,17 +26,21 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ApplicazioneCreate;
 import it.govpay.console.model.ApplicazioneReplace;
 import it.govpay.console.model.CodificaAvvisi;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListApplicazioni200Response;
 import it.govpay.console.model.Pagination;
+import it.govpay.console.model.RichiestaCambioPassword;
 import it.govpay.console.model.TipoPendenzaRef;
 import it.govpay.console.repository.ApplicazioneRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.utenza.PasswordPolicy;
 import it.govpay.console.utenza.UtenzaAssociazioniWriter;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -65,6 +70,7 @@ public class ApplicazioneService {
 
     public static final String AZIONE_AUDIT_CREATE = "APPLICAZIONE_CREATE";
     public static final String AZIONE_AUDIT_MODIFICA = "APPLICAZIONE_MODIFICA";
+    public static final String AZIONE_AUDIT_CAMBIO_PASSWORD = "APPLICAZIONE_CAMBIO_PASSWORD";
 
     /** Firma ricevuta "nessuna" (V1 {@code FirmaRichiesta.NESSUNA}). */
     private static final String FIRMA_RICEVUTA_NESSUNA = "0";
@@ -78,6 +84,8 @@ public class ApplicazioneService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
+    private final PasswordEncoder passwordEncoder;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -88,7 +96,9 @@ public class ApplicazioneService {
                                ApplicazioneMapper mapper,
                                CurrentOperatorService currentOperatorService,
                                AuditService auditService,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               AclAuthorizer aclAuthorizer,
+                               PasswordEncoder passwordEncoder) {
         this.applicazioneRepository = applicazioneRepository;
         this.utenzaRepository = utenzaRepository;
         this.writer = writer;
@@ -96,6 +106,8 @@ public class ApplicazioneService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -273,6 +285,21 @@ public class ApplicazioneService {
 
         audit(AZIONE_AUDIT_MODIFICA, app, request);
         return ok(app);
+    }
+
+    @Transactional
+    public ResponseEntity<Void> putPassword(String idA2A, RichiestaCambioPassword body,
+                                            HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
+        Applicazione app = load(idA2A);
+        PasswordPolicy.validate(body.getNuovaPassword());
+
+        Utenza utenza = app.getUtenza();
+        utenza.setPassword(passwordEncoder.encode(body.getNuovaPassword()));
+        utenzaRepository.save(utenza);
+
+        audit(AZIONE_AUDIT_CAMBIO_PASSWORD, app, request);
+        return ResponseEntity.noContent().build();
     }
 
     /**
