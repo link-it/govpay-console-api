@@ -1,5 +1,8 @@
 package it.govpay.console.avviso;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -10,11 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.model.Avviso;
 import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.repository.VersamentoRepository;
@@ -37,17 +38,20 @@ public class AvvisoService {
     private final AvvisoPdfPayloadMapper pdfPayloadMapper;
     private final StampeClient stampeClient;
     private final CurrentOperatorService currentOperatorService;
+    private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
 
     public AvvisoService(VersamentoRepository repository,
                          AvvisoMapper avvisoMapper,
                          AvvisoPdfPayloadMapper pdfPayloadMapper,
                          StampeClient stampeClient,
-                         CurrentOperatorService currentOperatorService) {
+                         CurrentOperatorService currentOperatorService,
+                         ExternalCallMetricsRecorder externalCallMetricsRecorder) {
         this.repository = repository;
         this.avvisoMapper = avvisoMapper;
         this.pdfPayloadMapper = pdfPayloadMapper;
         this.currentOperatorService = currentOperatorService;
         this.stampeClient = stampeClient;
+        this.externalCallMetricsRecorder = externalCallMetricsRecorder;
     }
 
     /**
@@ -98,7 +102,9 @@ public class AvvisoService {
             response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
                     "attachment; filename=\"" + filename + "\"");
             try {
-                stampeClient.streamPaymentNotice(payload, response.getOutputStream());
+                OutputStream output = response.getOutputStream();
+                externalCallMetricsRecorder.record("stampe", "payment_notice",
+                        () -> stampeClient.streamPaymentNotice(payload, output));
                 response.flushBuffer();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

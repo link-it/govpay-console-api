@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.StampeClient;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.repository.RptRepository;
@@ -64,6 +66,7 @@ public class RicevutaService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final RptRtJsonConverter rptRtJsonConverter;
+    private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
 
     public RicevutaService(RptRepository rptRepository,
                            VersamentoRepository versamentoRepository,
@@ -72,7 +75,8 @@ public class RicevutaService {
                            StampeClient stampeClient,
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,
-                           RptRtJsonConverter rptRtJsonConverter) {
+                           RptRtJsonConverter rptRtJsonConverter,
+                           ExternalCallMetricsRecorder externalCallMetricsRecorder) {
         this.rptRepository = rptRepository;
         this.versamentoRepository = versamentoRepository;
         this.ricevutaMapper = ricevutaMapper;
@@ -81,6 +85,7 @@ public class RicevutaService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.rptRtJsonConverter = rptRtJsonConverter;
+        this.externalCallMetricsRecorder = externalCallMetricsRecorder;
     }
 
     /**
@@ -246,7 +251,9 @@ public class RicevutaService {
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
         try {
-            stampeClient.streamReceipt(payload, response.getOutputStream());
+            OutputStream output = response.getOutputStream();
+            externalCallMetricsRecorder.record("stampe", "receipt",
+                    () -> stampeClient.streamReceipt(payload, output));
             response.flushBuffer();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
