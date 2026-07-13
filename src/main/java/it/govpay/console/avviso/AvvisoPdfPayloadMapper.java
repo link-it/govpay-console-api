@@ -47,6 +47,7 @@ public class AvvisoPdfPayloadMapper {
         notice.setDebtor(mapDebtor(v));
         notice.setTitle("AVVISO DI PAGAMENTO");
         notice.setPostal(hasBollettinoPostale(v));
+        notice.setFirstLogo(firstLogoOf(v.getDominio()));
         notice.setFull(mapFullAmount(v));
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
@@ -147,10 +148,31 @@ public class AvvisoPdfPayloadMapper {
         Amount amount = new Amount();
         amount.setAmount(v.getImportoTotale());
         amount.setNoticeNumber(v.getNumeroAvviso());
+        String qrcode = AvvisoMapper.buildQrcode(v);
+        if (qrcode == null) {
+            throw new AvvisoNonDisponibileException(
+                    "L'avviso PDF non e' disponibile: la pendenza non dispone dei dati "
+                            + "necessari a comporre il codice QR (IUV, dominio o importo assenti).");
+        }
+        amount.setQrcode(qrcode);
         if (v.getDataScadenza() != null) {
             amount.setDueDate(v.getDataScadenza().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate());
         }
         return amount;
+    }
+
+    /**
+     * Logo dell'ente creditore: govpay-stampe lo incorpora come TESTO base64
+     * nell'XML dato in pasto a Jasper, quindi va inviato il contenuto della
+     * colonna cosi' com'e' (testo base64), non i byte raw dell'immagine — che
+     * romperebbero il parsing XML lato stampe. Senza logo si invia contenuto
+     * vuoto e il default lo applica govpay-stampe.
+     */
+    private static byte[] firstLogoOf(Dominio dominio) {
+        if (dominio != null && dominio.getLogo() != null && dominio.getLogo().length > 0) {
+            return dominio.getLogo();
+        }
+        return new byte[0];
     }
 
     static LocalDate dueDateOf(Versamento v) {

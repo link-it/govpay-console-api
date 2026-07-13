@@ -66,7 +66,13 @@ public class AvvisoMapper {
         };
     }
 
-    private static String buildQrcode(Versamento v) {
+    /**
+     * Stringa QR {@code PAGOPA|002|...}; con numeroAvviso assente il codice
+     * viene derivato da auxDigit/applicationCode/IUV. {@code null} se mancano
+     * i dati di base (dominio, auxDigit, IUV, importo). Condivisa con il
+     * payload PDF ({@link AvvisoPdfPayloadMapper}).
+     */
+    static String buildQrcode(Versamento v) {
         if (!hasRequiredFields(v)) {
             return null;
         }

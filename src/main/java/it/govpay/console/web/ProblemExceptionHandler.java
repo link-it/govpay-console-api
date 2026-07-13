@@ -25,6 +25,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import it.govpay.console.avviso.AvvisoMbtException;
+import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
 import it.govpay.console.avviso.StampeUnavailableException;
 import it.govpay.console.model.Problem;
@@ -137,7 +138,8 @@ public class ProblemExceptionHandler {
                 request, null, ex);
     }
 
-    @ExceptionHandler({ AvvisoMbtException.class, UnprocessableEntityException.class })
+    @ExceptionHandler({ AvvisoMbtException.class, AvvisoNonDisponibileException.class,
+            UnprocessableEntityException.class })
     public ResponseEntity<Problem> handleUnprocessable(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
     }
