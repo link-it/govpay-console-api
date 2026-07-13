@@ -97,9 +97,18 @@ class PrometheusScrapeIntegrationTest {
 
     @Test
     void actuatorNotMappedOnApplicationPortReturns404() throws Exception {
-        HttpResponse<String> response = get(serverPort, "/actuator/prometheus");
+        assertThat(get(serverPort, "/actuator/prometheus").statusCode()).isEqualTo(404);
+        assertThat(get(serverPort, "/actuator/health").statusCode()).isEqualTo(404);
+    }
 
-        assertThat(response.statusCode()).isEqualTo(404);
+    @Test
+    void healthOnManagementPortReturns200StatusOnly() throws Exception {
+        HttpResponse<String> response = get(managementPort, "/actuator/health");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("\"status\"");
+        // niente show-details: nessun dettaglio sui componenti all'anonimo
+        assertThat(response.body()).doesNotContain("\"components\"");
     }
 
     @Test
