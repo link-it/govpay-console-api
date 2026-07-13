@@ -1,3 +1,13 @@
+2026-07-13  Giuliano Pintori <pintori@link.it>
+
+	* [Build]
+	Avanzamento versioni delle dipendenze GovPay:
+	- govpay-bom: 2.0.0-SNAPSHOT -> 2.0.1 (release).
+	- govpay-common: 2.0.0-SNAPSHOT -> 2.0.0 (release).
+	- govpay-common-auth: 1.0.0-SNAPSHOT -> 1.0.0 (release).
+	Rimossa la dipendenza da artefatti -SNAPSHOT lato central-snapshots
+	per il build a favore di release stabili su Maven Central.
+
 2026-05-12  Giuliano Pintori <pintori@link.it>
 
 	* [Build]
