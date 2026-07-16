@@ -15,11 +15,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.StampeClient;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.repository.RptRepository;

@@ -13,9 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.model.Avviso;
 import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.repository.VersamentoRepository;

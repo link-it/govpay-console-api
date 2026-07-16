@@ -19,6 +19,8 @@ import org.springframework.test.context.ActiveProfiles;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.annotation.Timed;
 
+import it.govpay.common.metrics.ExternalCallMetricsRecorder;
+
 /**
  * Verifica end-to-end dell'esposizione delle metriche Prometheus:
  * <ul>
@@ -36,7 +38,10 @@ import io.micrometer.core.annotation.Timed;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "management.server.port=0"
+                "management.server.port=0",
+                // sospese di default (govpay.metrics.enabled): qui riattivate
+                // esplicitamente per testare il breakdown custom quando attivo.
+                "govpay.metrics.enabled=true"
         })
 @ActiveProfiles("test")
 class PrometheusScrapeIntegrationTest {
