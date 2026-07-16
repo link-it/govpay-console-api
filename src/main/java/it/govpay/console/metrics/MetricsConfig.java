@@ -1,13 +1,15 @@
 package it.govpay.console.metrics;
 
+import jakarta.annotation.PostConstruct;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.web.filter.RequestContextFilter;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.micrometer.core.aop.TimedAspect;
 import io.micrometer.core.instrument.MeterRegistry;
+
+import it.govpay.common.metrics.ExternalCallOutcomeRegistry;
 
 /**
  * Configurazione delle metriche applicative.
@@ -17,6 +19,12 @@ import io.micrometer.core.instrument.MeterRegistry;
  * annotandolo con {@code @Timed("nome.metrica")}. La metrica risultante e'
  * esposta, insieme a quelle automatiche (HTTP server/client, JVM, datasource,
  * Resilience4j), dall'endpoint di scrape Prometheus sulla porta management.
+ *
+ * <p>Il breakdown API interno/esterno e il recorder delle chiamate esterne
+ * sono forniti da {@code GovpayMetricsAutoConfiguration} (govpay-common):
+ * qui si registra solo la classificazione {@code circuit_open} nel
+ * {@link ExternalCallOutcomeRegistry}, dato che common non dipende da
+ * Resilience4j.
  */
 @Configuration
 public class MetricsConfig {
@@ -26,11 +34,8 @@ public class MetricsConfig {
         return new TimedAspect(registry);
     }
 
-    @Bean
-    public FilterRegistrationBean<RequestContextFilter> requestContextFilterRegistration() {
-        FilterRegistrationBean<RequestContextFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RequestContextFilter());
-        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 15);
-        return registration;
+    @PostConstruct
+    public void registerCircuitOpenOutcome() {
+        ExternalCallOutcomeRegistry.registerCircuitOpen(CallNotPermittedException.class);
     }
 }
