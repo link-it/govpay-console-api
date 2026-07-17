@@ -25,3 +25,16 @@ oppure, in ambiente Docker, la variabile d'ambiente equivalente:
 MANAGEMENT_SERVER_PORT=[Porta dedicata per gli endpoint actuator]
 ```
 
+## Metriche custom (breakdown interno/esterno)
+
+Oltre alle metriche standard di Spring Boot/Micrometer, la libreria `govpay-common` espone un
+breakdown custom (durata delle richieste scomposta in tempo interno/esterno, durata delle chiamate
+verso servizi esterni). E' disattivato di default e va abilitato esplicitamente:
+
+``` bash
+govpay.metrics.enabled=true
+```
+
+Se non abilitato, l'applicazione continua a funzionare normalmente: le classi che dipendono dal
+recorder delle metriche ricevono un'implementazione no-op (esegue la chiamata ma non la misura).
+
