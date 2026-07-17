@@ -10,3 +10,18 @@
 
 API utilizzate dalla Console per il monitoraggio e configurazione di GovPay
 
+## Configurazione porta Actuator / Prometheus
+
+Gli endpoint `/actuator/health` e `/actuator/prometheus` rispondono di default su una porta
+**separata** da quella applicativa (`9090`). Per modificarla impostare:
+
+``` bash
+management.server.port=[Porta dedicata per gli endpoint actuator]
+```
+
+oppure, in ambiente Docker, la variabile d'ambiente equivalente:
+
+``` bash
+MANAGEMENT_SERVER_PORT=[Porta dedicata per gli endpoint actuator]
+```
+
