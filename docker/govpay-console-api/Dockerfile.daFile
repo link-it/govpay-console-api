@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 ARG govpay_console_api_fullversion
 ARG govpay_console_api_home=/opt/govpay-console-api
