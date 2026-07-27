@@ -7740,6 +7740,153 @@ components:
           format: date-time
           description: Timestamp dell'ultima sincronizzazione da pagoPA.
 
+    StatoEsecuzione:
+      type: string
+      description: Stato corrente di un'esecuzione di operazione.
+      enum:
+        - IN_CODA
+        - IN_CORSO
+        - COMPLETATA
+        - FALLITA
+        - ANNULLATA
+
+    EsitoEsecuzione:
+      type: object
+      description: Esito di un'esecuzione terminata (assente per esecuzioni in corso).
+      required:
+        - successo
+      properties:
+        successo:
+          type: boolean
+        messaggio:
+          type: string
+          description: Messaggio riassuntivo dell'esito.
+        errori:
+          type: array
+          description: Elenco degli errori riscontrati (vuoto se successo=true).
+          items:
+            type: string
+
+    EsecuzioneSummary:
+      type: object
+      description: Proiezione leggera di un'esecuzione, usata nel catalogo Operazioni.
+      required:
+        - idEsecuzione
+        - stato
+        - dataInizio
+      properties:
+        idEsecuzione:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoEsecuzione'
+        dataInizio:
+          type: string
+          format: date-time
+        dataFine:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'esecuzione e' ancora in corso.
+
+    Esecuzione:
+      type: object
+      description: Dettaglio canonico di un'esecuzione di operazione.
+      required:
+        - idEsecuzione
+        - idOperazione
+        - stato
+        - dataInizio
+        - forzata
+      properties:
+        idEsecuzione:
+          type: string
+        idOperazione:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoEsecuzione'
+        percentuale:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: Percentuale di completamento, se disponibile per l'operazione.
+        descrizione:
+          type: string
+          nullable: true
+        dettaglio:
+          type: string
+          nullable: true
+          description: Dettaglio testuale multi-riga (log riassuntivo, contesto), se disponibile.
+        dataInizio:
+          type: string
+          format: date-time
+        dataFine:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'esecuzione e' ancora in corso.
+        esito:
+          allOf:
+            - $ref: '#/components/schemas/EsitoEsecuzione'
+          nullable: true
+          description: Null finche' l'esecuzione non e' terminata.
+        forzata:
+          type: boolean
+          description: true se avviata via POST, false se avviata dalla schedulazione.
+
+    Operazione:
+      type: object
+      description: Voce di catalogo delle operazioni batch schedulabili/avviabili manualmente.
+      required:
+        - id
+        - nome
+        - frequenzaSchedulata
+        - lockAttivo
+        - abilitata
+      properties:
+        id:
+          type: string
+          description: Codice identificativo dell'operazione (es. RND, NTFY).
+        nome:
+          type: string
+        descrizione:
+          type: string
+          nullable: true
+        frequenzaSchedulata:
+          type: string
+          format: duration
+          description: |
+            Intervallo tra esecuzioni schedulate, in formato durata ISO 8601
+            (es. `PT2H` = ogni 2 ore). Rispecchia il modello fixedDelay con cui
+            i batch GovPay sono schedulati (attesa dalla fine dell'esecuzione
+            precedente, non un orario di calendario assoluto).
+          example: PT2H
+        ultimaEsecuzione:
+          allOf:
+            - $ref: '#/components/schemas/EsecuzioneSummary'
+          nullable: true
+          description: Null se l'operazione non e' mai stata eseguita.
+        prossimaEsecuzione:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'operazione e' disabilitata o non schedulata.
+        lockAttivo:
+          type: boolean
+          description: true se e' in esecuzione in questo momento.
+        abilitata:
+          type: boolean
+
+    RichiestaEsecuzione:
+      type: object
+      description: Body della richiesta di avvio manuale di un'operazione.
+      properties:
+        force:
+          type: boolean
+          default: false
+          description: Forza l'avvio anche se e' gia' in corso un'esecuzione della stessa operazione.
+
   responses:
 
     Problem400:
