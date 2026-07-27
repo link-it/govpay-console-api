@@ -18,6 +18,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -97,6 +98,13 @@ public class ProblemExceptionHandler {
     public ResponseEntity<Problem> handlePreconditionRequired(PreconditionRequiredException ex,
                                                               HttpServletRequest request) {
         return build(HttpStatus.PRECONDITION_REQUIRED, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Problem> handleMissingParameter(MissingServletRequestParameterException ex,
+                                                          HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST,
+                "Parametro obbligatorio mancante: '" + ex.getParameterName() + "'.", request, null, ex);
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
