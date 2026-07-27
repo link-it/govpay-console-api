@@ -54,6 +54,14 @@ tags:
     description: Anagrafica dei ruoli (ACL riusate da applicazioni e operatori).
   - name: Operatori
     description: Anagrafica degli operatori (utenti della console).
+  - name: EntiCreditori
+    description: |
+      Lookup in sola lettura sulla cache locale dell'anagrafica Enti Creditori
+      sincronizzata da pagoPA, usata per il censimento assistito dei Domini.
+  - name: Iban
+    description: |
+      Lookup in sola lettura sulla cache locale degli IBAN abilitati su pagoPA
+      per dominio, usata per il censimento assistito dei conti di accredito.
 
 paths:
 
@@ -4384,6 +4392,107 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /pagopa/enti-creditori:
+    get:
+      tags:
+        - EntiCreditori
+      operationId: listEntiCreditori
+      summary: Lookup di Enti Creditori nella cache pagoPA (typeahead).
+      description: |
+        Ricerca nella cache locale dell'anagrafica Enti Creditori sincronizzata
+        dal batch pagoPA, pensata per il tipo-mentre-scrivi del form di
+        creazione/modifica Dominio.
+
+        Filtro opzionale `search`: match parziale, in OR, su codice fiscale e
+        denominazione (a differenza delle altre risorse, qui e' volutamente un
+        singolo campo di ricerca libera anziche' filtri separati, per il caso
+        d'uso di tipo-mentre-scrivi).
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
+        Con `?total=true` vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
+        prefisso per ASC); campi ammessi: `taxCode`, `companyName`.
+        Default `companyName` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/SearchEnteCreditore'
+      responses:
+        '200':
+          description: Lista paginata di Enti Creditori dalla cache pagoPA.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EnteCreditoreSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
+  /pagopa/enti-creditori/{taxCode}:
+    parameters:
+      - $ref: '#/components/parameters/TaxCodePath'
+    get:
+      tags:
+        - EntiCreditori
+      operationId: getEnteCreditore
+      summary: Dettaglio di un Ente Creditore dalla cache pagoPA.
+      description: |
+        Restituisce l'anagrafica dell'Ente Creditore identificato da `taxCode`
+        cosi' come sincronizzata dal batch pagoPA, per la precompilazione
+        assistita del form di creazione/modifica Dominio. 404 se il codice
+        fiscale non e' presente nella cache (Ente Creditore non censito su
+        pagoPA, o non ancora sincronizzato).
+      responses:
+        '200':
+          description: Anagrafica dell'Ente Creditore.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnteCreditore'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /pagopa/iban:
+    get:
+      tags:
+        - Iban
+      operationId: listIbanPagopa
+      summary: Elenca gli IBAN abilitati su pagoPA per un dominio (censimento assistito).
+      description: |
+        Ricerca nella cache locale degli IBAN sincronizzata dal batch pagoPA per
+        il dominio indicato, per popolare il combobox filtrabile del form di
+        creazione/modifica ContoAccredito. Risposta non paginata (elenco
+        atteso di dimensione contenuta, scoperto per un singolo dominio).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioQueryRequired'
+      responses:
+        '200':
+          description: Elenco degli IBAN pagoPA per il dominio indicato (vuoto se nessuno).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IbanPagoPa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
 components:
   schemas:
 
@@ -7550,6 +7659,87 @@ components:
       items:
         $ref: '#/components/schemas/JsonPatchOperation'
 
+    EnteCreditoreSummary:
+      type: object
+      description: |
+        Proiezione leggera dell'Ente Creditore, usata nella lista di lookup
+        (typeahead) per il censimento assistito.
+      required:
+        - taxCode
+        - companyName
+      properties:
+        taxCode:
+          type: string
+          description: Codice fiscale dell'ente creditore su pagoPA.
+          maxLength: 16
+        companyName:
+          type: string
+          description: Denominazione dell'ente creditore su pagoPA.
+          maxLength: 255
+
+    EnteCreditore:
+      type: object
+      description: |
+        Anagrafica dell'Ente Creditore dalla cache locale di sincronizzazione
+        pagoPA, usata per precompilare il form di creazione/modifica Dominio.
+      required:
+        - taxCode
+        - companyName
+        - auxDigit
+        - dataUltimoAggiornamento
+      properties:
+        taxCode:
+          type: string
+          description: Codice fiscale dell'ente creditore su pagoPA.
+          maxLength: 16
+        companyName:
+          type: string
+          description: Denominazione dell'ente creditore su pagoPA.
+          maxLength: 255
+        stationId:
+          type: string
+          description: Identificativo della stazione associata su pagoPA.
+          maxLength: 35
+        auxDigit:
+          type: string
+          description: Cifra ausiliaria del numero avviso.
+          maxLength: 2
+        segregationCode:
+          type: string
+          description: Codice di segregazione.
+          maxLength: 4
+        cbill:
+          type: string
+          description: Codice CBILL.
+          maxLength: 35
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+          description: Timestamp dell'ultima sincronizzazione da pagoPA.
+
+    IbanPagoPa:
+      type: object
+      description: |
+        IBAN abilitato su pagoPA per un dominio, dalla cache locale di
+        sincronizzazione, usato per il censimento assistito del conto di
+        accredito.
+      required:
+        - iban
+        - attivo
+        - dataUltimaVerificaPagopa
+      properties:
+        iban:
+          type: string
+          description: IBAN censito su pagoPA.
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        attivo:
+          type: boolean
+          description: Stato ENABLED su pagoPA al momento dell'ultima sincronizzazione.
+        dataUltimaVerificaPagopa:
+          type: string
+          format: date-time
+          description: Timestamp dell'ultima sincronizzazione da pagoPA.
+
   responses:
 
     Problem400:
@@ -7967,4 +8157,33 @@ components:
       description: Match parziale sul nome (display name) dell'operatore.
       schema:
         type: string
+
+    TaxCodePath:
+      name: taxCode
+      in: path
+      required: true
+      description: Codice fiscale dell'ente creditore su pagoPA.
+      schema:
+        type: string
+        maxLength: 16
+
+    SearchEnteCreditore:
+      name: search
+      in: query
+      required: false
+      description: |
+        Match parziale, in OR, su codice fiscale e denominazione dell'ente
+        creditore. Pensato per il tipo-mentre-scrivi (typeahead) del form di
+        creazione/modifica Dominio.
+      schema:
+        type: string
+
+    IdDominioQueryRequired:
+      name: idDominio
+      in: query
+      required: true
+      description: Codice dominio (11 caratteri), match esatto.
+      schema:
+        type: string
+        pattern: '^[0-9]{11}$'
 
