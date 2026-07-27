@@ -44,6 +44,14 @@ public class OperazioniProperties {
          */
         private Duration frequenzaSchedulata;
         private boolean abilitata = true;
+        /**
+         * Base URL {@code /api/batch} del microservizio proprietario del
+         * job (es. {@code http://iban-batch:8080/api/batch}), usata per
+         * l'avvio manuale (POST /operazioni/{id}/esecuzioni). Assente per
+         * operazioni non batch-backed o non ancora cablate per l'avvio
+         * manuale.
+         */
+        private String triggerUrl;
 
         public String getId() {
             return id;
@@ -91,6 +99,14 @@ public class OperazioniProperties {
 
         public void setAbilitata(boolean abilitata) {
             this.abilitata = abilitata;
+        }
+
+        public String getTriggerUrl() {
+            return triggerUrl;
+        }
+
+        public void setTriggerUrl(String triggerUrl) {
+            this.triggerUrl = triggerUrl;
         }
     }
 }

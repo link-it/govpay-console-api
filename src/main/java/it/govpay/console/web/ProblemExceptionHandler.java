@@ -29,6 +29,8 @@ import it.govpay.console.avviso.AvvisoMbtException;
 import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
 import it.govpay.console.avviso.StampeUnavailableException;
+import it.govpay.console.operazioni.OperazioneTriggerNonConfiguratoException;
+import it.govpay.console.operazioni.OperazioneTriggerNonRaggiungibileException;
 import it.govpay.console.model.Problem;
 import it.govpay.console.model.ProblemErrorsInner;
 import jakarta.persistence.OptimisticLockException;
@@ -181,6 +183,18 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(StampeNotConfiguredException.class)
     public ResponseEntity<Problem> handleStampeNotConfigured(StampeNotConfiguredException ex,
                                                              HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(OperazioneTriggerNonRaggiungibileException.class)
+    public ResponseEntity<Problem> handleOperazioneTriggerNonRaggiungibile(OperazioneTriggerNonRaggiungibileException ex,
+                                                                           HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(OperazioneTriggerNonConfiguratoException.class)
+    public ResponseEntity<Problem> handleOperazioneTriggerNonConfigurato(OperazioneTriggerNonConfiguratoException ex,
+                                                                         HttpServletRequest request) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
     }
 

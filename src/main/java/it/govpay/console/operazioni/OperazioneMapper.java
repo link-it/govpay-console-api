@@ -9,6 +9,8 @@ import org.springframework.batch.core.job.JobExecution;
 import org.springframework.stereotype.Component;
 
 import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
+import it.govpay.console.entity.BatchJobExecutionEntity;
+import it.govpay.console.model.Esecuzione;
 import it.govpay.console.model.EsecuzioneSummary;
 import it.govpay.console.model.Operazione;
 import it.govpay.console.model.StatoEsecuzione;
@@ -35,14 +37,52 @@ public class OperazioneMapper {
     }
 
     private EsecuzioneSummary toEsecuzioneSummary(JobExecution execution) {
-        // getStartTime() e' null finche' l'esecuzione e' solo in coda
-        // (STARTING): CREATE_TIME e' invece NOT NULL a schema, sempre
-        // valorizzato alla creazione della JobExecution.
-        LocalDateTime dataInizio = execution.getStartTime() != null ? execution.getStartTime() : execution.getCreateTime();
         EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(execution.getId()),
-                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(dataInizio));
+                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(dataInizioOf(execution)));
         summary.dataFine(toOffsetDateTime(execution.getEndTime()));
         return summary;
+    }
+
+    Esecuzione toEsecuzione(OperazioneConfig config, JobExecution execution, boolean forzata) {
+        Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getId()), config.getId(),
+                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(dataInizioOf(execution)));
+        esecuzione.dataFine(toOffsetDateTime(execution.getEndTime()));
+        esecuzione.forzata(forzata);
+        return esecuzione;
+    }
+
+    EsecuzioneSummary toEsecuzioneSummary(BatchJobExecutionEntity execution) {
+        EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(execution.getId()),
+                toStatoEsecuzione(BatchStatus.valueOf(execution.getStatus())),
+                toOffsetDateTime(dataInizioOf(execution.getStartTime(), execution.getCreateTime())));
+        summary.dataFine(toOffsetDateTime(execution.getEndTime()));
+        return summary;
+    }
+
+    /**
+     * {@code forzata} e' sempre null: le esecuzioni lette storicamente (non
+     * appena create da {@code POST .../esecuzioni}) non hanno modo di
+     * distinguere avvio manuale da schedulato — Spring Batch non registra
+     * la provenienza di una JobExecution.
+     */
+    Esecuzione toEsecuzione(BatchJobExecutionEntity execution, String idOperazione) {
+        Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getId()), idOperazione,
+                toStatoEsecuzione(BatchStatus.valueOf(execution.getStatus())),
+                toOffsetDateTime(dataInizioOf(execution.getStartTime(), execution.getCreateTime())));
+        esecuzione.dataFine(toOffsetDateTime(execution.getEndTime()));
+        esecuzione.forzata(null);
+        return esecuzione;
+    }
+
+    // getStartTime() e' null finche' l'esecuzione e' solo in coda
+    // (STARTING): CREATE_TIME e' invece NOT NULL a schema, sempre
+    // valorizzato alla creazione della JobExecution.
+    private static LocalDateTime dataInizioOf(JobExecution execution) {
+        return dataInizioOf(execution.getStartTime(), execution.getCreateTime());
+    }
+
+    private static LocalDateTime dataInizioOf(LocalDateTime startTime, LocalDateTime createTime) {
+        return startTime != null ? startTime : createTime;
     }
 
     private OffsetDateTime calcolaProssimaEsecuzione(OperazioneConfig config, EsecuzioneSummary ultimaEsecuzione) {
@@ -55,6 +95,11 @@ public class OperazioneMapper {
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {
         return value != null ? value.atZone(clock.getZone()).toOffsetDateTime() : null;
+    }
+
+    /** Converte un filtro OffsetDateTime in ingresso nel timezone applicativo, per confrontarlo con le colonne LocalDateTime di Spring Batch. */
+    LocalDateTime toLocalDateTime(OffsetDateTime value) {
+        return value != null ? value.atZoneSameInstant(clock.getZone()).toLocalDateTime() : null;
     }
 
     static StatoEsecuzione toStatoEsecuzione(BatchStatus status) {
