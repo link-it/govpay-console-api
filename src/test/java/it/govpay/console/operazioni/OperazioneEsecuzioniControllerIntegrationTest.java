@@ -176,6 +176,27 @@ class OperazioneEsecuzioniControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[2].idEsecuzione").value(String.valueOf(first)));
     }
 
+    /**
+     * id di inserimento e dataInizio possono divergere (es. un'esecuzione
+     * resta in coda a lungo prima di partire, una creata dopo la sorpassa):
+     * l'ordine deve seguire dataInizio, non l'id grezzo.
+     */
+    @Test
+    void ordinePerDataInizioDescNonPerIdInserimento() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        // Creata per prima (id piu' basso) ma partita molto piu' tardi.
+        Long inseritaPrimaPartitaDopo = seedExecution("ibanCheckJob", BatchStatus.COMPLETED,
+                now.minusHours(1), now);
+        // Creata dopo (id piu' alto) ma partita molto prima.
+        Long inseritaDopoPartitaPrima = seedExecution("ibanCheckJob", BatchStatus.COMPLETED,
+                now.minusDays(5), now.minusDays(5).plusMinutes(5));
+
+        mvc.perform(get("/operazioni/IBAN_CHECK/esecuzioni").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].idEsecuzione").value(String.valueOf(inseritaPrimaPartitaDopo)))
+                .andExpect(jsonPath("$.results[1].idEsecuzione").value(String.valueOf(inseritaDopoPartitaPrima)));
+    }
+
     @Test
     void filtroStato() throws Exception {
         LocalDateTime now = LocalDateTime.now();
