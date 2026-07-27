@@ -4519,6 +4519,141 @@ paths:
         '401':
           $ref: '#/components/responses/Problem401'
 
+  /operazioni/{idOperazione}/esecuzioni:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: listEsecuzioni
+      summary: Elenca lo storico delle esecuzioni di un'operazione (paginato).
+      description: |
+        Filtri opzionali e ortogonali (AND): `stato`, `dataInizioMin`,
+        `dataInizioMax`. Paginazione offset `?page=N&limit=L` con
+        `hasNextPage` (Slice) e `?total=true` per i totali. Ordinamento
+        fisso per dataInizio DESC (nessun parametro di scelta lato client).
+        Un'operazione non collegata a un job batch ritorna sempre lista
+        vuota (non e' un errore). `Cache-Control: no-cache` (dati
+        real-time, non cacheable).
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/StatoEsecuzioneQuery'
+        - $ref: '#/components/parameters/DataInizioMin'
+        - $ref: '#/components/parameters/DataInizioMax'
+      responses:
+        '200':
+          description: Storico paginato delle esecuzioni.
+          headers:
+            Cache-Control:
+              description: 'no-cache'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EsecuzioneSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: avviaEsecuzione
+      summary: Avvia manualmente l'esecuzione di un'operazione batch.
+      description: |
+        Inoltra la richiesta di avvio al microservizio proprietario del job
+        e ritorna appena accettata (non attende il completamento del batch).
+        L'esecuzione creata e' la stessa letta da `GET /operazioni`/dalla
+        futura consultazione dettaglio: nessuna persistenza dedicata in
+        console-api.
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RichiestaEsecuzione'
+      responses:
+        '202':
+          description: |
+            Richiesta di avvio accettata. Il body con lo snapshot iniziale e
+            l'header Location sono presenti solo se l'esecuzione diventa
+            visibile entro un breve timeout dall'accettazione; altrimenti la
+            risposta e' priva di entrambi (l'avvio resta comunque accettato).
+          headers:
+            Location:
+              description: URI della nuova esecuzione (assente se non ancora visibile).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Esecuzione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '502':
+          description: Chiamata al microservizio proprietario del job fallita.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Operazione non configurata per l'avvio manuale (trigger URL mancante).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /operazioni/{idOperazione}/esecuzioni/{idEsecuzione}:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: getEsecuzione
+      summary: Dettaglio di un'esecuzione.
+      description: |
+        `Cache-Control: no-cache` (dato real-time, non cacheable).
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/IdEsecuzionePath'
+      responses:
+        '200':
+          description: Dettaglio dell'esecuzione.
+          headers:
+            Cache-Control:
+              description: 'no-cache'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Esecuzione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
 components:
   schemas:
 
@@ -7825,7 +7960,6 @@ components:
         - idOperazione
         - stato
         - dataInizio
-        - forzata
       properties:
         idEsecuzione:
           type: string
@@ -7865,7 +7999,11 @@ components:
           description: Null finche' l'esecuzione non e' terminata.
         forzata:
           type: boolean
-          description: true se avviata via POST, false se avviata dalla schedulazione.
+          nullable: true
+          description: |
+            true se avviata via POST, false se avviata dalla schedulazione.
+            Null se non determinabile (letture storiche: Spring Batch non
+            registra la provenienza di un'esecuzione passata).
 
     Operazione:
       type: object
@@ -8348,6 +8486,48 @@ components:
       schema:
         type: string
         maxLength: 16
+
+    IdOperazionePath:
+      name: idOperazione
+      in: path
+      required: true
+      description: Codice identificativo dell'operazione nel catalogo.
+      schema:
+        type: string
+
+    IdEsecuzionePath:
+      name: idEsecuzione
+      in: path
+      required: true
+      description: Identificativo dell'esecuzione.
+      schema:
+        type: string
+
+    StatoEsecuzioneQuery:
+      name: stato
+      in: query
+      required: false
+      description: Match esatto sullo stato dell'esecuzione.
+      schema:
+        $ref: '#/components/schemas/StatoEsecuzione'
+
+    DataInizioMin:
+      name: dataInizioMin
+      in: query
+      required: false
+      description: Limite inferiore (incluso) su dataInizio.
+      schema:
+        type: string
+        format: date-time
+
+    DataInizioMax:
+      name: dataInizioMax
+      in: query
+      required: false
+      description: Limite superiore (incluso) su dataInizio.
+      schema:
+        type: string
+        format: date-time
 
     SearchEnteCreditore:
       name: search
