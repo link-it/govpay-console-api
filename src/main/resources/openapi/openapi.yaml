@@ -62,6 +62,10 @@ tags:
     description: |
       Lookup in sola lettura sulla cache locale degli IBAN abilitati su pagoPA
       per dominio, usata per il censimento assistito dei conti di accredito.
+  - name: Manutenzione - Operazioni
+    description: |
+      Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
+      stato dell'ultima esecuzione nota.
 
 paths:
 
@@ -4493,6 +4497,28 @@ paths:
         '401':
           $ref: '#/components/responses/Problem401'
 
+  /operazioni:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: listOperazioni
+      summary: Elenca il catalogo delle operazioni batch schedulabili/avviabili manualmente.
+      description: |
+        Catalogo configurato all'avvio, arricchito con lo stato dell'ultima
+        esecuzione nota (letta dalle tabelle standard di Spring Batch) e la
+        prossima esecuzione stimata.
+      responses:
+        '200':
+          description: Catalogo delle operazioni.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operazione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
 components:
   schemas:
 
@@ -7782,6 +7808,9 @@ components:
         dataInizio:
           type: string
           format: date-time
+          description: |
+            Se l'esecuzione e' ancora in coda (non e' partita), riflette il
+            momento di creazione anziche' di avvio effettivo.
         dataFine:
           type: string
           format: date-time
@@ -7821,6 +7850,9 @@ components:
         dataInizio:
           type: string
           format: date-time
+          description: |
+            Se l'esecuzione e' ancora in coda (non e' partita), riflette il
+            momento di creazione anziche' di avvio effettivo.
         dataFine:
           type: string
           format: date-time
@@ -7841,8 +7873,6 @@ components:
       required:
         - id
         - nome
-        - frequenzaSchedulata
-        - lockAttivo
         - abilitata
       properties:
         id:
@@ -7856,11 +7886,13 @@ components:
         frequenzaSchedulata:
           type: string
           format: duration
+          nullable: true
           description: |
             Intervallo tra esecuzioni schedulate, in formato durata ISO 8601
             (es. `PT2H` = ogni 2 ore). Rispecchia il modello fixedDelay con cui
             i batch GovPay sono schedulati (attesa dalla fine dell'esecuzione
-            precedente, non un orario di calendario assoluto).
+            precedente, non un orario di calendario assoluto). Null se
+            l'operazione non e' schedulata (es. avviabile solo manualmente).
           example: PT2H
         ultimaEsecuzione:
           allOf:
@@ -7874,7 +7906,10 @@ components:
           description: Null se l'operazione e' disabilitata o non schedulata.
         lockAttivo:
           type: boolean
-          description: true se e' in esecuzione in questo momento.
+          nullable: true
+          description: |
+            true se e' in esecuzione in questo momento. Null se non
+            determinabile (nessun meccanismo di lock condiviso configurato).
         abilitata:
           type: boolean
 
