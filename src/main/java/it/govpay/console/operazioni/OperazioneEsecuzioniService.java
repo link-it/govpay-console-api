@@ -1,13 +1,11 @@
 package it.govpay.console.operazioni;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +25,7 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
@@ -74,12 +73,12 @@ public class OperazioneEsecuzioniService {
 
         List<BatchJobExecutionEntity> rows;
         if (wantTotal) {
-            Page<BatchJobExecutionEntity> p = repository.findAll(spec,
-                    PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "id")));
-            rows = p.getContent();
-            pagination.setHasNextPage(p.hasNext());
-            pagination.setTotalResults(p.getTotalElements());
-            pagination.setTotalPages(p.getTotalPages());
+            long totalElements = countTotal(spec);
+            int totalPages = (int) Math.ceil((double) totalElements / limit);
+            rows = findSlice(spec, (page - 1) * limit, limit);
+            pagination.setHasNextPage(page < totalPages);
+            pagination.setTotalResults(totalElements);
+            pagination.setTotalPages(totalPages);
         } else {
             List<BatchJobExecutionEntity> sliced = findSlice(spec, (page - 1) * limit, limit + 1);
             boolean hasNext = sliced.size() > limit;
@@ -120,7 +119,13 @@ public class OperazioneEsecuzioniService {
         }
     }
 
-    /** Slice senza COUNT(*): stesso schema di OperatoreService.findSlice, ordine fisso per id DESC (vedi dataInizio DESC in piano). */
+    /**
+     * Slice via Criteria (nessun COUNT(*): stesso schema di
+     * OperatoreService.findSlice). Ordine per dataInizio DESC
+     * (coalesce(startTime, createTime)) — non esprimibile via Sort/Pageable
+     * (solo path di proprieta'), quindi costruito a mano; id DESC come
+     * spareggio a parita' di dataInizio.
+     */
     private List<BatchJobExecutionEntity> findSlice(Specification<BatchJobExecutionEntity> spec, int offset, int maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<BatchJobExecutionEntity> q = cb.createQuery(BatchJobExecutionEntity.class);
@@ -129,10 +134,26 @@ public class OperazioneEsecuzioniService {
         if (predicate != null) {
             q.where(predicate);
         }
-        q.orderBy(cb.desc(root.get("id")));
+        q.orderBy(cb.desc(dataInizioExpression(cb, root)), cb.desc(root.get("id")));
         TypedQuery<BatchJobExecutionEntity> typed = entityManager.createQuery(q)
                 .setFirstResult(offset)
                 .setMaxResults(maxResults);
         return typed.getResultList();
+    }
+
+    private long countTotal(Specification<BatchJobExecutionEntity> spec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> q = cb.createQuery(Long.class);
+        Root<BatchJobExecutionEntity> root = q.from(BatchJobExecutionEntity.class);
+        Predicate predicate = spec.toPredicate(root, q, cb);
+        q.select(cb.count(root));
+        if (predicate != null) {
+            q.where(predicate);
+        }
+        return entityManager.createQuery(q).getSingleResult();
+    }
+
+    private static Expression<LocalDateTime> dataInizioExpression(CriteriaBuilder cb, Root<BatchJobExecutionEntity> root) {
+        return cb.coalesce(root.get("startTime"), root.get("createTime"));
     }
 }
