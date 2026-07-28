@@ -154,6 +154,11 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
     }
 
+    @ExceptionHandler(NotImplementedException.class)
+    public ResponseEntity<Problem> handleNotImplemented(NotImplementedException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_IMPLEMENTED, ex.getMessage(), request, null, ex);
+    }
+
     @ExceptionHandler(PayloadTooLargeException.class)
     public ResponseEntity<Problem> handlePayloadTooLarge(PayloadTooLargeException ex, HttpServletRequest request) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null, ex);
