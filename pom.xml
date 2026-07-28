@@ -21,7 +21,7 @@
 
     <properties>
         <!-- govpay-common (not in BOM) -->
-        <govpay-common.version>2.0.1-SNAPSHOT</govpay-common.version>
+        <govpay-common.version>2.0.3-SNAPSHOT</govpay-common.version>
 
         <!-- govpay-common-auth (not in BOM) -->
         <govpay-common-auth.version>1.0.0</govpay-common-auth.version>
@@ -307,14 +307,6 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
-        </dependency>
-
-        <!-- Spring Batch: solo il core (no starter/autoconfig) per leggere in
-             sola lettura le tabelle BATCH_* condivise con i microservizi batch
-             tramite JobRepository -->
-        <dependency>
-            <groupId>org.springframework.batch</groupId>
-            <artifactId>spring-batch-core</artifactId>
         </dependency>
 
         <!-- Test -->

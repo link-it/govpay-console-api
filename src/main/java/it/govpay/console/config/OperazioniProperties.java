@@ -1,6 +1,5 @@
 package it.govpay.console.config;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,27 +30,15 @@ public class OperazioniProperties {
     public static class OperazioneConfig {
 
         private String id;
-        private String nome;
-        private String descrizione;
-        /** Nome del job Spring Batch le cui esecuzioni valorizzano ultimaEsecuzione/prossimaEsecuzione; assente per operazioni non batch-backed. */
-        private String jobName;
         /**
-         * Durata ISO 8601 (es. PT2H) tra un'esecuzione schedulata e la
-         * successiva; assente se non schedulata. Tipo Duration (non String):
-         * il binder di Spring Boot valorizza/converte questo campo
-         * all'avvio, quindi un valore malformato nelle property fa fallire
-         * lo startup dell'applicazione anziche' una GET /operazioni a runtime.
+         * Base URL {@code /api/batch} del microservizio proprietario del job
+         * (es. {@code http://iban-batch:8080/api/batch}, govpay-common
+         * {@code AbstractBatchController}): nome/descrizione/schedulazione/
+         * esecuzioni si leggono tutte da qui. Assente per operazioni non
+         * batch-backed, dispatchate localmente via {@link it.govpay.console.operazioni.OperazioneLocaleHandler}.
          */
-        private Duration frequenzaSchedulata;
+        private String url;
         private boolean abilitata = true;
-        /**
-         * Base URL {@code /api/batch} del microservizio proprietario del
-         * job (es. {@code http://iban-batch:8080/api/batch}), usata per
-         * l'avvio manuale (POST /operazioni/{id}/esecuzioni). Assente per
-         * operazioni non batch-backed o non ancora cablate per l'avvio
-         * manuale.
-         */
-        private String triggerUrl;
 
         public String getId() {
             return id;
@@ -61,36 +48,12 @@ public class OperazioniProperties {
             this.id = id;
         }
 
-        public String getNome() {
-            return nome;
+        public String getUrl() {
+            return url;
         }
 
-        public void setNome(String nome) {
-            this.nome = nome;
-        }
-
-        public String getDescrizione() {
-            return descrizione;
-        }
-
-        public void setDescrizione(String descrizione) {
-            this.descrizione = descrizione;
-        }
-
-        public String getJobName() {
-            return jobName;
-        }
-
-        public void setJobName(String jobName) {
-            this.jobName = jobName;
-        }
-
-        public Duration getFrequenzaSchedulata() {
-            return frequenzaSchedulata;
-        }
-
-        public void setFrequenzaSchedulata(Duration frequenzaSchedulata) {
-            this.frequenzaSchedulata = frequenzaSchedulata;
+        public void setUrl(String url) {
+            this.url = url;
         }
 
         public boolean isAbilitata() {
@@ -99,14 +62,6 @@ public class OperazioniProperties {
 
         public void setAbilitata(boolean abilitata) {
             this.abilitata = abilitata;
-        }
-
-        public String getTriggerUrl() {
-            return triggerUrl;
-        }
-
-        public void setTriggerUrl(String triggerUrl) {
-            this.triggerUrl = triggerUrl;
         }
     }
 }

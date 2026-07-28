@@ -1,9 +1,10 @@
 package it.govpay.console.operazioni;
 
 /**
- * Lanciata quando un'operazione batch-backed (jobName presente) non ha un
- * triggerUrl configurato: l'avvio manuale non e' cablato per errore di
- * configurazione, non per colpa del client. Mappata a 503 problem+json.
+ * Lanciata quando un'operazione senza {@code url} configurato non ha
+ * nemmeno un {@link OperazioneLocaleHandler} registrato per il suo id:
+ * l'avvio manuale non e' cablato per errore di configurazione, non per
+ * colpa del client. Mappata a 503 problem+json.
  */
 public class OperazioneTriggerNonConfiguratoException extends RuntimeException {
 
