@@ -1,15 +1,17 @@
 package it.govpay.console.operazioni;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
-import org.springframework.batch.core.BatchStatus;
-import org.springframework.batch.core.job.JobExecution;
 import org.springframework.stereotype.Component;
 
+import it.govpay.common.batch.dto.BatchInfo;
+import it.govpay.common.batch.dto.ExecutionSummaryInfo;
+import it.govpay.common.batch.dto.LastExecutionInfo;
+import it.govpay.common.batch.dto.NextExecutionInfo;
 import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
-import it.govpay.console.entity.BatchJobExecutionEntity;
 import it.govpay.console.model.Esecuzione;
 import it.govpay.console.model.EsecuzioneSummary;
 import it.govpay.console.model.Operazione;
@@ -24,93 +26,133 @@ public class OperazioneMapper {
         this.clock = clock;
     }
 
-    Operazione toOperazione(OperazioneConfig config, JobExecution ultimaEsecuzione) {
-        EsecuzioneSummary summary = ultimaEsecuzione != null ? toEsecuzioneSummary(ultimaEsecuzione) : null;
-
-        Operazione operazione = new Operazione(config.getId(), config.getNome(), config.isAbilitata());
-        operazione.descrizione(config.getDescrizione());
-        operazione.frequenzaSchedulata(config.getFrequenzaSchedulata() != null ? config.getFrequenzaSchedulata().toString() : null);
-        operazione.ultimaEsecuzione(summary);
-        operazione.prossimaEsecuzione(calcolaProssimaEsecuzione(config, summary));
+    Operazione toOperazione(OperazioneConfig config, BatchInfo info, LastExecutionInfo ultima, NextExecutionInfo prossima) {
+        Operazione operazione = new Operazione(config.getId(), info.getDisplayName(), config.isAbilitata());
+        operazione.descrizione(info.getDescription());
+        operazione.frequenzaSchedulata(toIsoDuration(prossima.getIntervalMillis()));
+        operazione.ultimaEsecuzione(toEsecuzioneSummary(ultima));
+        operazione.prossimaEsecuzione(toOffsetDateTime(prossima.getNextExecutionTime()));
         operazione.lockAttivo(null);
         return operazione;
     }
 
-    private EsecuzioneSummary toEsecuzioneSummary(JobExecution execution) {
-        EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(execution.getId()),
-                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(dataInizioOf(execution)));
-        summary.dataFine(toOffsetDateTime(execution.getEndTime()));
-        return summary;
-    }
-
-    Esecuzione toEsecuzione(OperazioneConfig config, JobExecution execution, boolean forzata) {
-        Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getId()), config.getId(),
-                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(dataInizioOf(execution)));
-        esecuzione.dataFine(toOffsetDateTime(execution.getEndTime()));
-        esecuzione.forzata(forzata);
-        return esecuzione;
-    }
-
-    EsecuzioneSummary toEsecuzioneSummary(BatchJobExecutionEntity execution) {
-        EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(execution.getId()),
-                toStatoEsecuzione(BatchStatus.valueOf(execution.getStatus())),
-                toOffsetDateTime(dataInizioOf(execution.getStartTime(), execution.getCreateTime())));
-        summary.dataFine(toOffsetDateTime(execution.getEndTime()));
-        return summary;
+    Operazione toOperazioneLocale(OperazioneConfig config, OperazioneLocaleHandler handler) {
+        Operazione operazione = new Operazione(config.getId(), handler.getNome(), config.isAbilitata());
+        operazione.descrizione(handler.getDescrizione());
+        nessunDatoDinamico(operazione);
+        return operazione;
     }
 
     /**
-     * {@code forzata} e' sempre null: le esecuzioni lette storicamente (non
-     * appena create da {@code POST .../esecuzioni}) non hanno modo di
-     * distinguere avvio manuale da schedulato — Spring Batch non registra
-     * la provenienza di una JobExecution.
+     * Voce degradata quando il microservizio proprietario non e'
+     * raggiungibile: {@code nome} ripiega sull'id (unico dato sempre
+     * disponibile localmente), nessun dato dinamico.
      */
-    Esecuzione toEsecuzione(BatchJobExecutionEntity execution, String idOperazione) {
-        Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getId()), idOperazione,
-                toStatoEsecuzione(BatchStatus.valueOf(execution.getStatus())),
-                toOffsetDateTime(dataInizioOf(execution.getStartTime(), execution.getCreateTime())));
+    Operazione toOperazioneNonRaggiungibile(OperazioneConfig config) {
+        Operazione operazione = new Operazione(config.getId(), config.getId(), config.isAbilitata());
+        operazione.descrizione("Microservizio proprietario del job non raggiungibile.");
+        nessunDatoDinamico(operazione);
+        return operazione;
+    }
+
+    /** Chiavi sempre presenti nel JSON (JsonNullable "valorizzato a null", non omesso). */
+    private static void nessunDatoDinamico(Operazione operazione) {
+        operazione.frequenzaSchedulata(null);
+        operazione.ultimaEsecuzione(null);
+        operazione.prossimaEsecuzione(null);
+        operazione.lockAttivo(null);
+    }
+
+    /** Null se il batch non ha mai completato un'esecuzione ({@code executionId} assente). */
+    private EsecuzioneSummary toEsecuzioneSummary(LastExecutionInfo execution) {
+        if (execution == null || execution.getExecutionId() == null) {
+            return null;
+        }
+        EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(execution.getExecutionId()),
+                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(execution.getStartTime()));
+        summary.dataFine(toOffsetDateTime(execution.getEndTime()));
+        return summary;
+    }
+
+    EsecuzioneSummary toEsecuzioneSummary(ExecutionSummaryInfo row) {
+        EsecuzioneSummary summary = new EsecuzioneSummary(String.valueOf(row.getExecutionId()),
+                toStatoEsecuzione(row.getStatus()), toOffsetDateTime(row.getStartTime()));
+        summary.dataFine(toOffsetDateTime(row.getEndTime()));
+        return summary;
+    }
+
+    Esecuzione toEsecuzione(String idOperazione, LastExecutionInfo execution) {
+        Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getExecutionId()), idOperazione,
+                toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(execution.getStartTime()));
         esecuzione.dataFine(toOffsetDateTime(execution.getEndTime()));
-        esecuzione.forzata(null);
+        esecuzione.forzata(toForzata(execution.getTriggerType()));
         return esecuzione;
     }
 
-    // getStartTime() e' null finche' l'esecuzione e' solo in coda
-    // (STARTING): CREATE_TIME e' invece NOT NULL a schema, sempre
-    // valorizzato alla creazione della JobExecution.
-    private static LocalDateTime dataInizioOf(JobExecution execution) {
-        return dataInizioOf(execution.getStartTime(), execution.getCreateTime());
+    /**
+     * Esecuzione "istantanea" di un'operazione locale (non backed da un job
+     * batch): eseguita sincronamente, sempre completata al momento della
+     * chiamata.
+     */
+    Esecuzione toEsecuzioneLocale(String idOperazione) {
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        Esecuzione esecuzione = new Esecuzione(idOperazione, idOperazione, StatoEsecuzione.COMPLETATA, now);
+        esecuzione.dataFine(now);
+        esecuzione.forzata(true);
+        return esecuzione;
     }
 
-    private static LocalDateTime dataInizioOf(LocalDateTime startTime, LocalDateTime createTime) {
-        return startTime != null ? startTime : createTime;
-    }
-
-    private OffsetDateTime calcolaProssimaEsecuzione(OperazioneConfig config, EsecuzioneSummary ultimaEsecuzione) {
-        if (!config.isAbilitata() || config.getFrequenzaSchedulata() == null || ultimaEsecuzione == null) {
+    /** {@code MANUAL} → true, {@code SCHEDULED} → false, assente (esecuzioni precedenti al JobParameter) → null. */
+    private static Boolean toForzata(String triggerType) {
+        if (triggerType == null) {
             return null;
         }
-        OffsetDateTime dataFine = ultimaEsecuzione.getDataFine().orElse(null);
-        return dataFine != null ? dataFine.plus(config.getFrequenzaSchedulata()) : null;
+        return "MANUAL".equals(triggerType);
     }
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {
         return value != null ? value.atZone(clock.getZone()).toOffsetDateTime() : null;
     }
 
-    /** Converte un filtro OffsetDateTime in ingresso nel timezone applicativo, per confrontarlo con le colonne LocalDateTime di Spring Batch. */
-    LocalDateTime toLocalDateTime(OffsetDateTime value) {
-        return value != null ? value.atZoneSameInstant(clock.getZone()).toLocalDateTime() : null;
+    /** {@code frequenzaSchedulata} e' documentata in formato durata ISO 8601 (es. {@code PT2H}). */
+    private static String toIsoDuration(Long intervalMillis) {
+        return intervalMillis != null ? Duration.ofMillis(intervalMillis).toString() : null;
     }
 
-    static StatoEsecuzione toStatoEsecuzione(BatchStatus status) {
-        return switch (status) {
+    /**
+     * {@code statoGrezzo} e' lo stato Spring Batch nativo cosi' come
+     * restituito da govpay-common (govpay-common e' l'unico punto che
+     * ancora dipende da {@code spring-batch-core}; console-api lavora sulla
+     * stringa per restare disaccoppiato).
+     */
+    static StatoEsecuzione toStatoEsecuzione(String statoGrezzo) {
+        return switch (statoGrezzo) {
             // STARTING: JobExecution creata ma non ancora avviata (startTime
             // ancora null) - genuinamente "in coda", non "in corso".
-            case STARTING -> StatoEsecuzione.IN_CODA;
-            case STARTED -> StatoEsecuzione.IN_CORSO;
-            case COMPLETED -> StatoEsecuzione.COMPLETATA;
-            case FAILED, UNKNOWN -> StatoEsecuzione.FALLITA;
-            case STOPPING, STOPPED, ABANDONED -> StatoEsecuzione.ANNULLATA;
+            case "STARTING" -> StatoEsecuzione.IN_CODA;
+            case "STARTED" -> StatoEsecuzione.IN_CORSO;
+            case "COMPLETED" -> StatoEsecuzione.COMPLETATA;
+            case "FAILED", "UNKNOWN" -> StatoEsecuzione.FALLITA;
+            case "STOPPING", "STOPPED", "ABANDONED" -> StatoEsecuzione.ANNULLATA;
+            default -> throw new IllegalArgumentException("Stato batch grezzo sconosciuto: " + statoGrezzo);
+        };
+    }
+
+    /**
+     * Inverso di {@link #toStatoEsecuzione}: uno stato pubblico corrisponde
+     * a uno o piu' {@code BatchStatus} grezzi, tradotti nel formato CSV
+     * accettato da {@code GET {url}/executions?stato=}.
+     */
+    static String toBatchStatusCsv(StatoEsecuzione stato) {
+        if (stato == null) {
+            return null;
+        }
+        return switch (stato) {
+            case IN_CODA -> "STARTING";
+            case IN_CORSO -> "STARTED";
+            case COMPLETATA -> "COMPLETED";
+            case FALLITA -> "FAILED,UNKNOWN";
+            case ANNULLATA -> "STOPPING,STOPPED,ABANDONED";
         };
     }
 }
