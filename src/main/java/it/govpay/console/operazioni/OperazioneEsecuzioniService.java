@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import org.springframework.batch.core.BatchStatus;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,13 +14,17 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.console.config.OperazioniProperties;
 import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
 import it.govpay.console.entity.BatchJobExecutionEntity;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Esecuzione;
 import it.govpay.console.model.ListEsecuzioni200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.StatoEsecuzione;
 import it.govpay.console.repository.BatchJobExecutionRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.web.BadRequestException;
+import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.NotFoundException;
+import it.govpay.console.web.NotImplementedException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -35,15 +40,17 @@ public class OperazioneEsecuzioniService {
     private final OperazioniProperties operazioniProperties;
     private final BatchJobExecutionRepository repository;
     private final OperazioneMapper mapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public OperazioneEsecuzioniService(OperazioniProperties operazioniProperties,
-            BatchJobExecutionRepository repository, OperazioneMapper mapper) {
+            BatchJobExecutionRepository repository, OperazioneMapper mapper, AclAuthorizer aclAuthorizer) {
         this.operazioniProperties = operazioniProperties;
         this.repository = repository;
         this.mapper = mapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
@@ -94,14 +101,41 @@ public class OperazioneEsecuzioniService {
     @Transactional(readOnly = true)
     public Esecuzione dettaglio(String idOperazione, String idEsecuzione) {
         OperazioneConfig config = findConfig(idOperazione);
-        long id = parseId(idEsecuzione);
+        BatchJobExecutionEntity execution = findExecutionScoped(config, idOperazione, idEsecuzione);
+        return mapper.toEsecuzione(execution, idOperazione);
+    }
 
-        BatchJobExecutionEntity execution = repository.findById(id)
+    /**
+     * Cancellazione best-effort: 404/409 sono calcolati per davvero, ma
+     * nessun batch espone oggi un meccanismo di cancellazione cooperativa
+     * (ne' Spring Batch {@code JobOperator.stop()} ne' un equivalente
+     * custom) — per qualunque esecuzione ancora annullabile la richiesta
+     * e' sempre rifiutata con 501.
+     */
+    @Transactional(readOnly = true)
+    public void annullaEsecuzione(String idOperazione, String idEsecuzione) {
+        aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
+
+        OperazioneConfig config = findConfig(idOperazione);
+        BatchJobExecutionEntity execution = findExecutionScoped(config, idOperazione, idEsecuzione);
+
+        StatoEsecuzione stato = OperazioneMapper.toStatoEsecuzione(BatchStatus.valueOf(execution.getStatus()));
+        if (stato == StatoEsecuzione.COMPLETATA || stato == StatoEsecuzione.FALLITA
+                || stato == StatoEsecuzione.ANNULLATA) {
+            throw new ConflictException(
+                    "L'esecuzione '" + idEsecuzione + "' e' gia' in uno stato terminale (" + stato + ").");
+        }
+
+        throw new NotImplementedException(
+                "Nessun meccanismo di cancellazione cooperativa disponibile per l'operazione '" + idOperazione + "'.");
+    }
+
+    private BatchJobExecutionEntity findExecutionScoped(OperazioneConfig config, String idOperazione, String idEsecuzione) {
+        long id = parseId(idEsecuzione);
+        return repository.findById(id)
                 .filter(e -> e.getJobInstance().getJobName().equals(config.getJobName()))
                 .orElseThrow(() -> new NotFoundException(
                         "Esecuzione '" + idEsecuzione + "' non trovata per l'operazione '" + idOperazione + "'."));
-
-        return mapper.toEsecuzione(execution, idOperazione);
     }
 
     private OperazioneConfig findConfig(String idOperazione) {

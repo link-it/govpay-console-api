@@ -57,4 +57,10 @@ public class OperazioniController implements ManutenzioneOperazioniApi {
         Esecuzione body = esecuzioniService.dettaglio(idOperazione, idEsecuzione);
         return ResponseEntity.ok().cacheControl(CacheControl.noCache()).body(body);
     }
+
+    @Override
+    public ResponseEntity<Void> annullaEsecuzione(String idOperazione, String idEsecuzione) {
+        esecuzioniService.annullaEsecuzione(idOperazione, idEsecuzione);
+        return ResponseEntity.accepted().build();
+    }
 }

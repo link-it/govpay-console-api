@@ -1,6 +1,7 @@
 package it.govpay.console.operazioni;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -30,8 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
@@ -52,6 +55,8 @@ class OperazioneEsecuzioniControllerIntegrationTest {
     private UtenzaRepository utenzaRepository;
     @Autowired
     private OperatoreRepository operatoreRepository;
+    @Autowired
+    private AclRepository aclRepository;
     @Autowired
     private JobRepository jobRepository;
     @Autowired
@@ -77,6 +82,15 @@ class OperazioneEsecuzioniControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+    }
+
+    private void grantScrittura() {
+        Utenza utenza = utenzaRepository.findByPrincipal(PRINCIPAL).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(utenza.getId());
+        acl.setServizio("Configurazione e manutenzione");
+        acl.setDiritti("RW");
+        aclRepository.save(acl);
     }
 
     private <T> T callOutsideTestTransaction(Supplier<T> action) {
@@ -273,6 +287,68 @@ class OperazioneEsecuzioniControllerIntegrationTest {
         mvc.perform(get("/operazioni/IBAN_CHECK/esecuzioni"))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/operazioni/IBAN_CHECK/esecuzioni/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void annullaEsecuzioneTerminaleReturns409() throws Exception {
+        grantScrittura();
+        LocalDateTime now = LocalDateTime.now();
+        Long id = seedExecution("ibanCheckJob", BatchStatus.COMPLETED, now.minusHours(1), now);
+
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/" + id).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void annullaEsecuzioneAnnullabileReturns501NessunMeccanismoDisponibile() throws Exception {
+        grantScrittura();
+        LocalDateTime now = LocalDateTime.now();
+        Long id = seedExecution("ibanCheckJob", BatchStatus.STARTED, now.minusMinutes(5), null);
+
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/" + id).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotImplemented())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void annullaEsecuzioneOperazioneSconosciutaReturns404() throws Exception {
+        grantScrittura();
+        mvc.perform(delete("/operazioni/BOGUS/esecuzioni/1").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void annullaEsecuzioneIdInesistenteReturns404() throws Exception {
+        grantScrittura();
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/999999").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void annullaEsecuzioneIdDiAltraOperazioneReturns404() throws Exception {
+        grantScrittura();
+        LocalDateTime now = LocalDateTime.now();
+        Long id = seedExecution("ecSyncJob", BatchStatus.STARTED, now.minusMinutes(5), null);
+
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/" + id).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void annullaEsecuzioneSenzaDirittoScritturaReturns403() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        Long id = seedExecution("ibanCheckJob", BatchStatus.STARTED, now.minusMinutes(5), null);
+
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/" + id).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void annullaEsecuzioneSenzaAutenticazioneReturns401() throws Exception {
+        mvc.perform(delete("/operazioni/IBAN_CHECK/esecuzioni/1"))
                 .andExpect(status().isUnauthorized());
     }
 }

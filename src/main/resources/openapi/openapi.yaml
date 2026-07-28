@@ -4653,6 +4653,39 @@ paths:
           $ref: '#/components/responses/Problem401'
         '404':
           $ref: '#/components/responses/Problem404'
+    delete:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: annullaEsecuzione
+      summary: Richiede l'annullamento di un'esecuzione (best-effort, cancellazione cooperativa).
+      description: |
+        Ad oggi nessun batch espone un meccanismo di cancellazione
+        cooperativa (ne' Spring Batch `JobOperator.stop()` ne' un
+        equivalente custom): la richiesta e' sempre rifiutata con `501`
+        per le esecuzioni ancora annullabili (IN_CODA/IN_CORSO). 404/409
+        restano pero' calcolati per davvero.
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/IdEsecuzionePath'
+      responses:
+        '202':
+          description: Richiesta di annullamento accettata (best-effort).
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '501':
+          description: Nessun meccanismo di cancellazione cooperativa disponibile per questa esecuzione.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
 components:
   schemas:
