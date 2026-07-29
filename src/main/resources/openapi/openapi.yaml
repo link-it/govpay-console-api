@@ -54,6 +54,18 @@ tags:
     description: Anagrafica dei ruoli (ACL riusate da applicazioni e operatori).
   - name: Operatori
     description: Anagrafica degli operatori (utenti della console).
+  - name: EntiCreditori
+    description: |
+      Lookup in sola lettura sulla cache locale dell'anagrafica Enti Creditori
+      sincronizzata da pagoPA, usata per il censimento assistito dei Domini.
+  - name: Iban
+    description: |
+      Lookup in sola lettura sulla cache locale degli IBAN abilitati su pagoPA
+      per dominio, usata per il censimento assistito dei conti di accredito.
+  - name: Manutenzione - Operazioni
+    description: |
+      Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
+      stato dell'ultima esecuzione nota.
 
 paths:
 
@@ -4384,6 +4396,297 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /pagopa/enti-creditori:
+    get:
+      tags:
+        - EntiCreditori
+      operationId: listEntiCreditori
+      summary: Lookup di Enti Creditori nella cache pagoPA (typeahead).
+      description: |
+        Ricerca nella cache locale dell'anagrafica Enti Creditori sincronizzata
+        dal batch pagoPA, pensata per il tipo-mentre-scrivi del form di
+        creazione/modifica Dominio.
+
+        Filtro opzionale `search`: match parziale, in OR, su codice fiscale e
+        denominazione (a differenza delle altre risorse, qui e' volutamente un
+        singolo campo di ricerca libera anziche' filtri separati, per il caso
+        d'uso di tipo-mentre-scrivi).
+
+        **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
+        valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
+        Con `?total=true` vengono aggiunti `totalResults` e `totalPages`.
+
+        Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
+        prefisso per ASC); campi ammessi: `taxCode`, `companyName`.
+        Default `companyName` (ASC).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/SearchEnteCreditore'
+      responses:
+        '200':
+          description: Lista paginata di Enti Creditori dalla cache pagoPA.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EnteCreditoreSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
+  /pagopa/enti-creditori/{taxCode}:
+    parameters:
+      - $ref: '#/components/parameters/TaxCodePath'
+    get:
+      tags:
+        - EntiCreditori
+      operationId: getEnteCreditore
+      summary: Dettaglio di un Ente Creditore dalla cache pagoPA.
+      description: |
+        Restituisce l'anagrafica dell'Ente Creditore identificato da `taxCode`
+        cosi' come sincronizzata dal batch pagoPA, per la precompilazione
+        assistita del form di creazione/modifica Dominio. 404 se il codice
+        fiscale non e' presente nella cache (Ente Creditore non censito su
+        pagoPA, o non ancora sincronizzato).
+      responses:
+        '200':
+          description: Anagrafica dell'Ente Creditore.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnteCreditore'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /pagopa/iban:
+    get:
+      tags:
+        - Iban
+      operationId: listIbanPagopa
+      summary: Elenca gli IBAN abilitati su pagoPA per un dominio (censimento assistito).
+      description: |
+        Ricerca nella cache locale degli IBAN sincronizzata dal batch pagoPA per
+        il dominio indicato, per popolare il combobox filtrabile del form di
+        creazione/modifica ContoAccredito. Risposta non paginata (elenco
+        atteso di dimensione contenuta, scoperto per un singolo dominio).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioQueryRequired'
+      responses:
+        '200':
+          description: Elenco degli IBAN pagoPA per il dominio indicato (vuoto se nessuno).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IbanPagoPa'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
+  /operazioni:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: listOperazioni
+      summary: Elenca il catalogo delle operazioni batch schedulabili/avviabili manualmente.
+      description: |
+        Catalogo configurato all'avvio, arricchito con lo stato dell'ultima
+        esecuzione nota (letta dalle tabelle standard di Spring Batch) e la
+        prossima esecuzione stimata.
+      responses:
+        '200':
+          description: Catalogo delle operazioni.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operazione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
+  /operazioni/{idOperazione}/esecuzioni:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: listEsecuzioni
+      summary: Elenca lo storico delle esecuzioni di un'operazione (paginato).
+      description: |
+        Filtri opzionali e ortogonali (AND): `stato`, `dataInizioMin`,
+        `dataInizioMax`. Paginazione offset `?page=N&limit=L` con
+        `hasNextPage` (Slice) e `?total=true` per i totali. Ordinamento
+        fisso per dataInizio DESC (nessun parametro di scelta lato client).
+        Un'operazione non collegata a un job batch ritorna sempre lista
+        vuota (non e' un errore). `Cache-Control: no-cache` (dati
+        real-time, non cacheable).
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/StatoEsecuzioneQuery'
+        - $ref: '#/components/parameters/DataInizioMin'
+        - $ref: '#/components/parameters/DataInizioMax'
+      responses:
+        '200':
+          description: Storico paginato delle esecuzioni.
+          headers:
+            Cache-Control:
+              description: 'no-cache'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EsecuzioneSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    post:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: avviaEsecuzione
+      summary: Avvia manualmente l'esecuzione di un'operazione batch.
+      description: |
+        Inoltra la richiesta di avvio al microservizio proprietario del job
+        e ritorna appena accettata (non attende il completamento del batch).
+        L'esecuzione creata e' la stessa letta da `GET /operazioni`/dalla
+        futura consultazione dettaglio: nessuna persistenza dedicata in
+        console-api.
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RichiestaEsecuzione'
+      responses:
+        '202':
+          description: |
+            Richiesta di avvio accettata. Il body con lo snapshot iniziale e
+            l'header Location sono presenti solo se l'esecuzione diventa
+            visibile entro un breve timeout dall'accettazione; altrimenti la
+            risposta e' priva di entrambi (l'avvio resta comunque accettato).
+          headers:
+            Location:
+              description: URI della nuova esecuzione (assente se non ancora visibile).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Esecuzione'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '502':
+          description: Chiamata al microservizio proprietario del job fallita.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Operazione non configurata per l'avvio manuale (trigger URL mancante).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /operazioni/{idOperazione}/esecuzioni/{idEsecuzione}:
+    get:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: getEsecuzione
+      summary: Dettaglio di un'esecuzione.
+      description: |
+        `Cache-Control: no-cache` (dato real-time, non cacheable).
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/IdEsecuzionePath'
+      responses:
+        '200':
+          description: Dettaglio dell'esecuzione.
+          headers:
+            Cache-Control:
+              description: 'no-cache'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Esecuzione'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    delete:
+      tags:
+        - Manutenzione - Operazioni
+      operationId: annullaEsecuzione
+      summary: Richiede l'annullamento di un'esecuzione (best-effort, cancellazione cooperativa).
+      description: |
+        Ad oggi nessun batch espone un meccanismo di cancellazione
+        cooperativa (ne' Spring Batch `JobOperator.stop()` ne' un
+        equivalente custom): la richiesta e' sempre rifiutata con `501`
+        per le esecuzioni ancora annullabili (IN_CODA/IN_CORSO). 404/409
+        restano pero' calcolati per davvero.
+      parameters:
+        - $ref: '#/components/parameters/IdOperazionePath'
+        - $ref: '#/components/parameters/IdEsecuzionePath'
+      responses:
+        '202':
+          description: Richiesta di annullamento accettata (best-effort).
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '501':
+          description: Nessun meccanismo di cancellazione cooperativa disponibile per questa esecuzione.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   schemas:
 
@@ -7550,6 +7853,246 @@ components:
       items:
         $ref: '#/components/schemas/JsonPatchOperation'
 
+    EnteCreditoreSummary:
+      type: object
+      description: |
+        Proiezione leggera dell'Ente Creditore, usata nella lista di lookup
+        (typeahead) per il censimento assistito.
+      required:
+        - taxCode
+        - companyName
+      properties:
+        taxCode:
+          type: string
+          description: Codice fiscale dell'ente creditore su pagoPA.
+          maxLength: 16
+        companyName:
+          type: string
+          description: Denominazione dell'ente creditore su pagoPA.
+          maxLength: 255
+
+    EnteCreditore:
+      type: object
+      description: |
+        Anagrafica dell'Ente Creditore dalla cache locale di sincronizzazione
+        pagoPA, usata per precompilare il form di creazione/modifica Dominio.
+      required:
+        - taxCode
+        - companyName
+        - auxDigit
+        - dataUltimoAggiornamento
+      properties:
+        taxCode:
+          type: string
+          description: Codice fiscale dell'ente creditore su pagoPA.
+          maxLength: 16
+        companyName:
+          type: string
+          description: Denominazione dell'ente creditore su pagoPA.
+          maxLength: 255
+        stationId:
+          type: string
+          description: Identificativo della stazione associata su pagoPA.
+          maxLength: 35
+        auxDigit:
+          type: string
+          description: Cifra ausiliaria del numero avviso.
+          maxLength: 2
+        segregationCode:
+          type: string
+          description: Codice di segregazione.
+          maxLength: 4
+        cbill:
+          type: string
+          description: Codice CBILL.
+          maxLength: 35
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+          description: Timestamp dell'ultima sincronizzazione da pagoPA.
+
+    IbanPagoPa:
+      type: object
+      description: |
+        IBAN abilitato su pagoPA per un dominio, dalla cache locale di
+        sincronizzazione, usato per il censimento assistito del conto di
+        accredito.
+      required:
+        - iban
+        - attivo
+        - dataUltimaVerificaPagopa
+      properties:
+        iban:
+          type: string
+          description: IBAN censito su pagoPA.
+          pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+        attivo:
+          type: boolean
+          description: Stato ENABLED su pagoPA al momento dell'ultima sincronizzazione.
+        dataUltimaVerificaPagopa:
+          type: string
+          format: date-time
+          description: Timestamp dell'ultima sincronizzazione da pagoPA.
+
+    StatoEsecuzione:
+      type: string
+      description: Stato corrente di un'esecuzione di operazione.
+      enum:
+        - IN_CODA
+        - IN_CORSO
+        - COMPLETATA
+        - FALLITA
+        - ANNULLATA
+
+    EsitoEsecuzione:
+      type: object
+      description: Esito di un'esecuzione terminata (assente per esecuzioni in corso).
+      required:
+        - successo
+      properties:
+        successo:
+          type: boolean
+        messaggio:
+          type: string
+          description: Messaggio riassuntivo dell'esito.
+        errori:
+          type: array
+          description: Elenco degli errori riscontrati (vuoto se successo=true).
+          items:
+            type: string
+
+    EsecuzioneSummary:
+      type: object
+      description: Proiezione leggera di un'esecuzione, usata nel catalogo Operazioni.
+      required:
+        - idEsecuzione
+        - stato
+        - dataInizio
+      properties:
+        idEsecuzione:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoEsecuzione'
+        dataInizio:
+          type: string
+          format: date-time
+          description: |
+            Se l'esecuzione e' ancora in coda (non e' partita), riflette il
+            momento di creazione anziche' di avvio effettivo.
+        dataFine:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'esecuzione e' ancora in corso.
+
+    Esecuzione:
+      type: object
+      description: Dettaglio canonico di un'esecuzione di operazione.
+      required:
+        - idEsecuzione
+        - idOperazione
+        - stato
+        - dataInizio
+      properties:
+        idEsecuzione:
+          type: string
+        idOperazione:
+          type: string
+        stato:
+          $ref: '#/components/schemas/StatoEsecuzione'
+        percentuale:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: Percentuale di completamento, se disponibile per l'operazione.
+        descrizione:
+          type: string
+          nullable: true
+        dettaglio:
+          type: string
+          nullable: true
+          description: Dettaglio testuale multi-riga (log riassuntivo, contesto), se disponibile.
+        dataInizio:
+          type: string
+          format: date-time
+          description: |
+            Se l'esecuzione e' ancora in coda (non e' partita), riflette il
+            momento di creazione anziche' di avvio effettivo.
+        dataFine:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'esecuzione e' ancora in corso.
+        esito:
+          allOf:
+            - $ref: '#/components/schemas/EsitoEsecuzione'
+          nullable: true
+          description: Null finche' l'esecuzione non e' terminata.
+        forzata:
+          type: boolean
+          nullable: true
+          description: |
+            true se avviata via POST, false se avviata dalla schedulazione.
+            Null se non determinabile (letture storiche: Spring Batch non
+            registra la provenienza di un'esecuzione passata).
+
+    Operazione:
+      type: object
+      description: Voce di catalogo delle operazioni batch schedulabili/avviabili manualmente.
+      required:
+        - id
+        - nome
+        - abilitata
+      properties:
+        id:
+          type: string
+          description: Codice identificativo dell'operazione (es. RND, NTFY).
+        nome:
+          type: string
+        descrizione:
+          type: string
+          nullable: true
+        frequenzaSchedulata:
+          type: string
+          format: duration
+          nullable: true
+          description: |
+            Intervallo tra esecuzioni schedulate, in formato durata ISO 8601
+            (es. `PT2H` = ogni 2 ore). Rispecchia il modello fixedDelay con cui
+            i batch GovPay sono schedulati (attesa dalla fine dell'esecuzione
+            precedente, non un orario di calendario assoluto). Null se
+            l'operazione non e' schedulata (es. avviabile solo manualmente).
+          example: PT2H
+        ultimaEsecuzione:
+          allOf:
+            - $ref: '#/components/schemas/EsecuzioneSummary'
+          nullable: true
+          description: Null se l'operazione non e' mai stata eseguita.
+        prossimaEsecuzione:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null se l'operazione e' disabilitata o non schedulata.
+        lockAttivo:
+          type: boolean
+          nullable: true
+          description: |
+            true se e' in esecuzione in questo momento. Null se non
+            determinabile (nessun meccanismo di lock condiviso configurato).
+        abilitata:
+          type: boolean
+
+    RichiestaEsecuzione:
+      type: object
+      description: Body della richiesta di avvio manuale di un'operazione.
+      properties:
+        force:
+          type: boolean
+          default: false
+          description: Forza l'avvio anche se e' gia' in corso un'esecuzione della stessa operazione.
+
   responses:
 
     Problem400:
@@ -7967,4 +8510,75 @@ components:
       description: Match parziale sul nome (display name) dell'operatore.
       schema:
         type: string
+
+    TaxCodePath:
+      name: taxCode
+      in: path
+      required: true
+      description: Codice fiscale dell'ente creditore su pagoPA.
+      schema:
+        type: string
+        maxLength: 16
+
+    IdOperazionePath:
+      name: idOperazione
+      in: path
+      required: true
+      description: Codice identificativo dell'operazione nel catalogo.
+      schema:
+        type: string
+
+    IdEsecuzionePath:
+      name: idEsecuzione
+      in: path
+      required: true
+      description: Identificativo dell'esecuzione.
+      schema:
+        type: string
+
+    StatoEsecuzioneQuery:
+      name: stato
+      in: query
+      required: false
+      description: Match esatto sullo stato dell'esecuzione.
+      schema:
+        $ref: '#/components/schemas/StatoEsecuzione'
+
+    DataInizioMin:
+      name: dataInizioMin
+      in: query
+      required: false
+      description: Limite inferiore (incluso) su dataInizio.
+      schema:
+        type: string
+        format: date-time
+
+    DataInizioMax:
+      name: dataInizioMax
+      in: query
+      required: false
+      description: Limite superiore (incluso) su dataInizio.
+      schema:
+        type: string
+        format: date-time
+
+    SearchEnteCreditore:
+      name: search
+      in: query
+      required: false
+      description: |
+        Match parziale, in OR, su codice fiscale e denominazione dell'ente
+        creditore. Pensato per il tipo-mentre-scrivi (typeahead) del form di
+        creazione/modifica Dominio.
+      schema:
+        type: string
+
+    IdDominioQueryRequired:
+      name: idDominio
+      in: query
+      required: true
+      description: Codice dominio (11 caratteri), match esatto.
+      schema:
+        type: string
+        pattern: '^[0-9]{11}$'
 

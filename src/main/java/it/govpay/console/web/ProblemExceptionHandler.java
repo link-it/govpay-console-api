@@ -18,6 +18,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -28,6 +29,8 @@ import it.govpay.console.avviso.AvvisoMbtException;
 import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
 import it.govpay.console.avviso.StampeUnavailableException;
+import it.govpay.console.operazioni.OperazioneTriggerNonConfiguratoException;
+import it.govpay.console.operazioni.OperazioneTriggerNonRaggiungibileException;
 import it.govpay.console.model.Problem;
 import it.govpay.console.model.ProblemErrorsInner;
 import jakarta.persistence.OptimisticLockException;
@@ -99,6 +102,13 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.PRECONDITION_REQUIRED, ex.getMessage(), request, null, ex);
     }
 
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Problem> handleMissingParameter(MissingServletRequestParameterException ex,
+                                                          HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST,
+                "Parametro obbligatorio mancante: '" + ex.getParameterName() + "'.", request, null, ex);
+    }
+
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<Problem> handleMissingHeader(MissingRequestHeaderException ex,
                                                        HttpServletRequest request) {
@@ -144,6 +154,11 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);
     }
 
+    @ExceptionHandler(NotImplementedException.class)
+    public ResponseEntity<Problem> handleNotImplemented(NotImplementedException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_IMPLEMENTED, ex.getMessage(), request, null, ex);
+    }
+
     @ExceptionHandler(PayloadTooLargeException.class)
     public ResponseEntity<Problem> handlePayloadTooLarge(PayloadTooLargeException ex, HttpServletRequest request) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null, ex);
@@ -173,6 +188,18 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(StampeNotConfiguredException.class)
     public ResponseEntity<Problem> handleStampeNotConfigured(StampeNotConfiguredException ex,
                                                              HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(OperazioneTriggerNonRaggiungibileException.class)
+    public ResponseEntity<Problem> handleOperazioneTriggerNonRaggiungibile(OperazioneTriggerNonRaggiungibileException ex,
+                                                                           HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(OperazioneTriggerNonConfiguratoException.class)
+    public ResponseEntity<Problem> handleOperazioneTriggerNonConfigurato(OperazioneTriggerNonConfiguratoException ex,
+                                                                         HttpServletRequest request) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
     }
 
