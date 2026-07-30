@@ -77,6 +77,19 @@ tags:
       logging per interfaccia API. Accesso riservato al servizio ACL
       `Configurazione e manutenzione` (lettura per le GET, scrittura per le
       PUT/PATCH).
+  - name: Impostazioni - Mail Server
+    description: |
+      Sotto-risorsa `mailBatch` del blob V1 `configurazione`: server SMTP
+      usato per l'invio dei promemoria. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH). Le credenziali (password SMTP e password di
+      keystore/truststore) sono su un endpoint dedicato, mai restituite dalle GET.
+  - name: Impostazioni - Mail Template Promemoria
+    description: |
+      Sotto-risorsa `avvisaturaMail` del blob V1 `configurazione`: template
+      FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via mail.
+      Accesso riservato al servizio ACL `Configurazione e manutenzione`
+      (lettura per le GET, scrittura per le PUT/PATCH).
 
 paths:
 
@@ -4897,6 +4910,246 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /impostazioni/mail/server:
+    get:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: getImpostazioniMailServer
+      summary: Server SMTP usato per l'invio dei promemoria (senza credenziali).
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Configurazione server SMTP.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: replaceImpostazioniMailServer
+      summary: Sostituisce la configurazione del server SMTP (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailServer'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: patchImpostazioniMailServer
+      summary: Aggiorna la configurazione del server SMTP (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `ssl` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/ssl`). Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/mail/server/password:
+    put:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: putPasswordImpostazioniMailServer
+      summary: Imposta le credenziali del server SMTP (write-only).
+      description: |
+        Aggiorna password SMTP e/o password di keystore/truststore. Non
+        vengono mai restituite dalle GET. Richiede il diritto di scrittura
+        sul servizio ACL `Configurazione e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailServerCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /impostazioni/mail/template-promemoria:
+    get:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: getImpostazioniMailTemplatePromemoria
+      summary: Template FreeMarker dei promemoria spediti via mail.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template promemoria.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: replaceImpostazioniMailTemplatePromemoria
+      summary: Sostituisce i template dei promemoria via mail.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: patchImpostazioniMailTemplatePromemoria
+      summary: Aggiorna un template promemoria (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`, valore l'intero blocco).
+        Richiede l'header `If-Match` e il diritto di scrittura sul servizio
+        ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -7781,6 +8034,182 @@ components:
           $ref: '#/components/schemas/GdeInterfaccia'
         _links:
           $ref: '#/components/schemas/ImpostazioniGiornaleEventiLinks'
+
+    MailKeyStore:
+      type: object
+      description: |
+        Riferimento a un keystore/truststore Java per l'autenticazione SSL
+        client verso il server SMTP. La password non e' inclusa: si imposta
+        tramite l'endpoint dedicato `/impostazioni/mail/server/password`.
+      properties:
+        location:
+          type: string
+          description: Path del file keystore/truststore.
+          maxLength: 255
+        tipo:
+          type: string
+          description: Tipo del keystore/truststore (es. JKS, PKCS12).
+          maxLength: 255
+        managementAlgorithm:
+          type: string
+          maxLength: 255
+
+    ImpostazioniMailServerSsl:
+      type: object
+      description: Configurazione SSL/TLS del server SMTP.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          type: string
+          description: Tipo di SSLContext (es. TLS).
+          maxLength: 255
+        hostnameVerifier:
+          type: boolean
+        trustStore:
+          $ref: '#/components/schemas/MailKeyStore'
+        keyStore:
+          $ref: '#/components/schemas/MailKeyStore'
+
+    ImpostazioniMailServer:
+      type: object
+      description: |
+        Server SMTP usato per l'invio dei promemoria. Sotto-risorsa
+        `mailBatch` del blob V1 `configurazione`. Le credenziali (password
+        SMTP e password di keystore/truststore) non sono incluse: si
+        impostano tramite l'endpoint dedicato `.../password` e non sono mai
+        restituite dalle GET; `passwordImpostata` indica solo se una password
+        SMTP e' stata configurata.
+
+        Il campo `ssl` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/ssl`).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        host:
+          type: string
+          maxLength: 255
+        port:
+          type: integer
+          format: int32
+        username:
+          type: string
+          maxLength: 35
+        from:
+          type: string
+          description: Indirizzo mittente del promemoria.
+          maxLength: 255
+        readTimeoutMs:
+          type: integer
+          format: int32
+        connectionTimeoutMs:
+          type: integer
+          format: int32
+        startTls:
+          type: boolean
+        ssl:
+          $ref: '#/components/schemas/ImpostazioniMailServerSsl'
+        passwordImpostata:
+          type: boolean
+          readOnly: true
+          description: Indica se una password SMTP e' stata configurata.
+
+    ImpostazioniMailServerCredenziali:
+      type: object
+      description: |
+        Credenziali del server SMTP (write-only). Non vengono mai restituite
+        dalle GET. `ksPassword`/`tsPassword` sono significative solo se
+        `ssl.keyStore`/`ssl.trustStore` sono configurati.
+      properties:
+        nuovaPassword:
+          type: string
+          description: Password HTTP del server SMTP.
+        ksPassword:
+          type: string
+        tsPassword:
+          type: string
+
+    TemplatePromemoriaAvviso:
+      type: object
+      description: Template del promemoria di avviso pagamento spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        allegaPdf:
+          type: boolean
+          description: Se true allega alla mail il pdf dell'avviso.
+
+    TemplatePromemoriaRicevuta:
+      type: object
+      description: Template del promemoria di ricevuta pagamento spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        soloEseguiti:
+          type: boolean
+          description: Se true limita l'invio ai soli pagamenti eseguiti.
+        allegaPdf:
+          type: boolean
+          description: Se true allega alla mail il pdf della ricevuta.
+
+    TemplatePromemoriaScadenza:
+      type: object
+      description: Template del promemoria di scadenza avviso spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        preavviso:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Numero di giorni prima della scadenza per l'invio del promemoria.
+
+    ImpostazioniMailTemplatePromemoria:
+      type: object
+      description: |
+        Template FreeMarker dei promemoria spediti via mail. Sotto-risorsa
+        `avvisaturaMail` del blob V1 `configurazione`. Ogni campo e' un
+        blocco patchabile atomicamente (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`).
+      required:
+        - promemoriaAvviso
+        - promemoriaRicevuta
+        - promemoriaScadenza
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TemplatePromemoriaAvviso'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TemplatePromemoriaRicevuta'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TemplatePromemoriaScadenza'
 
     ConnettoreIntermediarioPagopa:
       type: object

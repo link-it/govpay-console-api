@@ -82,3 +82,45 @@ CREATE TABLE giornale_eventi_interfacce
 	-- fk/pk keys constraints
 	CONSTRAINT pk_giornale_eventi_interfacce PRIMARY KEY (nome_interfaccia)
 );
+
+-- Server SMTP usato per l'invio dei promemoria (riga singola). Le password
+-- (SMTP, keystore, truststore) sono scritte solo dall'endpoint dedicato
+-- `.../password`, mai esposte in lettura.
+CREATE TABLE impostazioni_mail_server
+(
+	id NUMBER(5) NOT NULL,
+	abilitato NUMBER(1) NOT NULL,
+	host VARCHAR2(255 CHAR),
+	port NUMBER(10),
+	username VARCHAR2(35 CHAR),
+	from_indirizzo VARCHAR2(255 CHAR),
+	read_timeout_ms NUMBER(10),
+	connection_timeout_ms NUMBER(10),
+	start_tls NUMBER(1) NOT NULL,
+	ssl_abilitato NUMBER(1) NOT NULL,
+	ssl_tipo VARCHAR2(255 CHAR),
+	ssl_hostname_verifier NUMBER(1) NOT NULL,
+	ks_location VARCHAR2(255 CHAR),
+	ks_tipo VARCHAR2(255 CHAR),
+	ks_management_algorithm VARCHAR2(255 CHAR),
+	ts_location VARCHAR2(255 CHAR),
+	ts_tipo VARCHAR2(255 CHAR),
+	ts_management_algorithm VARCHAR2(255 CHAR),
+	password VARCHAR2(255 CHAR),
+	ks_password VARCHAR2(255 CHAR),
+	ts_password VARCHAR2(255 CHAR),
+	CONSTRAINT pk_impostazioni_mail_server PRIMARY KEY (id)
+);
+
+-- Template FreeMarker dei promemoria spediti via mail, una riga per tipo
+-- (AVVISO/RICEVUTA/SCADENZA).
+CREATE TABLE impostazioni_mail_promemoria
+(
+	tipo_promemoria VARCHAR2(20 CHAR) NOT NULL,
+	oggetto VARCHAR2(4000 CHAR),
+	messaggio VARCHAR2(4000 CHAR),
+	allega_pdf NUMBER(1),
+	solo_eseguiti NUMBER(1),
+	preavviso NUMBER(10),
+	CONSTRAINT pk_impostazioni_mail_promemoria PRIMARY KEY (tipo_promemoria)
+);
