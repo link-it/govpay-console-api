@@ -41,3 +41,18 @@ CREATE TABLE pagopa_iban_cache
 	CONSTRAINT pk_pagopa_iban_cache PRIMARY KEY (id),
 	CONSTRAINT uq_pagopa_iban_cache_dominio_iban UNIQUE (cod_dominio, iban)
 );
+
+-- Politica di logging verso il Giornale degli Eventi, una riga per ciascuna
+-- delle 8 interfacce API di GovPay. Sotto-risorsa `giornaleEventi` del blob
+-- V1 `configurazione` (il connettore GDE vero e proprio e' sulla tabella
+-- condivisa `connettori`, cod_connettore 'govpay_gde_api').
+CREATE TABLE giornale_eventi_interfacce
+(
+	nome_interfaccia VARCHAR(20) NOT NULL,
+	log_letture VARCHAR(20) NOT NULL,
+	dump_letture VARCHAR(20) NOT NULL,
+	log_scritture VARCHAR(20) NOT NULL,
+	dump_scritture VARCHAR(20) NOT NULL,
+	-- fk/pk keys constraints
+	CONSTRAINT pk_giornale_eventi_interfacce PRIMARY KEY (nome_interfaccia)
+);

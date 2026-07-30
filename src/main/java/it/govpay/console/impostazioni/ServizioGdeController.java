@@ -4,13 +4,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-import it.govpay.console.api.ImpostazioniApi;
+import it.govpay.console.api.ImpostazioniServizioGdeApi;
 import it.govpay.console.model.ConnettoreCredenziali;
 import it.govpay.console.model.ImpostazioniServizioGDE;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
-public class ServizioGdeController implements ImpostazioniApi {
+public class ServizioGdeController implements ImpostazioniServizioGdeApi {
 
     private final ServizioGdeService service;
 

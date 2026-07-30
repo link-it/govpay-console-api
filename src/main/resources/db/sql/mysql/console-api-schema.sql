@@ -41,3 +41,18 @@ CREATE TABLE pagopa_iban_cache
 	CONSTRAINT pk_pagopa_iban_cache PRIMARY KEY (id),
 	CONSTRAINT uq_pagopa_iban_cache_dominio_iban UNIQUE (cod_dominio, iban)
 )ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
+
+-- Politica di logging verso il Giornale degli Eventi, una riga per ciascuna
+-- delle 8 interfacce API di GovPay. Sotto-risorsa `giornaleEventi` del blob
+-- V1 `configurazione` (il connettore GDE vero e proprio e' sulla tabella
+-- condivisa `connettori`, cod_connettore 'govpay_gde_api').
+CREATE TABLE giornale_eventi_interfacce
+(
+	nome_interfaccia VARCHAR(20) NOT NULL COMMENT 'Nome dell''interfaccia API (es. apiEnte)',
+	log_letture VARCHAR(20) NOT NULL COMMENT 'Politica di log per le letture',
+	dump_letture VARCHAR(20) NOT NULL COMMENT 'Politica di dump per le letture',
+	log_scritture VARCHAR(20) NOT NULL COMMENT 'Politica di log per le scritture',
+	dump_scritture VARCHAR(20) NOT NULL COMMENT 'Politica di dump per le scritture',
+	-- fk/pk keys constraints
+	CONSTRAINT pk_giornale_eventi_interfacce PRIMARY KEY (nome_interfaccia)
+)ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;

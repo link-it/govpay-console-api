@@ -67,3 +67,18 @@ begin
    END IF;
 end;
 /
+
+-- Politica di logging verso il Giornale degli Eventi, una riga per ciascuna
+-- delle 8 interfacce API di GovPay. Sotto-risorsa `giornaleEventi` del blob
+-- V1 `configurazione` (il connettore GDE vero e proprio e' sulla tabella
+-- condivisa `connettori`, cod_connettore 'govpay_gde_api').
+CREATE TABLE giornale_eventi_interfacce
+(
+	nome_interfaccia VARCHAR2(20 CHAR) NOT NULL,
+	log_letture VARCHAR2(20 CHAR) NOT NULL,
+	dump_letture VARCHAR2(20 CHAR) NOT NULL,
+	log_scritture VARCHAR2(20 CHAR) NOT NULL,
+	dump_scritture VARCHAR2(20 CHAR) NOT NULL,
+	-- fk/pk keys constraints
+	CONSTRAINT pk_giornale_eventi_interfacce PRIMARY KEY (nome_interfaccia)
+);

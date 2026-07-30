@@ -66,11 +66,17 @@ tags:
     description: |
       Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
       stato dell'ultima esecuzione nota.
-  - name: Impostazioni
+  - name: Impostazioni - Servizio GDE
     description: |
-      Sotto-risorse indipendenti del blob V1 `configurazione`. Accesso riservato
-      al servizio ACL `Configurazione e manutenzione` (lettura per le GET,
-      scrittura per le PUT).
+      Sotto-risorsa `servizioGDE` del blob V1 `configurazione`: connettore
+      verso il Giornale degli Eventi. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le PUT).
+  - name: Impostazioni - Giornale Eventi
+    description: |
+      Sotto-risorsa `giornaleEventi` del blob V1 `configurazione`: politica di
+      logging per interfaccia API. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH).
 
 paths:
 
@@ -4695,7 +4701,7 @@ paths:
   /impostazioni/servizioGDE:
     get:
       tags:
-        - Impostazioni
+        - Impostazioni - Servizio GDE
       operationId: getImpostazioniServizioGDE
       summary: Connettore verso il Giornale degli Eventi (senza credenziali).
       description: |
@@ -4720,7 +4726,7 @@ paths:
           $ref: '#/components/responses/Problem403'
     put:
       tags:
-        - Impostazioni
+        - Impostazioni - Servizio GDE
       operationId: replaceImpostazioniServizioGDE
       summary: Sostituisce la configurazione del connettore GDE (senza credenziali).
       description: |
@@ -4761,7 +4767,7 @@ paths:
   /impostazioni/servizioGDE/credenziali:
     put:
       tags:
-        - Impostazioni
+        - Impostazioni - Servizio GDE
       operationId: putCredenzialiImpostazioniServizioGDE
       summary: Imposta le credenziali del connettore GDE (write-only).
       description: |
@@ -4783,6 +4789,113 @@ paths:
           $ref: '#/components/responses/Problem401'
         '403':
           $ref: '#/components/responses/Problem403'
+
+  /impostazioni/giornale-eventi:
+    get:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: getImpostazioniGiornaleEventi
+      summary: Politica di logging verso il Giornale degli Eventi.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Impostazioni giornale eventi.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: replaceImpostazioniGiornaleEventi
+      summary: Sostituisce la politica di logging verso il Giornale degli Eventi.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+      responses:
+        '200':
+          description: Impostazioni aggiornate.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: patchImpostazioniGiornaleEventi
+      summary: Aggiorna un blocco della politica di logging (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/apiEnte`, valore l'intero blocco `{letture,
+        scritture}`). Richiede l'header `If-Match` e il diritto di scrittura
+        sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Impostazioni aggiornate.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
 
 components:
   schemas:
@@ -7582,6 +7695,92 @@ components:
           maxLength: 255
         auth:
           $ref: '#/components/schemas/ConnettoreAuth'
+
+    GdeEvento:
+      type: object
+      description: |
+        Politica di logging di un evento verso il Giornale degli Eventi:
+        `log` traccia il riepilogo dell'evento, `dump` include anche il
+        payload completo. Valori normalizzati da V1 (`sempre`/`mai`/`solo errore`).
+      required:
+        - log
+        - dump
+      properties:
+        log:
+          type: string
+          enum:
+            - SEMPRE
+            - MAI
+            - SOLO_ERRORE
+        dump:
+          type: string
+          enum:
+            - SEMPRE
+            - MAI
+            - SOLO_ERRORE
+
+    GdeInterfaccia:
+      type: object
+      description: |
+        Politica di logging di un'interfaccia API, separata per operazioni
+        di lettura e scrittura.
+      required:
+        - letture
+        - scritture
+      properties:
+        letture:
+          $ref: '#/components/schemas/GdeEvento'
+        scritture:
+          $ref: '#/components/schemas/GdeEvento'
+
+    ImpostazioniGiornaleEventiLinks:
+      type: object
+      description: Hyperlink correlati alle impostazioni del giornale degli eventi.
+      properties:
+        servizioGDE:
+          $ref: '#/components/schemas/Link'
+
+    ImpostazioniGiornaleEventi:
+      type: object
+      description: |
+        Politica di logging verso il Giornale degli Eventi (GDE), per ciascuna
+        delle 8 interfacce API di GovPay. Sotto-risorsa `giornaleEventi` del
+        blob V1 `configurazione` (il connettore GDE vero e proprio, cioe' url
+        e autenticazione, e' la sotto-risorsa indipendente `/impostazioni/servizioGDE`,
+        vedi `_links`).
+
+        Ogni campo e' un blocco patchabile atomicamente: il PATCH RFC 6902
+        opera con un pointer a singolo segmento top-level (es. `/apiEnte`),
+        sostituendo l'intero blocco `{letture, scritture}` in un'unica
+        operazione.
+      required:
+        - apiEnte
+        - apiPagamento
+        - apiRagioneria
+        - apiBackoffice
+        - apiPagoPA
+        - apiPendenze
+        - apiBackendIO
+        - apiMaggioliJPPA
+      properties:
+        apiEnte:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPagamento:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiRagioneria:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiBackoffice:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPagoPA:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPendenze:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiBackendIO:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiMaggioliJPPA:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        _links:
+          $ref: '#/components/schemas/ImpostazioniGiornaleEventiLinks'
 
     ConnettoreIntermediarioPagopa:
       type: object
