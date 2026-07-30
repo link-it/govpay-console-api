@@ -66,6 +66,11 @@ tags:
     description: |
       Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
       stato dell'ultima esecuzione nota.
+  - name: Impostazioni
+    description: |
+      Sotto-risorse indipendenti del blob V1 `configurazione`. Accesso riservato
+      al servizio ACL `Configurazione e manutenzione` (lettura per le GET,
+      scrittura per le PUT).
 
 paths:
 
@@ -4687,6 +4692,98 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /impostazioni/servizioGDE:
+    get:
+      tags:
+        - Impostazioni
+      operationId: getImpostazioniServizioGDE
+      summary: Connettore verso il Giornale degli Eventi (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Connettore GDE.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniServizioGDE'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni
+      operationId: replaceImpostazioniServizioGDE
+      summary: Sostituisce la configurazione del connettore GDE (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente e il
+        diritto di scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniServizioGDE'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniServizioGDE'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/servizioGDE/credenziali:
+    put:
+      tags:
+        - Impostazioni
+      operationId: putCredenzialiImpostazioniServizioGDE
+      summary: Imposta le credenziali del connettore GDE (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle
+        GET. Richiede il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
 components:
   schemas:
 
@@ -7465,6 +7562,26 @@ components:
           type: string
         urlTokenEndpoint:
           type: string
+
+    ImpostazioniServizioGDE:
+      type: object
+      description: |
+        Connettore verso il Giornale degli Eventi (GDE): endpoint a cui i
+        moduli GovPay inviano gli eventi. Sotto-risorsa `servizioGDE` del blob
+        V1 `configurazione`. Le credenziali non sono incluse: si impostano
+        tramite l'endpoint dedicato `.../credenziali` e non sono mai
+        restituite dalle GET.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+          description: URL del servizio GDE.
+          maxLength: 255
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
 
     ConnettoreIntermediarioPagopa:
       type: object
