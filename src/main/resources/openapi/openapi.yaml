@@ -110,6 +110,13 @@ tags:
       FreeMarker per la generazione dei tracciati CSV di risposta. Accesso
       riservato al servizio ACL `Configurazione e manutenzione` (lettura per
       le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - Hardening
+    description: |
+      Sotto-risorsa `hardening` del blob V1 `configurazione`: configurazione
+      Google reCAPTCHA usata per irrobustire il login. Accesso riservato al
+      servizio ACL `Configurazione e manutenzione` (lettura per le GET,
+      scrittura per le PUT/PATCH). La chiave segreta reCAPTCHA e' su un
+      endpoint dedicato, mai restituita dalle GET.
 
 paths:
 
@@ -5517,6 +5524,139 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /impostazioni/hardening:
+    get:
+      tags:
+        - Impostazioni - Hardening
+      operationId: getImpostazioniHardening
+      summary: Configurazione Google reCAPTCHA (senza credenziali).
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Configurazione hardening.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Hardening
+      operationId: replaceImpostazioniHardening
+      summary: Sostituisce la configurazione hardening (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniHardening'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Hardening
+      operationId: patchImpostazioniHardening
+      summary: Aggiorna la configurazione hardening (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `captcha` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/captcha`). Richiede l'header `If-Match` e il diritto
+        di scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/hardening/credenziali:
+    put:
+      tags:
+        - Impostazioni - Hardening
+      operationId: putCredenzialiImpostazioniHardening
+      summary: Imposta la chiave segreta reCAPTCHA (write-only).
+      description: |
+        Aggiorna la chiave segreta. Non viene mai restituita dalle GET.
+        Richiede il diritto di scrittura sul servizio ACL `Configurazione e
+        manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniHardeningCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
 components:
   schemas:
 
@@ -8689,6 +8829,67 @@ components:
         risposta:
           type: string
           description: Template FreeMarker per la trasformazione di un record da JSON a CSV.
+
+    ConfigurazioneReCaptcha:
+      type: object
+      description: |
+        Configurazione Google reCAPTCHA. La chiave segreta non e' inclusa: si
+        imposta tramite l'endpoint dedicato `/impostazioni/hardening/credenziali`
+        e non e' mai restituita dalle GET.
+      properties:
+        serverURL:
+          type: string
+          description: URL del servizio di verifica.
+          maxLength: 255
+        siteKey:
+          type: string
+          description: Chiave sito reCAPTCHA.
+          maxLength: 255
+        soglia:
+          type: number
+          format: double
+          minimum: 0.1
+          maximum: 1.0
+          description: Soglia di accettazione della risposta di validazione.
+        parametro:
+          type: string
+          pattern: '[a-zA-Z0-9-_]+'
+          description: Nome del parametro che porta la response reCAPTCHA da inviare al server.
+        denyOnFail:
+          type: boolean
+          description: Se true nega la richiesta quando il server di verifica non e' raggiungibile.
+        connectionTimeoutMs:
+          type: integer
+          format: int32
+        readTimeoutMs:
+          type: integer
+          format: int32
+
+    ImpostazioniHardening:
+      type: object
+      description: |
+        Configurazione Google reCAPTCHA usata per irrobustire il login.
+        Sotto-risorsa `hardening` del blob V1 `configurazione`.
+
+        Il campo `captcha` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/captcha`).
+      required:
+        - abilitato
+        - captcha
+      properties:
+        abilitato:
+          type: boolean
+        captcha:
+          $ref: '#/components/schemas/ConfigurazioneReCaptcha'
+
+    ImpostazioniHardeningCredenziali:
+      type: object
+      description: |
+        Chiave segreta reCAPTCHA (write-only). Non viene mai restituita
+        dalle GET.
+      properties:
+        secretKey:
+          type: string
 
     ConnettoreIntermediarioPagopa:
       type: object

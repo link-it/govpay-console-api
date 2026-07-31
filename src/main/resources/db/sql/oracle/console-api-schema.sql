@@ -148,3 +148,21 @@ CREATE TABLE impostazioni_tracciati_csv
 	risposta VARCHAR2(4000 CHAR),
 	CONSTRAINT pk_impostazioni_tracciati_csv PRIMARY KEY (id)
 );
+
+-- Configurazione Google reCAPTCHA usata per irrobustire il login (riga
+-- singola). La chiave segreta e' scritta solo dall'endpoint dedicato
+-- `.../credenziali`, mai esposta in lettura.
+CREATE TABLE impostazioni_hardening
+(
+	id NUMBER(5) NOT NULL,
+	abilitato NUMBER(1) NOT NULL,
+	server_url VARCHAR2(255 CHAR),
+	site_key VARCHAR2(255 CHAR),
+	soglia NUMBER(3,2),
+	parametro VARCHAR2(255 CHAR),
+	deny_on_fail NUMBER(1) NOT NULL,
+	connection_timeout_ms NUMBER(10),
+	read_timeout_ms NUMBER(10),
+	secret_key VARCHAR2(255 CHAR),
+	CONSTRAINT pk_impostazioni_hardening PRIMARY KEY (id)
+);

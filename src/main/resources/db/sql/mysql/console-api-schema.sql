@@ -122,3 +122,21 @@ CREATE TABLE impostazioni_tracciati_csv
 	risposta VARCHAR(4000),
 	CONSTRAINT pk_impostazioni_tracciati_csv PRIMARY KEY (id)
 )ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
+
+-- Configurazione Google reCAPTCHA usata per irrobustire il login (riga
+-- singola). La chiave segreta e' scritta solo dall'endpoint dedicato
+-- `.../credenziali`, mai esposta in lettura.
+CREATE TABLE impostazioni_hardening
+(
+	id SMALLINT NOT NULL COMMENT 'Riga singola, sempre 1',
+	abilitato BOOLEAN NOT NULL,
+	server_url VARCHAR(255),
+	site_key VARCHAR(255),
+	soglia DOUBLE,
+	parametro VARCHAR(255),
+	deny_on_fail BOOLEAN NOT NULL,
+	connection_timeout_ms INT,
+	read_timeout_ms INT,
+	secret_key VARCHAR(255),
+	CONSTRAINT pk_impostazioni_hardening PRIMARY KEY (id)
+)ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
