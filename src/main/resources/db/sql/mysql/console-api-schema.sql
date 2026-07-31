@@ -98,3 +98,16 @@ CREATE TABLE impostazioni_mail_promemoria
 	preavviso INT,
 	CONSTRAINT pk_impostazioni_mail_promemoria PRIMARY KEY (tipo_promemoria)
 )ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
+
+-- Template FreeMarker dei promemoria spediti via notifica push App IO, una
+-- riga per tipo (AVVISO/RICEVUTA/SCADENZA). Nessun allegato (a differenza
+-- della variante mail): niente colonna allega_pdf.
+CREATE TABLE impostazioni_appio_promemoria
+(
+	tipo_promemoria VARCHAR(20) NOT NULL,
+	oggetto VARCHAR(4000),
+	messaggio VARCHAR(4000),
+	solo_eseguiti BOOLEAN,
+	preavviso INT,
+	CONSTRAINT pk_impostazioni_appio_promemoria PRIMARY KEY (tipo_promemoria)
+)ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;

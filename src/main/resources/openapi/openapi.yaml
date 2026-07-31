@@ -90,6 +90,20 @@ tags:
       FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via mail.
       Accesso riservato al servizio ACL `Configurazione e manutenzione`
       (lettura per le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - App IO Server
+    description: |
+      Sotto-risorsa `appIOBatch` del blob V1 `configurazione`: connettore
+      verso il servizio App IO. Stessa infrastruttura EAV dei connettori
+      (`/impostazioni/servizioGDE`). Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH). Le credenziali sono su un endpoint dedicato, mai restituite
+      dalle GET.
+  - name: Impostazioni - App IO Template Promemoria
+    description: |
+      Sotto-risorsa `avvisaturaAppIO` del blob V1 `configurazione`: template
+      FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via
+      notifica push App IO. Accesso riservato al servizio ACL `Configurazione
+      e manutenzione` (lettura per le GET, scrittura per le PUT/PATCH).
 
 paths:
 
@@ -5150,6 +5164,247 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /impostazioni/app-io/server:
+    get:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: getImpostazioniAppIoServer
+      summary: Connettore verso il servizio App IO (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Connettore App IO.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: replaceImpostazioniAppIoServer
+      summary: Sostituisce la configurazione del connettore App IO (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniAppIoServer'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: patchImpostazioniAppIoServer
+      summary: Aggiorna la configurazione del connettore App IO (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `auth` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/auth`). Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/app-io/server/credenziali:
+    put:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: putCredenzialiImpostazioniAppIoServer
+      summary: Imposta le credenziali del connettore App IO (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite
+        dalle GET. Richiede il diritto di scrittura sul servizio ACL
+        `Configurazione e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /impostazioni/app-io/template-promemoria:
+    get:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: getImpostazioniAppIoTemplatePromemoria
+      summary: Template FreeMarker dei promemoria spediti via notifica App IO.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template promemoria.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: replaceImpostazioniAppIoTemplatePromemoria
+      summary: Sostituisce i template dei promemoria via App IO.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: patchImpostazioniAppIoTemplatePromemoria
+      summary: Aggiorna un template promemoria (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`, valore l'intero blocco).
+        Richiede l'header `If-Match` e il diritto di scrittura sul servizio
+        ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -8208,6 +8463,95 @@ components:
           $ref: '#/components/schemas/TemplatePromemoriaAvviso'
         promemoriaRicevuta:
           $ref: '#/components/schemas/TemplatePromemoriaRicevuta'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TemplatePromemoriaScadenza'
+
+    ImpostazioniAppIoServer:
+      type: object
+      description: |
+        Connettore verso il servizio App IO usato per l'invio delle notifiche
+        push. Sotto-risorsa `appIOBatch` del blob V1 `configurazione`, stessa
+        infrastruttura EAV dei connettori (`connettori`, come
+        `/impostazioni/servizioGDE`). Le credenziali non sono incluse: si
+        impostano tramite l'endpoint dedicato `.../credenziali` e non sono
+        mai restituite dalle GET.
+
+        Il campo `auth` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/auth`).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+          description: URL base del servizio App IO.
+          maxLength: 255
+        timeToLiveSecondi:
+          type: integer
+          format: int32
+          description: |
+            Tempo (in secondi) entro cui Agid tenta la consegna della
+            notifica prima di considerarla scaduta.
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    TemplatePromemoriaAvvisoBase:
+      type: object
+      description: |
+        Template del promemoria di avviso pagamento spedito via notifica push
+        (nessun allegato, a differenza della variante mail).
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per il titolo della notifica.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della notifica.
+
+    TemplatePromemoriaRicevutaBase:
+      type: object
+      description: |
+        Template del promemoria di ricevuta pagamento spedito via notifica
+        push (nessun allegato, a differenza della variante mail).
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per il titolo della notifica.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della notifica.
+        soloEseguiti:
+          type: boolean
+          description: Se true limita l'invio ai soli pagamenti eseguiti.
+
+    ImpostazioniAppIoTemplatePromemoria:
+      type: object
+      description: |
+        Template FreeMarker dei promemoria spediti via notifica push App IO.
+        Sotto-risorsa `avvisaturaAppIO` del blob V1 `configurazione`.
+        `promemoriaScadenza` riusa lo stesso schema della sotto-risorsa mail
+        (`TemplatePromemoriaScadenza`): V1 usa la stessa classe per entrambi
+        i canali, nessuna differenza di campi. Ogni campo e' un blocco
+        patchabile atomicamente (pointer a singolo segmento top-level, es.
+        `/promemoriaScadenza`).
+      required:
+        - promemoriaAvviso
+        - promemoriaRicevuta
+        - promemoriaScadenza
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TemplatePromemoriaAvvisoBase'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TemplatePromemoriaRicevutaBase'
         promemoriaScadenza:
           $ref: '#/components/schemas/TemplatePromemoriaScadenza'
 

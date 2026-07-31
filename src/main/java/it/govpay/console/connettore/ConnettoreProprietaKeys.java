@@ -31,6 +31,7 @@ public final class ConnettoreProprietaKeys {
     public static final String OAUTH2_CLIENT_ID = "OAUTH2_CLIENT_CREDENTIALS_CLIENT_ID_NAME";
     public static final String OAUTH2_SCOPE = "OAUTH2_CLIENT_CREDENTIALS_SCOPE_NAME";
     public static final String OAUTH2_URL_TOKEN_ENDPOINT = "OAUTH2_CLIENT_CREDENTIALS_URL_TOKEN_ENDPOINT_NAME";
+    public static final String TIME_TO_LIVE = "TIME_TO_LIVE";
 
     // --- credenziali ---
     public static final String SUBSCRIPTION_KEY = "SUBSCRIPTION_KEY_VALUE";
@@ -45,7 +46,8 @@ public final class ConnettoreProprietaKeys {
     public static final Set<String> CONFIG_KEYS = Set.of(
             ABILITATO, URL, ABILITA_GDE, TIPOAUTENTICAZIONE, TIPOSSL, HTTPUSER,
             SSLKSLOCATION, SSLKSTYPE, SSLTSLOCATION, SSLTSTYPE, SSLTYPE,
-            HTTP_HEADER_NAME, API_ID, OAUTH2_CLIENT_ID, OAUTH2_SCOPE, OAUTH2_URL_TOKEN_ENDPOINT);
+            HTTP_HEADER_NAME, API_ID, OAUTH2_CLIENT_ID, OAUTH2_SCOPE, OAUTH2_URL_TOKEN_ENDPOINT,
+            TIME_TO_LIVE);
 
     public static final Set<String> CREDENTIAL_KEYS = Set.of(
             SUBSCRIPTION_KEY, HTTPPASSW, SSLKSPASSWD, SSLPKEYPASSWD, SSLTSPASSWD,

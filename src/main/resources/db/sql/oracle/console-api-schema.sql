@@ -124,3 +124,16 @@ CREATE TABLE impostazioni_mail_promemoria
 	preavviso NUMBER(10),
 	CONSTRAINT pk_impostazioni_mail_promemoria PRIMARY KEY (tipo_promemoria)
 );
+
+-- Template FreeMarker dei promemoria spediti via notifica push App IO, una
+-- riga per tipo (AVVISO/RICEVUTA/SCADENZA). Nessun allegato (a differenza
+-- della variante mail): niente colonna allega_pdf.
+CREATE TABLE impostazioni_appio_promemoria
+(
+	tipo_promemoria VARCHAR2(20 CHAR) NOT NULL,
+	oggetto VARCHAR2(4000 CHAR),
+	messaggio VARCHAR2(4000 CHAR),
+	solo_eseguiti NUMBER(1),
+	preavviso NUMBER(10),
+	CONSTRAINT pk_impostazioni_appio_promemoria PRIMARY KEY (tipo_promemoria)
+);
