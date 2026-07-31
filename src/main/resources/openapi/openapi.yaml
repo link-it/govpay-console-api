@@ -66,6 +66,12 @@ tags:
     description: |
       Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
       stato dell'ultima esecuzione nota.
+  - name: Impostazioni
+    description: |
+      Overview delle 8 sotto-risorse indipendenti del blob V1 `configurazione`
+      (`servizioGDE`, `giornaleEventi`, `mailBatch`, `avvisaturaMail`,
+      `appIOBatch`, `avvisaturaAppIO`, `tracciatoCsv`, `hardening`). Accesso
+      riservato al servizio ACL `Configurazione e manutenzione`.
   - name: Impostazioni - Servizio GDE
     description: |
       Sotto-risorsa `servizioGDE` del blob V1 `configurazione`: connettore
@@ -119,6 +125,28 @@ tags:
       endpoint dedicato, mai restituita dalle GET.
 
 paths:
+
+  /impostazioni:
+    get:
+      tags:
+        - Impostazioni
+      operationId: getImpostazioniOverview
+      summary: Overview delle 8 sotto-risorse di impostazioni.
+      description: |
+        Flag di abilitazione (dove il concetto si applica) e link a ciascuna
+        sotto-risorsa. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Overview impostazioni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniOverview'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
 
   /profilo:
     get:
@@ -8890,6 +8918,51 @@ components:
       properties:
         secretKey:
           type: string
+
+    AreaImpostazioni:
+      type: object
+      description: |
+        Riepilogo di una sotto-risorsa di impostazioni. `abilitata` e'
+        presente solo per le aree che hanno un vero flag di abilitazione
+        (connettori e hardening); le aree di solo template (giornale-eventi,
+        i due template-promemoria, tracciati-csv) non la espongono, non
+        avendo V1 alcun interruttore on/off. `ultimaModifica' e' assente se
+        l'area non e' mai stata modificata dopo il deploy.
+      required:
+        - codice
+        - nome
+        - href
+      properties:
+        codice:
+          type: string
+          example: servizioGDE
+        nome:
+          type: string
+          example: Servizio GDE
+        abilitata:
+          type: boolean
+        href:
+          type: string
+          example: /impostazioni/servizioGDE
+        ultimaModifica:
+          type: string
+          format: date-time
+
+    ImpostazioniOverview:
+      type: object
+      description: |
+        Overview delle 8 sotto-risorse indipendenti del blob V1
+        `configurazione`. `servizioGDE` e `giornaleEventi` sono due risorse
+        REST separate (auth/connettore vs politica di logging) nonostante
+        derivino dalla stessa area V1: vedi `_links.servizioGDE` dentro
+        `ImpostazioniGiornaleEventi`.
+      required:
+        - aree
+      properties:
+        aree:
+          type: array
+          items:
+            $ref: '#/components/schemas/AreaImpostazioni'
 
     ConnettoreIntermediarioPagopa:
       type: object
