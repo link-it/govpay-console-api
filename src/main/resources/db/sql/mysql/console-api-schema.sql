@@ -111,3 +111,14 @@ CREATE TABLE impostazioni_appio_promemoria
 	preavviso INT,
 	CONSTRAINT pk_impostazioni_appio_promemoria PRIMARY KEY (tipo_promemoria)
 )ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
+
+-- Template FreeMarker per la generazione dei tracciati CSV di risposta (riga singola).
+CREATE TABLE impostazioni_tracciati_csv
+(
+	id SMALLINT NOT NULL COMMENT 'Riga singola, sempre 1',
+	tipo VARCHAR(20),
+	intestazione VARCHAR(4000),
+	richiesta VARCHAR(4000),
+	risposta VARCHAR(4000),
+	CONSTRAINT pk_impostazioni_tracciati_csv PRIMARY KEY (id)
+)ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;

@@ -104,6 +104,12 @@ tags:
       FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via
       notifica push App IO. Accesso riservato al servizio ACL `Configurazione
       e manutenzione` (lettura per le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - Tracciati CSV
+    description: |
+      Sotto-risorsa `tracciatoCsv` del blob V1 `configurazione`: template
+      FreeMarker per la generazione dei tracciati CSV di risposta. Accesso
+      riservato al servizio ACL `Configurazione e manutenzione` (lettura per
+      le GET, scrittura per le PUT/PATCH).
 
 paths:
 
@@ -5405,6 +5411,112 @@ paths:
         '428':
           $ref: '#/components/responses/Problem428'
 
+  /impostazioni/tracciati-csv:
+    get:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: getImpostazioniTracciatiCsv
+      summary: Template FreeMarker per la generazione dei tracciati CSV di risposta.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template tracciati CSV.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: replaceImpostazioniTracciatiCsv
+      summary: Sostituisce i template dei tracciati CSV.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: patchImpostazioniTracciatiCsv
+      summary: Aggiorna il template dei tracciati CSV (JSON Patch).
+      description: |
+        RFC 6902, schema piatto: ogni campo top-level e' patchabile
+        singolarmente. Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
 components:
   schemas:
 
@@ -8554,6 +8666,29 @@ components:
           $ref: '#/components/schemas/TemplatePromemoriaRicevutaBase'
         promemoriaScadenza:
           $ref: '#/components/schemas/TemplatePromemoriaScadenza'
+
+    ImpostazioniTracciatiCsv:
+      type: object
+      description: |
+        Template FreeMarker per la generazione dei tracciati CSV di risposta.
+        Sotto-risorsa `tracciatoCsv` del blob V1 `configurazione`.
+      required:
+        - tipo
+        - intestazione
+        - richiesta
+        - risposta
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        intestazione:
+          type: string
+          description: Intestazione del file CSV di risposta.
+        richiesta:
+          type: string
+          description: Template FreeMarker per la trasformazione di un record da CSV a JSON.
+        risposta:
+          type: string
+          description: Template FreeMarker per la trasformazione di un record da JSON a CSV.
 
     ConnettoreIntermediarioPagopa:
       type: object

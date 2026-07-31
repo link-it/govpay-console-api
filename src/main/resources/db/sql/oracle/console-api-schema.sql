@@ -137,3 +137,14 @@ CREATE TABLE impostazioni_appio_promemoria
 	preavviso NUMBER(10),
 	CONSTRAINT pk_impostazioni_appio_promemoria PRIMARY KEY (tipo_promemoria)
 );
+
+-- Template FreeMarker per la generazione dei tracciati CSV di risposta (riga singola).
+CREATE TABLE impostazioni_tracciati_csv
+(
+	id NUMBER(5) NOT NULL,
+	tipo VARCHAR2(20 CHAR),
+	intestazione VARCHAR2(4000 CHAR),
+	richiesta VARCHAR2(4000 CHAR),
+	risposta VARCHAR2(4000 CHAR),
+	CONSTRAINT pk_impostazioni_tracciati_csv PRIMARY KEY (id)
+);
