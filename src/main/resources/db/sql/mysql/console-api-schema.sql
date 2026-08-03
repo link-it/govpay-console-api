@@ -4,7 +4,7 @@
 -- govpay-core sono nello script `upgrade-v1-to-v2.sql`.
 --
 -- Per applicare il bring-up completo di un DB da zero per console-api:
---   1) applicare lo schema di govpay-core (`gov_pay.sql` di govpay-381)
+--   1) applicare lo schema di govpay-core V1
 --   2) applicare `upgrade-v1-to-v2.sql` di questo progetto
 --   3) applicare questo file
 

@@ -116,9 +116,8 @@ public class AvvisoService {
     }
 
     /**
-     * Replica {@code VersamentoUtils.isPendenzaMBT} (govpay-381): la pendenza
-     * e' una Marca da Bollo Telematica se almeno un singolo versamento ha
-     * {@code hashDocumento}, {@code provinciaResidenza} e {@code tipoBollo}
+     * la pendenza e' una Marca da Bollo Telematica se almeno un singolo versamento
+     * ha {@code hashDocumento}, {@code provinciaResidenza} e {@code tipoBollo}
      * tutti valorizzati.
      */
     private static boolean isPendenzaMbt(Versamento v) {
