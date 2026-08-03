@@ -20,6 +20,11 @@ tags:
     description: Pagamenti in attesa e spontanei.
   - name: Ricevute
     description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
+  - name: Rendicontazioni
+    description: |
+      Consultazione dei flussi di rendicontazione (FR) scaricati da pagoPA.
+      Acquisizione read-only lato core (`RecuperoFR`); qui solo lettura per il
+      cruscotto.
   - name: Profilo
     description: Profilo dell'utenza autenticata corrente.
   - name: Autenticazione
@@ -520,6 +525,80 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '502':
           description: Microservizio govpay-stampe irraggiungibile (solo PDF).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /flussi-rendicontazione:
+    get:
+      tags:
+        - Rendicontazioni
+      operationId: listFlussiRendicontazione
+      summary: Elenca i flussi di rendicontazione (FR) visibili all'operatore (paginati).
+      description: |
+        Consultazione read-only dei flussi di rendicontazione scaricati da
+        pagoPA (acquisizione batch lato core, `RecuperoFR`). Restituisce solo
+        metadati aggregati (`FlussoRendicontazioneSummary`): nessun dato
+        personale, quindi la lista non genera audit GDPR.
+
+        Filtri supportati:
+        - `idDominio`, `idFlusso`, `idPsp` — match esatto;
+        - `dataDa` / `dataA` — intervallo (incluso) sulla data di
+          acquisizione del flusso (non sulla data di emissione PSP);
+        - `stato` — match puntuale;
+        - `incassato` — shortcut booleano: il flusso ha un incasso (bonifico
+          SCT) associato;
+        - `iuv` — restituisce solo i flussi che contengono quello IUV (join a
+          `rendicontazioni`: costo aggiuntivo rispetto agli altri filtri).
+
+        Tutti i filtri sono opzionali e in AND.
+
+        ACL: filtro automatico sui domini visibili all'operatore corrente; un
+        operatore senza visibilita' riceve lista vuota (mai 403).
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(dataOraFlusso DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 con motivazione parlante. Cursor malformato → 400.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/IdFlusso'
+        - $ref: '#/components/parameters/IdPsp'
+        - $ref: '#/components/parameters/FrDataDa'
+        - $ref: '#/components/parameters/FrDataA'
+        - $ref: '#/components/parameters/StatoFlussoFilter'
+        - $ref: '#/components/parameters/Incassato'
+        - $ref: '#/components/parameters/IuvFilter'
+      responses:
+        '200':
+          description: Lista paginata di flussi di rendicontazione.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FlussoRendicontazioneSummary'
+        '400':
+          description: Filtro non supportato, parametro malformato o `limit > 200`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
           content:
             application/problem+json:
               schema:
@@ -6335,6 +6414,80 @@ components:
           format: double
           description: Importo totale pagato. Dato finanziario, non personale.
 
+    StatoFlussoRendicontazione:
+      type: string
+      description: |
+        Stato del flusso di rendicontazione. `OBSOLETO` prevale sugli altri
+        valori: marca una revisione superata dello stesso flusso (il PSP lo ha
+        riemesso con `revisione` incrementata), indipendentemente da come
+        pagoPA aveva classificato quella revisione.
+      enum:
+        - ACQUISITO
+        - ANOMALO
+        - RIFIUTATO
+        - OBSOLETO
+
+    FlussoRendicontazioneSummary:
+      type: object
+      description: |
+        Proiezione leggera (metadata-only) di un flusso di rendicontazione,
+        usata nelle liste. Nessun dato personale del debitore, quindi la
+        lista non genera audit GDPR. La quaterna `idDominio`, `idFlusso`,
+        `idPsp`, `revisione` identifica univocamente il flusso.
+      required:
+        - idDominio
+        - idFlusso
+        - idPsp
+        - revisione
+        - dataOraFlusso
+        - dataAcquisizione
+        - stato
+        - numeroPagamenti
+        - importoTotale
+      properties:
+        idDominio:
+          type: string
+          description: Codice fiscale dell'ente creditore (11 cifre).
+        idFlusso:
+          type: string
+          description: Identificativo del flusso assegnato dal PSP.
+        idPsp:
+          type: string
+          description: Identificativo del PSP mittente.
+        revisione:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Numero di revisione: i PSP possono ri-emettere lo stesso
+            `idFlusso` con revisione crescente.
+        dataOraFlusso:
+          type: string
+          format: date-time
+          description: Data di emissione del flusso dichiarata dal PSP.
+        dataAcquisizione:
+          type: string
+          format: date-time
+          description: Data in cui GovPay ha scaricato il flusso da pagoPA.
+        dataRegolamento:
+          type: string
+          format: date
+          description: Data valuta del bonifico SCT di regolamento.
+        sctBonifico:
+          type: string
+          description: Riferimento del bonifico SEPA Credit Transfer di regolamento.
+        stato:
+          $ref: '#/components/schemas/StatoFlussoRendicontazione'
+        descrizioneStato:
+          type: string
+          description: Dettaglio human-readable dello stato.
+        numeroPagamenti:
+          type: integer
+          format: int64
+        importoTotale:
+          type: number
+          format: double
+
     Soggetto:
       type: object
       description: |
@@ -9787,6 +9940,58 @@ components:
       schema:
         type: string
         format: date
+
+    IdFlusso:
+      name: idFlusso
+      in: query
+      required: false
+      description: Identificativo del flusso di rendicontazione assegnato dal PSP, match esatto.
+      schema:
+        type: string
+
+    IdPsp:
+      name: idPsp
+      in: query
+      required: false
+      description: Identificativo del PSP mittente del flusso, match esatto.
+      schema:
+        type: string
+
+    FrDataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla data di acquisizione del flusso (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    FrDataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data di acquisizione del flusso (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    StatoFlussoFilter:
+      name: stato
+      in: query
+      required: false
+      description: Filtra per stato del flusso.
+      schema:
+        $ref: '#/components/schemas/StatoFlussoRendicontazione'
+
+    Incassato:
+      name: incassato
+      in: query
+      required: false
+      description: |
+        Se `true`, solo i flussi con un incasso (bonifico SCT) associato; se
+        `false`, solo quelli senza.
+      schema:
+        type: boolean
 
     IdDominioPath:
       name: idDominio
