@@ -8,10 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import it.govpay.console.api.RendicontazioniApi;
+import it.govpay.console.model.FlussoRendicontazione;
 import it.govpay.console.model.ListFlussiRendicontazione200Response;
 import it.govpay.console.model.StatoFlussoRendicontazione;
 import it.govpay.console.web.ListQueryValidator;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 public class FrController implements RendicontazioniApi {
@@ -20,15 +22,22 @@ public class FrController implements RendicontazioniApi {
             "page", "limit", "sort", "total", "cursor",
             "idDominio", "idFlusso", "idPsp", "dataDa", "dataA", "stato", "incassato", "iuv");
 
+    private static final Set<String> GET_QUERY_PARAMS = Set.of();
+
     private static final String CURSOR_FIXED_SORT = "dataOraFlusso DESC, id DESC";
 
     private final FrSearchService searchService;
+    private final FrDetailService detailService;
 
     @Autowired(required = false)
     private HttpServletRequest currentRequest;
 
-    public FrController(FrSearchService searchService) {
+    @Autowired(required = false)
+    private HttpServletResponse currentResponse;
+
+    public FrController(FrSearchService searchService, FrDetailService detailService) {
         this.searchService = searchService;
+        this.detailService = detailService;
     }
 
     @Override
@@ -57,5 +66,14 @@ public class FrController implements RendicontazioniApi {
                 incassato,
                 iuv);
         return ResponseEntity.ok(searchService.search(query));
+    }
+
+    @Override
+    public ResponseEntity<FlussoRendicontazione> getFlussoRendicontazione(
+            String idDominio, String idFlusso, String idPsp, Long revisione) {
+        ListQueryValidator.rejectUnsupported(currentRequest, GET_QUERY_PARAMS);
+        ResponseEntity<FlussoRendicontazione> response =
+                detailService.get(idDominio, idFlusso, idPsp, revisione, currentRequest, currentResponse);
+        return response != null ? response : ResponseEntity.ok().build();
     }
 }

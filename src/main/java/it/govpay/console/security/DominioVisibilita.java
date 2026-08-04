@@ -36,4 +36,12 @@ public final class DominioVisibilita {
         }
         return idDominio.in(dominiInteri);
     }
+
+    /** Check post-fetch su un {@code id_dominio} già caricato (per i {@code get} di dettaglio). */
+    public static boolean isVisibile(Long idDominio, OperatoreCorrente operatore) {
+        if (operatore.tuttiIDomini()) {
+            return true;
+        }
+        return idDominio != null && operatore.idDominiInteri().contains(idDominio);
+    }
 }

@@ -3,7 +3,10 @@ package it.govpay.console.rendicontazione;
 import org.springframework.stereotype.Component;
 
 import it.govpay.console.entity.Fr;
+import it.govpay.console.model.FlussoRendicontazione;
+import it.govpay.console.model.FlussoRendicontazioneLinks;
 import it.govpay.console.model.FlussoRendicontazioneSummary;
+import it.govpay.console.model.Link;
 import it.govpay.console.model.StatoFlussoRendicontazione;
 
 /**
@@ -32,6 +35,35 @@ public class FrMapper {
         s.setNumeroPagamenti(fr.getNumeroPagamenti());
         s.setImportoTotale(fr.getImportoTotalePagamenti());
         return s;
+    }
+
+    /**
+     * Dettaglio canonico: gli stessi campi della summary + {@code dataInizio}/
+     * {@code dataFine} (finestra temporale, mai calcolata nella lista) + {@code _links}.
+     * Niente {@code xml} inline: si ottiene sullo stesso path via content negotiation.
+     */
+    public FlussoRendicontazione toDetail(Fr fr, FrPeriodo periodo) {
+        FlussoRendicontazione d = new FlussoRendicontazione();
+        d.setIdDominio(fr.getCodDominio());
+        d.setIdFlusso(fr.getCodFlusso());
+        d.setIdPsp(fr.getCodPsp());
+        d.setRevisione(fr.getRevisione() != null ? fr.getRevisione() : 1L);
+        d.setDataOraFlusso(fr.getDataOraFlusso());
+        d.setDataAcquisizione(fr.getDataAcquisizione());
+        if (fr.getDataRegolamento() != null) {
+            d.setDataRegolamento(fr.getDataRegolamento().toLocalDate());
+        }
+        d.setSctBonifico(fr.getIur());
+        d.setStato(statoArricchito(fr));
+        d.setDescrizioneStato(fr.getDescrizioneStato());
+        d.setNumeroPagamenti(fr.getNumeroPagamenti());
+        d.setImportoTotale(fr.getImportoTotalePagamenti());
+        if (periodo != null) {
+            d.setDataInizio(periodo.dataInizio());
+            d.setDataFine(periodo.dataFine());
+        }
+        d.setLinks(new FlussoRendicontazioneLinks(new Link("/domini/" + fr.getCodDominio())));
+        return d;
     }
 
     private static StatoFlussoRendicontazione statoArricchito(Fr fr) {

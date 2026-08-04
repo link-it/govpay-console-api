@@ -604,6 +604,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /flussi-rendicontazione/{idDominio}/{idFlusso}/{idPsp}/{revisione}:
+    get:
+      tags:
+        - Rendicontazioni
+      operationId: getFlussoRendicontazione
+      summary: Dettaglio di un flusso di rendicontazione, con download XML via content negotiation.
+      description: |
+        La quaterna `(idDominio, idFlusso, idPsp, revisione)` identifica
+        univocamente il flusso (vincolo gia' presente a DB). Le 3 varianti V1
+        di dettaglio (`{idFlusso}`, `{idFlusso}/{dataOraFlusso}`,
+        `{idDominio}/{idFlusso}/{dataOraFlusso}`) collassano in questa unica;
+        se il cruscotto ha ancora bookmark con la chiave V1 deve prima cercare
+        via `GET /flussi-rendicontazione?idFlusso=...` e poi navigare al
+        canonico.
+
+        Content negotiation tramite header `Accept`:
+        - `application/json` (default) → metadati del flusso (`FlussoRendicontazione`);
+        - `application/xml` → XML originale del flusso (schema pagoPA
+          `FlussoRiversamento`), byte-per-byte dal DB.
+
+        404 problem+json se il flusso non esiste o non è visibile per ACL
+        (indistinguibile, anti-leak); 404 anche se il record esiste ma l'XML
+        non è archiviato (flussi storici con soli metadati) ed è richiesto
+        `Accept: application/xml`. 406 se `Accept` non è ne' JSON ne' XML.
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/IdFlussoPath'
+        - $ref: '#/components/parameters/IdPspPath'
+        - $ref: '#/components/parameters/RevisionePath'
+      responses:
+        '200':
+          description: Flusso nel formato richiesto.
+          headers:
+            Cache-Control:
+              description: |
+                Il flusso è immutabile una volta acquisito: una nuova
+                revisione produce un nuovo record, non modifica questo.
+              schema:
+                type: string
+                example: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlussoRendicontazione'
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: 'Flusso non trovato, non visibile, oppure XML non archiviato (solo per `Accept: application/xml`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Formato richiesto non supportato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /pendenze:
     get:
       tags:
@@ -6488,6 +6555,40 @@ components:
           type: number
           format: double
 
+    FlussoRendicontazioneLinks:
+      type: object
+      description: Hyperlink relativi al flusso. Il download XML non ha `_link` dedicato (stesso URL di `self`, con `Accept` diverso).
+      required:
+        - dominio
+      properties:
+        dominio:
+          $ref: '#/components/schemas/Link'
+
+    FlussoRendicontazione:
+      description: |
+        Dettaglio canonico di un flusso di rendicontazione: `FlussoRendicontazioneSummary`
+        + finestra temporale coperta dal flusso + `_links`. Niente `xml` inline:
+        si ottiene sullo stesso path via `Accept: application/xml`.
+      allOf:
+        - $ref: '#/components/schemas/FlussoRendicontazioneSummary'
+        - type: object
+          required:
+            - _links
+          properties:
+            dataInizio:
+              type: string
+              format: date-time
+              description: |
+                Data del pagamento più vecchio rendicontato dal flusso
+                (derivata da `MIN(rendicontazioni.data)`, non da un campo
+                proprio del flusso).
+            dataFine:
+              type: string
+              format: date-time
+              description: Data del pagamento più recente rendicontato dal flusso (`MAX(rendicontazioni.data)`).
+            _links:
+              $ref: '#/components/schemas/FlussoRendicontazioneLinks'
+
     Soggetto:
       type: object
       description: |
@@ -10001,6 +10102,32 @@ components:
       schema:
         type: string
         pattern: '^[0-9]{11}$'
+
+    IdFlussoPath:
+      name: idFlusso
+      in: path
+      required: true
+      description: Identificativo del flusso di rendicontazione assegnato dal PSP.
+      schema:
+        type: string
+
+    IdPspPath:
+      name: idPsp
+      in: path
+      required: true
+      description: Identificativo del PSP mittente del flusso.
+      schema:
+        type: string
+
+    RevisionePath:
+      name: revisione
+      in: path
+      required: true
+      description: Numero di revisione del flusso.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
 
     IuvPath:
       name: iuv
