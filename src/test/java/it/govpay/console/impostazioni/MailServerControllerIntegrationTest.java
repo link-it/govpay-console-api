@@ -22,15 +22,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.MailBatch;
+import it.govpay.common.repository.ConfigurazioneRepository;
 import it.govpay.console.entity.Acl;
-import it.govpay.console.entity.ImpostazioniMailServer;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.GpAuditRepository;
-import it.govpay.console.repository.ImpostazioniMailServerRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,7 +59,9 @@ class MailServerControllerIntegrationTest {
     @Autowired
     private GpAuditRepository gpAuditRepository;
     @Autowired
-    private ImpostazioniMailServerRepository mailServerRepository;
+    private ConfigurazioneRepository configurazioneRepository;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setup() {
@@ -181,10 +185,11 @@ class MailServerControllerIntegrationTest {
                 .andExpect(jsonPath("$.ksPassword").doesNotExist())
                 .andExpect(jsonPath("$.tsPassword").doesNotExist());
 
-        ImpostazioniMailServer entity = mailServerRepository.findById(ImpostazioniMailServer.ID_SINGLETON).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(entity.getPassword()).isEqualTo("s3cr3t");
-        org.assertj.core.api.Assertions.assertThat(entity.getKsPassword()).isEqualTo("ksSecret");
-        org.assertj.core.api.Assertions.assertThat(entity.getTsPassword()).isEqualTo("tsSecret");
+        String valore = configurazioneRepository.findByNome(ConfigurazioneKeys.KEY_MAIL_BATCH).orElseThrow().getValore();
+        MailBatch mailBatch = objectMapper.readValue(valore, MailBatch.class);
+        org.assertj.core.api.Assertions.assertThat(mailBatch.getMailserver().getPassword()).isEqualTo("s3cr3t");
+        org.assertj.core.api.Assertions.assertThat(mailBatch.getMailserver().getSslConfig().getKeyStore().getPassword()).isEqualTo("ksSecret");
+        org.assertj.core.api.Assertions.assertThat(mailBatch.getMailserver().getSslConfig().getTrustStore().getPassword()).isEqualTo("tsSecret");
     }
 
     @Test

@@ -8,13 +8,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.Hardening;
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.ImpostazioniHardening;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ImpostazioniHardeningCredenziali;
 import it.govpay.console.model.JsonPatchOperation;
-import it.govpay.console.repository.ImpostazioniHardeningRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -27,8 +27,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Gestisce la configurazione Google reCAPTCHA, riga singola
- * {@link ImpostazioniHardening#ID_SINGLETON}.
+ * Gestisce la configurazione Google reCAPTCHA, riga {@code hardening} della
+ * tabella {@code configurazione} (stessa chiave/forma di V1).
  */
 @Service
 public class HardeningService {
@@ -36,20 +36,20 @@ public class HardeningService {
     public static final String AZIONE_AUDIT_MODIFICA = "IMPOSTAZIONI_HARDENING_MODIFICA";
     public static final String AZIONE_AUDIT_CREDENZIALI = "IMPOSTAZIONI_HARDENING_CREDENZIALI";
 
-    private final ImpostazioniHardeningRepository repository;
+    private final ConfigurazioneBlobStore blobStore;
     private final HardeningMapper mapper;
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
 
-    public HardeningService(ImpostazioniHardeningRepository repository,
+    public HardeningService(ConfigurazioneBlobStore blobStore,
                             HardeningMapper mapper,
                             ObjectMapper objectMapper,
                             AclAuthorizer aclAuthorizer,
                             CurrentOperatorService currentOperatorService,
                             AuditService auditService) {
-        this.repository = repository;
+        this.blobStore = blobStore;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
@@ -69,9 +69,9 @@ public class HardeningService {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         checkIfMatch(ifMatch, currentDto());
 
-        ImpostazioniHardening entity = loadOrCreate();
-        mapper.applyConfig(entity, body);
-        repository.save(entity);
+        Hardening hardening = loadOrCreate();
+        mapper.applyConfig(hardening, body);
+        blobStore.write(ConfigurazioneKeys.KEY_HARDENING, hardening);
 
         audit(AZIONE_AUDIT_MODIFICA, request);
         return ok(currentDto());
@@ -94,9 +94,9 @@ public class HardeningService {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
 
-        ImpostazioniHardening entity = loadOrCreate();
-        mapper.applyConfig(entity, body);
-        repository.save(entity);
+        Hardening hardening = loadOrCreate();
+        mapper.applyConfig(hardening, body);
+        blobStore.write(ConfigurazioneKeys.KEY_HARDENING, hardening);
 
         audit(AZIONE_AUDIT_MODIFICA, request);
         return ok(currentDto());
@@ -106,17 +106,16 @@ public class HardeningService {
     public ResponseEntity<Void> putCredenziali(ImpostazioniHardeningCredenziali credenziali, HttpServletRequest request) {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
 
-        ImpostazioniHardening entity = loadOrCreate();
-        mapper.applyCredenziali(entity, credenziali);
-        repository.save(entity);
+        Hardening hardening = loadOrCreate();
+        mapper.applyCredenziali(hardening, credenziali);
+        blobStore.write(ConfigurazioneKeys.KEY_HARDENING, hardening);
 
         audit(AZIONE_AUDIT_CREDENZIALI, request);
         return ResponseEntity.noContent().build();
     }
 
-    private ImpostazioniHardening loadOrCreate() {
-        return repository.findById(ImpostazioniHardening.ID_SINGLETON)
-                .orElseGet(ImpostazioniHardening::new);
+    private Hardening loadOrCreate() {
+        return blobStore.read(ConfigurazioneKeys.KEY_HARDENING, Hardening.class, Hardening::new);
     }
 
     private it.govpay.console.model.ImpostazioniHardening currentDto() {
@@ -144,6 +143,6 @@ public class HardeningService {
     private void audit(String azione, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        auditService.registra(azione, ImpostazioniHardening.ID_SINGLETON, dettaglio, operatore, request);
+        auditService.registra(azione, 0L, dettaglio, operatore, request);
     }
 }

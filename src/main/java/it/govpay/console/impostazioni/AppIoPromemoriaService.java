@@ -3,19 +3,18 @@ package it.govpay.console.impostazioni;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.AvvisaturaViaAppIo;
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.ImpostazioniAppIoPromemoria;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ImpostazioniAppIoTemplatePromemoria;
 import it.govpay.console.model.JsonPatchOperation;
-import it.govpay.console.repository.ImpostazioniAppIoPromemoriaRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -29,30 +28,27 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Gestisce i template FreeMarker dei promemoria spediti via notifica push
- * App IO, 3 righe fisse (una per tipo) su {@code impostazioni_appio_promemoria}.
+ * App IO, riga {@code avvisatura_app_io} della tabella {@code configurazione}.
  */
 @Service
 public class AppIoPromemoriaService {
 
-    private static final Set<String> TIPI = Set.of(
-            ImpostazioniAppIoPromemoria.AVVISO, ImpostazioniAppIoPromemoria.RICEVUTA, ImpostazioniAppIoPromemoria.SCADENZA);
-
     public static final String AZIONE_AUDIT_MODIFICA = "IMPOSTAZIONI_APP_IO_PROMEMORIA_MODIFICA";
 
-    private final ImpostazioniAppIoPromemoriaRepository repository;
+    private final ConfigurazioneBlobStore blobStore;
     private final AppIoPromemoriaMapper mapper;
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
 
-    public AppIoPromemoriaService(ImpostazioniAppIoPromemoriaRepository repository,
+    public AppIoPromemoriaService(ConfigurazioneBlobStore blobStore,
                                   AppIoPromemoriaMapper mapper,
                                   ObjectMapper objectMapper,
                                   AclAuthorizer aclAuthorizer,
                                   CurrentOperatorService currentOperatorService,
                                   AuditService auditService) {
-        this.repository = repository;
+        this.blobStore = blobStore;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
@@ -72,7 +68,7 @@ public class AppIoPromemoriaService {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         checkIfMatch(ifMatch, currentDto());
 
-        persist(body);
+        blobStore.write(ConfigurazioneKeys.KEY_AVVISATURA_APP_IO, mapper.toCommon(body));
         audit(request);
         return ok(currentDto());
     }
@@ -94,20 +90,14 @@ public class AppIoPromemoriaService {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
 
-        persist(body);
+        blobStore.write(ConfigurazioneKeys.KEY_AVVISATURA_APP_IO, mapper.toCommon(body));
         audit(request);
         return ok(currentDto());
     }
 
-    private void persist(ImpostazioniAppIoTemplatePromemoria body) {
-        Map<String, ImpostazioniAppIoPromemoria> entities = mapper.toEntities(body);
-        repository.saveAll(entities.values());
-    }
-
     private ImpostazioniAppIoTemplatePromemoria currentDto() {
-        Map<String, ImpostazioniAppIoPromemoria> byTipo = repository.findAllById(TIPI).stream()
-                .collect(java.util.stream.Collectors.toMap(ImpostazioniAppIoPromemoria::getTipoPromemoria, e -> e));
-        return mapper.toDto(byTipo);
+        AvvisaturaViaAppIo avvisatura = blobStore.read(ConfigurazioneKeys.KEY_AVVISATURA_APP_IO, AvvisaturaViaAppIo.class, AvvisaturaViaAppIo::new);
+        return mapper.toDto(avvisatura);
     }
 
     private ResponseEntity<ImpostazioniAppIoTemplatePromemoria> ok(ImpostazioniAppIoTemplatePromemoria dto) {

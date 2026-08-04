@@ -8,13 +8,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.MailBatch;
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.ImpostazioniMailServer;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ImpostazioniMailServerCredenziali;
 import it.govpay.console.model.JsonPatchOperation;
-import it.govpay.console.repository.ImpostazioniMailServerRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -27,8 +27,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Gestisce il server SMTP usato per l'invio dei promemoria, riga singola
- * {@link ImpostazioniMailServer#ID_SINGLETON}.
+ * Gestisce il server SMTP usato per l'invio dei promemoria, riga
+ * {@code mail_batch} della tabella {@code configurazione}.
  */
 @Service
 public class MailServerService {
@@ -36,20 +36,20 @@ public class MailServerService {
     public static final String AZIONE_AUDIT_MODIFICA = "IMPOSTAZIONI_MAIL_SERVER_MODIFICA";
     public static final String AZIONE_AUDIT_CREDENZIALI = "IMPOSTAZIONI_MAIL_SERVER_CREDENZIALI";
 
-    private final ImpostazioniMailServerRepository repository;
+    private final ConfigurazioneBlobStore blobStore;
     private final MailServerMapper mapper;
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
 
-    public MailServerService(ImpostazioniMailServerRepository repository,
+    public MailServerService(ConfigurazioneBlobStore blobStore,
                              MailServerMapper mapper,
                              ObjectMapper objectMapper,
                              AclAuthorizer aclAuthorizer,
                              CurrentOperatorService currentOperatorService,
                              AuditService auditService) {
-        this.repository = repository;
+        this.blobStore = blobStore;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
@@ -69,9 +69,9 @@ public class MailServerService {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         checkIfMatch(ifMatch, currentDto());
 
-        ImpostazioniMailServer entity = loadOrCreate();
-        mapper.applyConfig(entity, body);
-        repository.save(entity);
+        MailBatch mailBatch = loadOrCreate();
+        mapper.applyConfig(mailBatch, body);
+        blobStore.write(ConfigurazioneKeys.KEY_MAIL_BATCH, mailBatch);
 
         audit(AZIONE_AUDIT_MODIFICA, request);
         return ok(currentDto());
@@ -96,9 +96,9 @@ public class MailServerService {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
 
-        ImpostazioniMailServer entity = loadOrCreate();
-        mapper.applyConfig(entity, body);
-        repository.save(entity);
+        MailBatch mailBatch = loadOrCreate();
+        mapper.applyConfig(mailBatch, body);
+        blobStore.write(ConfigurazioneKeys.KEY_MAIL_BATCH, mailBatch);
 
         audit(AZIONE_AUDIT_MODIFICA, request);
         return ok(currentDto());
@@ -108,17 +108,16 @@ public class MailServerService {
     public ResponseEntity<Void> putPassword(ImpostazioniMailServerCredenziali credenziali, HttpServletRequest request) {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
 
-        ImpostazioniMailServer entity = loadOrCreate();
-        mapper.applyCredenziali(entity, credenziali);
-        repository.save(entity);
+        MailBatch mailBatch = loadOrCreate();
+        mapper.applyCredenziali(mailBatch, credenziali);
+        blobStore.write(ConfigurazioneKeys.KEY_MAIL_BATCH, mailBatch);
 
         audit(AZIONE_AUDIT_CREDENZIALI, request);
         return ResponseEntity.noContent().build();
     }
 
-    private ImpostazioniMailServer loadOrCreate() {
-        return repository.findById(ImpostazioniMailServer.ID_SINGLETON)
-                .orElseGet(ImpostazioniMailServer::new);
+    private MailBatch loadOrCreate() {
+        return blobStore.read(ConfigurazioneKeys.KEY_MAIL_BATCH, MailBatch.class, MailBatch::new);
     }
 
     private it.govpay.console.model.ImpostazioniMailServer currentDto() {
@@ -146,6 +145,6 @@ public class MailServerService {
     private void audit(String azione, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        auditService.registra(azione, ImpostazioniMailServer.ID_SINGLETON, dettaglio, operatore, request);
+        auditService.registra(azione, 0L, dettaglio, operatore, request);
     }
 }

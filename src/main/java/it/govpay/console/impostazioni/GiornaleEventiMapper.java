@@ -1,84 +1,90 @@
 package it.govpay.console.impostazioni;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
+import it.govpay.common.configurazione.model.Giornale;
 import org.springframework.stereotype.Component;
 
-import it.govpay.console.entity.GiornaleEventiInterfaccia;
+import it.govpay.common.configurazione.model.GdeInterfaccia;
 import it.govpay.console.model.GdeEvento;
 import it.govpay.console.model.GdeEvento.DumpEnum;
 import it.govpay.console.model.GdeEvento.LogEnum;
-import it.govpay.console.model.GdeInterfaccia;
 import it.govpay.console.model.ImpostazioniGiornaleEventi;
 
 /**
- * Conversione bidirezionale tra {@link ImpostazioniGiornaleEventi} (8 blocchi
- * {@code GdeInterfaccia}, uno per interfaccia API) e le 8 righe di
- * {@code giornale_eventi_interfacce}, chiave naturale {@code nome_interfaccia}.
+ * Conversione bidirezionale tra {@link ImpostazioniGiornaleEventi} e
+ * {@link Giornale} (bean di {@code govpay-common}, stessi 8 campi/nomi,
+ * deserializzato dal blob {@code configurazione}, chiave {@code giornale_eventi}).
+ * Il connettore GDE vero e proprio (url/auth) e' la sotto-risorsa indipendente
+ * {@link ServizioGdeService}, referenziata via {@code _links}.
  */
 @Component
 public class GiornaleEventiMapper {
 
-    /** Nomi delle interfacce, stesso ordine/naming di V1 (set fisso, mai esteso a runtime). */
-    public static final List<String> NOMI_INTERFACCE = List.of(
-            "apiEnte", "apiPagamento", "apiRagioneria", "apiBackoffice",
-            "apiPagoPA", "apiPendenze", "apiBackendIO", "apiMaggioliJPPA");
-
     private static final String DEFAULT_POLICY = "MAI";
 
-    public ImpostazioniGiornaleEventi toDto(Map<String, GiornaleEventiInterfaccia> byNome) {
+    public ImpostazioniGiornaleEventi toDto(Giornale source) {
         ImpostazioniGiornaleEventi dto = new ImpostazioniGiornaleEventi();
-        dto.setApiEnte(toGdeInterfaccia(byNome.get("apiEnte")));
-        dto.setApiPagamento(toGdeInterfaccia(byNome.get("apiPagamento")));
-        dto.setApiRagioneria(toGdeInterfaccia(byNome.get("apiRagioneria")));
-        dto.setApiBackoffice(toGdeInterfaccia(byNome.get("apiBackoffice")));
-        dto.setApiPagoPA(toGdeInterfaccia(byNome.get("apiPagoPA")));
-        dto.setApiPendenze(toGdeInterfaccia(byNome.get("apiPendenze")));
-        dto.setApiBackendIO(toGdeInterfaccia(byNome.get("apiBackendIO")));
-        dto.setApiMaggioliJPPA(toGdeInterfaccia(byNome.get("apiMaggioliJPPA")));
+        dto.setApiEnte(toApiInterfaccia(source.getApiEnte()));
+        dto.setApiPagamento(toApiInterfaccia(source.getApiPagamento()));
+        dto.setApiRagioneria(toApiInterfaccia(source.getApiRagioneria()));
+        dto.setApiBackoffice(toApiInterfaccia(source.getApiBackoffice()));
+        dto.setApiPagoPA(toApiInterfaccia(source.getApiPagoPA()));
+        dto.setApiPendenze(toApiInterfaccia(source.getApiPendenze()));
+        dto.setApiBackendIO(toApiInterfaccia(source.getApiBackendIO()));
+        dto.setApiMaggioliJPPA(toApiInterfaccia(source.getApiMaggioliJPPA()));
         return dto;
     }
 
-    public Map<String, GiornaleEventiInterfaccia> toEntities(ImpostazioniGiornaleEventi dto) {
-        Map<String, GiornaleEventiInterfaccia> map = new LinkedHashMap<>();
-        map.put("apiEnte", toEntity("apiEnte", dto.getApiEnte()));
-        map.put("apiPagamento", toEntity("apiPagamento", dto.getApiPagamento()));
-        map.put("apiRagioneria", toEntity("apiRagioneria", dto.getApiRagioneria()));
-        map.put("apiBackoffice", toEntity("apiBackoffice", dto.getApiBackoffice()));
-        map.put("apiPagoPA", toEntity("apiPagoPA", dto.getApiPagoPA()));
-        map.put("apiPendenze", toEntity("apiPendenze", dto.getApiPendenze()));
-        map.put("apiBackendIO", toEntity("apiBackendIO", dto.getApiBackendIO()));
-        map.put("apiMaggioliJPPA", toEntity("apiMaggioliJPPA", dto.getApiMaggioliJPPA()));
-        return map;
+    public Giornale toCommon(ImpostazioniGiornaleEventi dto) {
+        Giornale target = new Giornale();
+        target.setApiEnte(toCommonInterfaccia(dto.getApiEnte()));
+        target.setApiPagamento(toCommonInterfaccia(dto.getApiPagamento()));
+        target.setApiRagioneria(toCommonInterfaccia(dto.getApiRagioneria()));
+        target.setApiBackoffice(toCommonInterfaccia(dto.getApiBackoffice()));
+        target.setApiPagoPA(toCommonInterfaccia(dto.getApiPagoPA()));
+        target.setApiPendenze(toCommonInterfaccia(dto.getApiPendenze()));
+        target.setApiBackendIO(toCommonInterfaccia(dto.getApiBackendIO()));
+        target.setApiMaggioliJPPA(toCommonInterfaccia(dto.getApiMaggioliJPPA()));
+        return target;
     }
 
-    private GdeInterfaccia toGdeInterfaccia(GiornaleEventiInterfaccia entity) {
-        GdeInterfaccia dto = new GdeInterfaccia();
-        if (entity == null) {
+    private static it.govpay.console.model.GdeInterfaccia toApiInterfaccia(GdeInterfaccia source) {
+        it.govpay.console.model.GdeInterfaccia dto = new it.govpay.console.model.GdeInterfaccia();
+        if (source == null) {
             dto.setLetture(defaultEvento());
             dto.setScritture(defaultEvento());
             return dto;
         }
-        dto.setLetture(new GdeEvento(LogEnum.fromValue(entity.getLogLetture()), DumpEnum.fromValue(entity.getDumpLetture())));
-        dto.setScritture(new GdeEvento(LogEnum.fromValue(entity.getLogScritture()), DumpEnum.fromValue(entity.getDumpScritture())));
+        dto.setLetture(toApiEvento(source.getLetture()));
+        dto.setScritture(toApiEvento(source.getScritture()));
         return dto;
+    }
+
+    private static GdeEvento toApiEvento(it.govpay.common.configurazione.model.GdeEvento source) {
+        if (source == null) {
+            return defaultEvento();
+        }
+        LogEnum log = source.getLog() != null ? LogEnum.fromValue(source.getLog().name()) : LogEnum.fromValue(DEFAULT_POLICY);
+        DumpEnum dump = source.getDump() != null ? DumpEnum.fromValue(source.getDump().name()) : DumpEnum.fromValue(DEFAULT_POLICY);
+        return new GdeEvento(log, dump);
     }
 
     private static GdeEvento defaultEvento() {
         return new GdeEvento(LogEnum.fromValue(DEFAULT_POLICY), DumpEnum.fromValue(DEFAULT_POLICY));
     }
 
-    private GiornaleEventiInterfaccia toEntity(String nomeInterfaccia, GdeInterfaccia dto) {
-        GiornaleEventiInterfaccia entity = new GiornaleEventiInterfaccia();
-        entity.setNomeInterfaccia(nomeInterfaccia);
-        GdeEvento letture = dto != null ? dto.getLetture() : null;
-        GdeEvento scritture = dto != null ? dto.getScritture() : null;
-        entity.setLogLetture(letture != null && letture.getLog() != null ? letture.getLog().getValue() : DEFAULT_POLICY);
-        entity.setDumpLetture(letture != null && letture.getDump() != null ? letture.getDump().getValue() : DEFAULT_POLICY);
-        entity.setLogScritture(scritture != null && scritture.getLog() != null ? scritture.getLog().getValue() : DEFAULT_POLICY);
-        entity.setDumpScritture(scritture != null && scritture.getDump() != null ? scritture.getDump().getValue() : DEFAULT_POLICY);
-        return entity;
+    private static GdeInterfaccia toCommonInterfaccia(it.govpay.console.model.GdeInterfaccia dto) {
+        GdeInterfaccia target = new GdeInterfaccia();
+        target.setLetture(toCommonEvento(dto != null ? dto.getLetture() : null));
+        target.setScritture(toCommonEvento(dto != null ? dto.getScritture() : null));
+        return target;
+    }
+
+    private static it.govpay.common.configurazione.model.GdeEvento toCommonEvento(GdeEvento dto) {
+        it.govpay.common.configurazione.model.GdeEvento target = new it.govpay.common.configurazione.model.GdeEvento();
+        String log = dto != null && dto.getLog() != null ? dto.getLog().getValue() : DEFAULT_POLICY;
+        String dump = dto != null && dto.getDump() != null ? dto.getDump().getValue() : DEFAULT_POLICY;
+        target.setLog(it.govpay.common.configurazione.model.GdeEvento.LogEnum.valueOf(log));
+        target.setDump(it.govpay.common.configurazione.model.GdeEvento.DumpEnum.valueOf(dump));
+        return target;
     }
 }

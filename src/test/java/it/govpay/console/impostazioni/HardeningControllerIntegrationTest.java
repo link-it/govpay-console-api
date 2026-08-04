@@ -22,15 +22,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.Hardening;
+import it.govpay.common.repository.ConfigurazioneRepository;
 import it.govpay.console.entity.Acl;
-import it.govpay.console.entity.ImpostazioniHardening;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.GpAuditRepository;
-import it.govpay.console.repository.ImpostazioniHardeningRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,7 +59,9 @@ class HardeningControllerIntegrationTest {
     @Autowired
     private GpAuditRepository gpAuditRepository;
     @Autowired
-    private ImpostazioniHardeningRepository hardeningRepository;
+    private ConfigurazioneRepository configurazioneRepository;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setup() {
@@ -168,8 +172,9 @@ class HardeningControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$..secretKey").doesNotExist());
 
-        ImpostazioniHardening entity = hardeningRepository.findById(ImpostazioniHardening.ID_SINGLETON).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(entity.getSecretKey()).isEqualTo("s3cr3t");
+        String valore = configurazioneRepository.findByNome(ConfigurazioneKeys.KEY_HARDENING).orElseThrow().getValore();
+        Hardening hardening = objectMapper.readValue(valore, Hardening.class);
+        org.assertj.core.api.Assertions.assertThat(hardening.getGoogleCatpcha().getSecretKey()).isEqualTo("s3cr3t");
     }
 
     @Test

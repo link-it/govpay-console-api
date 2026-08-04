@@ -1,11 +1,11 @@
 package it.govpay.console.impostazioni;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import org.springframework.stereotype.Component;
 
-import it.govpay.console.entity.ImpostazioniAppIoPromemoria;
+import it.govpay.common.configurazione.model.AvvisaturaViaAppIo;
+import it.govpay.common.configurazione.model.PromemoriaAvvisoBase;
+import it.govpay.common.configurazione.model.PromemoriaRicevutaBase;
+import it.govpay.common.configurazione.model.PromemoriaScadenza;
 import it.govpay.console.model.ImpostazioniAppIoTemplatePromemoria;
 import it.govpay.console.model.TemplatePromemoriaAvvisoBase;
 import it.govpay.console.model.TemplatePromemoriaRicevutaBase;
@@ -14,76 +14,73 @@ import it.govpay.console.model.TipoTemplateTrasformazione;
 
 /**
  * Conversione bidirezionale tra {@link ImpostazioniAppIoTemplatePromemoria}
- * (3 blocchi top-level) e le 3 righe di {@code impostazioni_appio_promemoria},
- * chiave naturale {@code tipo_promemoria}. Stesso pattern di
- * {@link MailPromemoriaMapper}, senza il campo {@code allegaPdf} (non
- * applicabile alle notifiche push).
+ * e {@link AvvisaturaViaAppIo} (bean di {@code govpay-common}, deserializzato
+ * dal blob {@code configurazione}, chiave {@code avvisatura_app_io}). Stesso
+ * pattern di {@link MailPromemoriaMapper}, senza il campo {@code allegaPdf}
+ * (non applicabile alle notifiche push).
  */
 @Component
 public class AppIoPromemoriaMapper {
 
-    public ImpostazioniAppIoTemplatePromemoria toDto(Map<String, ImpostazioniAppIoPromemoria> byTipo) {
+    public ImpostazioniAppIoTemplatePromemoria toDto(AvvisaturaViaAppIo source) {
         ImpostazioniAppIoTemplatePromemoria dto = new ImpostazioniAppIoTemplatePromemoria();
-        dto.setPromemoriaAvviso(toAvviso(byTipo.get(ImpostazioniAppIoPromemoria.AVVISO)));
-        dto.setPromemoriaRicevuta(toRicevuta(byTipo.get(ImpostazioniAppIoPromemoria.RICEVUTA)));
-        dto.setPromemoriaScadenza(toScadenza(byTipo.get(ImpostazioniAppIoPromemoria.SCADENZA)));
+        dto.setPromemoriaAvviso(toAvviso(source.getPromemoriaAvviso()));
+        dto.setPromemoriaRicevuta(toRicevuta(source.getPromemoriaRicevuta()));
+        dto.setPromemoriaScadenza(toScadenza(source.getPromemoriaScadenza()));
         return dto;
     }
 
-    public Map<String, ImpostazioniAppIoPromemoria> toEntities(ImpostazioniAppIoTemplatePromemoria dto) {
-        Map<String, ImpostazioniAppIoPromemoria> map = new LinkedHashMap<>();
+    public AvvisaturaViaAppIo toCommon(ImpostazioniAppIoTemplatePromemoria dto) {
+        AvvisaturaViaAppIo target = new AvvisaturaViaAppIo();
 
         TemplatePromemoriaAvvisoBase avviso = dto.getPromemoriaAvviso();
-        ImpostazioniAppIoPromemoria avvisoEntity = new ImpostazioniAppIoPromemoria();
-        avvisoEntity.setTipoPromemoria(ImpostazioniAppIoPromemoria.AVVISO);
-        avvisoEntity.setOggetto(avviso != null ? avviso.getOggetto() : null);
-        avvisoEntity.setMessaggio(avviso != null ? avviso.getMessaggio() : null);
-        map.put(ImpostazioniAppIoPromemoria.AVVISO, avvisoEntity);
+        PromemoriaAvvisoBase avvisoCommon = new PromemoriaAvvisoBase();
+        avvisoCommon.setOggetto(avviso != null ? avviso.getOggetto() : null);
+        avvisoCommon.setMessaggio(avviso != null ? avviso.getMessaggio() : null);
+        target.setPromemoriaAvviso(avvisoCommon);
 
         TemplatePromemoriaRicevutaBase ricevuta = dto.getPromemoriaRicevuta();
-        ImpostazioniAppIoPromemoria ricevutaEntity = new ImpostazioniAppIoPromemoria();
-        ricevutaEntity.setTipoPromemoria(ImpostazioniAppIoPromemoria.RICEVUTA);
-        ricevutaEntity.setOggetto(ricevuta != null ? ricevuta.getOggetto() : null);
-        ricevutaEntity.setMessaggio(ricevuta != null ? ricevuta.getMessaggio() : null);
-        ricevutaEntity.setSoloEseguiti(ricevuta != null ? ricevuta.getSoloEseguiti() : null);
-        map.put(ImpostazioniAppIoPromemoria.RICEVUTA, ricevutaEntity);
+        PromemoriaRicevutaBase ricevutaCommon = new PromemoriaRicevutaBase();
+        ricevutaCommon.setOggetto(ricevuta != null ? ricevuta.getOggetto() : null);
+        ricevutaCommon.setMessaggio(ricevuta != null ? ricevuta.getMessaggio() : null);
+        ricevutaCommon.setSoloEseguiti(ricevuta != null && Boolean.TRUE.equals(ricevuta.getSoloEseguiti()));
+        target.setPromemoriaRicevuta(ricevutaCommon);
 
         TemplatePromemoriaScadenza scadenza = dto.getPromemoriaScadenza();
-        ImpostazioniAppIoPromemoria scadenzaEntity = new ImpostazioniAppIoPromemoria();
-        scadenzaEntity.setTipoPromemoria(ImpostazioniAppIoPromemoria.SCADENZA);
-        scadenzaEntity.setOggetto(scadenza != null ? scadenza.getOggetto() : null);
-        scadenzaEntity.setMessaggio(scadenza != null ? scadenza.getMessaggio() : null);
-        scadenzaEntity.setPreavviso(scadenza != null ? scadenza.getPreavviso() : null);
-        map.put(ImpostazioniAppIoPromemoria.SCADENZA, scadenzaEntity);
+        PromemoriaScadenza scadenzaCommon = new PromemoriaScadenza();
+        scadenzaCommon.setOggetto(scadenza != null ? scadenza.getOggetto() : null);
+        scadenzaCommon.setMessaggio(scadenza != null ? scadenza.getMessaggio() : null);
+        scadenzaCommon.setPreavviso(scadenza != null ? scadenza.getPreavviso() : null);
+        target.setPromemoriaScadenza(scadenzaCommon);
 
-        return map;
+        return target;
     }
 
-    private static TemplatePromemoriaAvvisoBase toAvviso(ImpostazioniAppIoPromemoria entity) {
+    private static TemplatePromemoriaAvvisoBase toAvviso(PromemoriaAvvisoBase source) {
         TemplatePromemoriaAvvisoBase dto = new TemplatePromemoriaAvvisoBase(TipoTemplateTrasformazione.FREEMARKER);
-        if (entity != null) {
-            dto.setOggetto(entity.getOggetto());
-            dto.setMessaggio(entity.getMessaggio());
+        if (source != null) {
+            dto.setOggetto(source.getOggetto());
+            dto.setMessaggio(source.getMessaggio());
         }
         return dto;
     }
 
-    private static TemplatePromemoriaRicevutaBase toRicevuta(ImpostazioniAppIoPromemoria entity) {
+    private static TemplatePromemoriaRicevutaBase toRicevuta(PromemoriaRicevutaBase source) {
         TemplatePromemoriaRicevutaBase dto = new TemplatePromemoriaRicevutaBase(TipoTemplateTrasformazione.FREEMARKER);
-        if (entity != null) {
-            dto.setOggetto(entity.getOggetto());
-            dto.setMessaggio(entity.getMessaggio());
-            dto.setSoloEseguiti(entity.getSoloEseguiti());
+        if (source != null) {
+            dto.setOggetto(source.getOggetto());
+            dto.setMessaggio(source.getMessaggio());
+            dto.setSoloEseguiti(source.isSoloEseguiti());
         }
         return dto;
     }
 
-    private static TemplatePromemoriaScadenza toScadenza(ImpostazioniAppIoPromemoria entity) {
+    private static TemplatePromemoriaScadenza toScadenza(PromemoriaScadenza source) {
         TemplatePromemoriaScadenza dto = new TemplatePromemoriaScadenza(TipoTemplateTrasformazione.FREEMARKER);
-        if (entity != null) {
-            dto.setOggetto(entity.getOggetto());
-            dto.setMessaggio(entity.getMessaggio());
-            dto.setPreavviso(entity.getPreavviso());
+        if (source != null) {
+            dto.setOggetto(source.getOggetto());
+            dto.setMessaggio(source.getMessaggio());
+            dto.setPreavviso(source.getPreavviso());
         }
         return dto;
     }

@@ -3,19 +3,18 @@ package it.govpay.console.impostazioni;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.AvvisaturaViaMail;
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.ImpostazioniMailPromemoria;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ImpostazioniMailTemplatePromemoria;
 import it.govpay.console.model.JsonPatchOperation;
-import it.govpay.console.repository.ImpostazioniMailPromemoriaRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -28,31 +27,28 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Gestisce i template FreeMarker dei promemoria spediti via mail, 3 righe
- * fisse (una per tipo) su {@code impostazioni_mail_promemoria}.
+ * Gestisce i template FreeMarker dei promemoria spediti via mail, riga
+ * {@code avvisatura_mail} della tabella {@code configurazione}.
  */
 @Service
 public class MailPromemoriaService {
 
-    private static final Set<String> TIPI = Set.of(
-            ImpostazioniMailPromemoria.AVVISO, ImpostazioniMailPromemoria.RICEVUTA, ImpostazioniMailPromemoria.SCADENZA);
-
     public static final String AZIONE_AUDIT_MODIFICA = "IMPOSTAZIONI_MAIL_PROMEMORIA_MODIFICA";
 
-    private final ImpostazioniMailPromemoriaRepository repository;
+    private final ConfigurazioneBlobStore blobStore;
     private final MailPromemoriaMapper mapper;
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
 
-    public MailPromemoriaService(ImpostazioniMailPromemoriaRepository repository,
+    public MailPromemoriaService(ConfigurazioneBlobStore blobStore,
                                  MailPromemoriaMapper mapper,
                                  ObjectMapper objectMapper,
                                  AclAuthorizer aclAuthorizer,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService) {
-        this.repository = repository;
+        this.blobStore = blobStore;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
@@ -72,7 +68,7 @@ public class MailPromemoriaService {
         aclAuthorizer.requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         checkIfMatch(ifMatch, currentDto());
 
-        persist(body);
+        blobStore.write(ConfigurazioneKeys.KEY_AVVISATURA_MAIL, mapper.toCommon(body));
         audit(request);
         return ok(currentDto());
     }
@@ -94,20 +90,14 @@ public class MailPromemoriaService {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
 
-        persist(body);
+        blobStore.write(ConfigurazioneKeys.KEY_AVVISATURA_MAIL, mapper.toCommon(body));
         audit(request);
         return ok(currentDto());
     }
 
-    private void persist(ImpostazioniMailTemplatePromemoria body) {
-        Map<String, ImpostazioniMailPromemoria> entities = mapper.toEntities(body);
-        repository.saveAll(entities.values());
-    }
-
     private ImpostazioniMailTemplatePromemoria currentDto() {
-        Map<String, ImpostazioniMailPromemoria> byTipo = repository.findAllById(TIPI).stream()
-                .collect(java.util.stream.Collectors.toMap(ImpostazioniMailPromemoria::getTipoPromemoria, e -> e));
-        return mapper.toDto(byTipo);
+        AvvisaturaViaMail avvisatura = blobStore.read(ConfigurazioneKeys.KEY_AVVISATURA_MAIL, AvvisaturaViaMail.class, AvvisaturaViaMail::new);
+        return mapper.toDto(avvisatura);
     }
 
     private ResponseEntity<ImpostazioniMailTemplatePromemoria> ok(ImpostazioniMailTemplatePromemoria dto) {

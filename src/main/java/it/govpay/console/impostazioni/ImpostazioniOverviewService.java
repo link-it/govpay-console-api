@@ -6,14 +6,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.common.configurazione.ConfigurazioneKeys;
+import it.govpay.common.configurazione.model.Hardening;
+import it.govpay.common.configurazione.model.MailBatch;
 import it.govpay.console.connettore.ConnettoreProprietaKeys;
 import it.govpay.console.connettore.ConnettoreStore;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.AreaImpostazioni;
 import it.govpay.console.model.ImpostazioniOverview;
 import it.govpay.console.repository.GpAuditRepository;
-import it.govpay.console.repository.ImpostazioniHardeningRepository;
-import it.govpay.console.repository.ImpostazioniMailServerRepository;
 import it.govpay.console.security.AclAuthorizer;
 
 /**
@@ -27,19 +28,16 @@ import it.govpay.console.security.AclAuthorizer;
 public class ImpostazioniOverviewService {
 
     private final ConnettoreStore connettoreStore;
-    private final ImpostazioniMailServerRepository mailServerRepository;
-    private final ImpostazioniHardeningRepository hardeningRepository;
+    private final ConfigurazioneBlobStore blobStore;
     private final GpAuditRepository gpAuditRepository;
     private final AclAuthorizer aclAuthorizer;
 
     public ImpostazioniOverviewService(ConnettoreStore connettoreStore,
-                                       ImpostazioniMailServerRepository mailServerRepository,
-                                       ImpostazioniHardeningRepository hardeningRepository,
+                                       ConfigurazioneBlobStore blobStore,
                                        GpAuditRepository gpAuditRepository,
                                        AclAuthorizer aclAuthorizer) {
         this.connettoreStore = connettoreStore;
-        this.mailServerRepository = mailServerRepository;
-        this.hardeningRepository = hardeningRepository;
+        this.blobStore = blobStore;
         this.gpAuditRepository = gpAuditRepository;
         this.aclAuthorizer = aclAuthorizer;
     }
@@ -79,17 +77,15 @@ public class ImpostazioniOverviewService {
     }
 
     private AreaImpostazioni areaMailServer() {
-        boolean abilitata = mailServerRepository.findById(it.govpay.console.entity.ImpostazioniMailServer.ID_SINGLETON)
-                .map(it.govpay.console.entity.ImpostazioniMailServer::isAbilitato)
-                .orElse(false);
+        boolean abilitata = blobStore.read(ConfigurazioneKeys.KEY_MAIL_BATCH, MailBatch.class, MailBatch::new)
+                .isAbilitato();
         return area("mail-server", "Server SMTP", "/impostazioni/mail/server", abilitata,
                 List.of(MailServerService.AZIONE_AUDIT_MODIFICA, MailServerService.AZIONE_AUDIT_CREDENZIALI));
     }
 
     private AreaImpostazioni areaHardening() {
-        boolean abilitata = hardeningRepository.findById(it.govpay.console.entity.ImpostazioniHardening.ID_SINGLETON)
-                .map(it.govpay.console.entity.ImpostazioniHardening::isAbilitato)
-                .orElse(false);
+        boolean abilitata = blobStore.read(ConfigurazioneKeys.KEY_HARDENING, Hardening.class, Hardening::new)
+                .isAbilitato();
         return area("hardening", "Hardening (reCAPTCHA)", "/impostazioni/hardening", abilitata,
                 List.of(HardeningService.AZIONE_AUDIT_MODIFICA, HardeningService.AZIONE_AUDIT_CREDENZIALI));
     }
