@@ -29,6 +29,8 @@ import it.govpay.console.avviso.AvvisoMbtException;
 import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
 import it.govpay.console.avviso.StampeUnavailableException;
+import it.govpay.console.eventi.GdeNonConfiguratoException;
+import it.govpay.console.eventi.GdeNonRaggiungibileException;
 import it.govpay.console.operazioni.OperazioneTriggerNonConfiguratoException;
 import it.govpay.console.operazioni.OperazioneTriggerNonRaggiungibileException;
 import it.govpay.console.model.Problem;
@@ -200,6 +202,18 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(OperazioneTriggerNonConfiguratoException.class)
     public ResponseEntity<Problem> handleOperazioneTriggerNonConfigurato(OperazioneTriggerNonConfiguratoException ex,
                                                                          HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(GdeNonRaggiungibileException.class)
+    public ResponseEntity<Problem> handleGdeNonRaggiungibile(GdeNonRaggiungibileException ex,
+                                                              HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(GdeNonConfiguratoException.class)
+    public ResponseEntity<Problem> handleGdeNonConfigurato(GdeNonConfiguratoException ex,
+                                                            HttpServletRequest request) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
     }
 
