@@ -109,10 +109,14 @@ class ImpostazioniOverviewControllerIntegrationTest {
     }
 
     @Test
-    void ultimaModificaPopulatedAfterPutOnResource() throws Exception {
+    void ultimaModificaAdvancesAfterPutOnResource() throws Exception {
         grantScrittura();
-        mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(jsonPath("$.aree[?(@.codice=='mail-server')].ultimaModifica").doesNotExist());
+        // Non si assume che 'ultimaModifica' sia assente in partenza: l'audit
+        // (scritto con REQUIRES_NEW, vedi AuditWriter) non e' isolato dal
+        // rollback @Transactional di altri test che hanno gia' scritto su
+        // /impostazioni/mail/server. Si confronta prima/dopo invece che
+        // assumere uno stato assoluto iniziale.
+        String before = ultimaModificaMailServer(BASE);
 
         String etag = mvc.perform(get("/impostazioni/mail/server").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -125,8 +129,27 @@ class ImpostazioniOverviewControllerIntegrationTest {
 
         mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.aree[?(@.codice=='mail-server')].abilitata", org.hamcrest.Matchers.contains(true)))
-                .andExpect(jsonPath("$.aree[?(@.codice=='mail-server')].ultimaModifica").exists());
+                .andExpect(jsonPath("$.aree[?(@.codice=='mail-server')].abilitata", org.hamcrest.Matchers.contains(true)));
+        String after = ultimaModificaMailServer(BASE);
+
+        org.assertj.core.api.Assertions.assertThat(after).isNotNull();
+        if (before != null) {
+            org.assertj.core.api.Assertions.assertThat(java.time.OffsetDateTime.parse(after))
+                    .isAfter(java.time.OffsetDateTime.parse(before));
+        }
+    }
+
+    private String ultimaModificaMailServer(String base) throws Exception {
+        String json = mvc.perform(get(base).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        for (var area : objectMapper.readTree(json).get("aree")) {
+            if ("mail-server".equals(area.get("codice").asText())) {
+                var valore = area.get("ultimaModifica");
+                return (valore == null || valore.isNull()) ? null : valore.asText();
+            }
+        }
+        throw new AssertionError("area 'mail-server' non trovata in " + json);
     }
 
     @Test
