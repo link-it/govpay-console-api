@@ -51,8 +51,3 @@ CREATE TABLE pagopa_iban_cache
 
 CREATE TABLE pagopa_iban_cache_init_seq (id BIGINT);
 INSERT INTO pagopa_iban_cache_init_seq VALUES (NEXT VALUE FOR seq_pagopa_iban_cache);
-
-
-
-
-

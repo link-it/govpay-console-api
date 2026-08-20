@@ -45,8 +45,3 @@ CREATE TABLE pagopa_iban_cache
 	CONSTRAINT pk_pagopa_iban_cache PRIMARY KEY (id),
 	CONSTRAINT uq_pagopa_iban_cache_dominio_iban UNIQUE (cod_dominio, iban)
 );
-
-
-
-
-
