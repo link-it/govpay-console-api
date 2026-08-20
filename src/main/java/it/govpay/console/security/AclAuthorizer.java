@@ -41,14 +41,27 @@ public class AclAuthorizer {
      */
     @Transactional(readOnly = true)
     public void requireScrittura(AclServizio servizio) {
+        require(servizio, it.govpay.console.model.Acl.AutorizzazioniEnum.W, "scrittura");
+    }
+
+    /**
+     * Verifica che l'utenza autenticata abbia il diritto di lettura sul
+     * servizio indicato; altrimenti lancia {@link AccessDeniedException}
+     * (resa come 403 problem+json).
+     */
+    @Transactional(readOnly = true)
+    public void requireLettura(AclServizio servizio) {
+        require(servizio, it.govpay.console.model.Acl.AutorizzazioniEnum.R, "lettura");
+    }
+
+    private void require(AclServizio servizio, it.govpay.console.model.Acl.AutorizzazioniEnum diritto, String label) {
         Utenza utenza = utenzaAutenticata();
         boolean autorizzata = aclDellUtenza(utenza).stream()
                 .anyMatch(acl -> servizio.getValue().equals(acl.getServizio())
-                        && DirittiCodec.parse(acl.getDiritti())
-                                .contains(it.govpay.console.model.Acl.AutorizzazioniEnum.W));
+                        && DirittiCodec.parse(acl.getDiritti()).contains(diritto));
         if (!autorizzata) {
             throw new AccessDeniedException("L'utenza '" + utenza.getPrincipal()
-                    + "' non dispone del diritto di scrittura sul servizio '" + servizio.getValue() + "'.");
+                    + "' non dispone del diritto di " + label + " sul servizio '" + servizio.getValue() + "'.");
         }
     }
 

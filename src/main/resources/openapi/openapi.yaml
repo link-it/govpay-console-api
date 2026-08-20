@@ -20,6 +20,19 @@ tags:
     description: Pagamenti in attesa e spontanei.
   - name: Ricevute
     description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
+  - name: Rendicontazioni
+    description: |
+      Consultazione dei flussi di rendicontazione (FR) scaricati da pagoPA.
+      Acquisizione read-only lato core (`RecuperoFR`); qui solo lettura per il
+      cruscotto.
+  - name: Giornale Eventi
+    description: |
+      Consultazione del giornale degli eventi (log strutturato di chiamate al
+      Nodo pagoPA, invocazioni API di backoffice, esecuzioni batch). La
+      persistenza avviene sempre lato GDE (Gestore Database Eventi); qui solo
+      lettura via il client REST generato da govpay-common. Distinta da
+      `/impostazioni/giornale-eventi` (quella configura cosa loggare, questa
+      espone cosa c'e' dentro il giornale).
   - name: Profilo
     description: Profilo dell'utenza autenticata corrente.
   - name: Autenticazione
@@ -66,8 +79,87 @@ tags:
     description: |
       Catalogo delle operazioni batch schedulabili/avviabili manualmente, con
       stato dell'ultima esecuzione nota.
+  - name: Impostazioni
+    description: |
+      Overview delle 8 sotto-risorse indipendenti del blob V1 `configurazione`
+      (`servizioGDE`, `giornaleEventi`, `mailBatch`, `avvisaturaMail`,
+      `appIOBatch`, `avvisaturaAppIO`, `tracciatoCsv`, `hardening`). Accesso
+      riservato al servizio ACL `Configurazione e manutenzione`.
+  - name: Impostazioni - Servizio GDE
+    description: |
+      Sotto-risorsa `servizioGDE` del blob V1 `configurazione`: connettore
+      verso il Giornale degli Eventi. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le PUT).
+  - name: Impostazioni - Giornale Eventi
+    description: |
+      Sotto-risorsa `giornaleEventi` del blob V1 `configurazione`: politica di
+      logging per interfaccia API. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH).
+  - name: Impostazioni - Mail Server
+    description: |
+      Sotto-risorsa `mailBatch` del blob V1 `configurazione`: server SMTP
+      usato per l'invio dei promemoria. Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH). Le credenziali (password SMTP e password di
+      keystore/truststore) sono su un endpoint dedicato, mai restituite dalle GET.
+  - name: Impostazioni - Mail Template Promemoria
+    description: |
+      Sotto-risorsa `avvisaturaMail` del blob V1 `configurazione`: template
+      FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via mail.
+      Accesso riservato al servizio ACL `Configurazione e manutenzione`
+      (lettura per le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - App IO Server
+    description: |
+      Sotto-risorsa `appIOBatch` del blob V1 `configurazione`: connettore
+      verso il servizio App IO. Stessa infrastruttura EAV dei connettori
+      (`/impostazioni/servizioGDE`). Accesso riservato al servizio ACL
+      `Configurazione e manutenzione` (lettura per le GET, scrittura per le
+      PUT/PATCH). Le credenziali sono su un endpoint dedicato, mai restituite
+      dalle GET.
+  - name: Impostazioni - App IO Template Promemoria
+    description: |
+      Sotto-risorsa `avvisaturaAppIO` del blob V1 `configurazione`: template
+      FreeMarker dei promemoria (avviso, ricevuta, scadenza) spediti via
+      notifica push App IO. Accesso riservato al servizio ACL `Configurazione
+      e manutenzione` (lettura per le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - Tracciati CSV
+    description: |
+      Sotto-risorsa `tracciatoCsv` del blob V1 `configurazione`: template
+      FreeMarker per la generazione dei tracciati CSV di risposta. Accesso
+      riservato al servizio ACL `Configurazione e manutenzione` (lettura per
+      le GET, scrittura per le PUT/PATCH).
+  - name: Impostazioni - Hardening
+    description: |
+      Sotto-risorsa `hardening` del blob V1 `configurazione`: configurazione
+      Google reCAPTCHA usata per irrobustire il login. Accesso riservato al
+      servizio ACL `Configurazione e manutenzione` (lettura per le GET,
+      scrittura per le PUT/PATCH). La chiave segreta reCAPTCHA e' su un
+      endpoint dedicato, mai restituita dalle GET.
 
 paths:
+
+  /impostazioni:
+    get:
+      tags:
+        - Impostazioni
+      operationId: getImpostazioniOverview
+      summary: Overview delle 8 sotto-risorse di impostazioni.
+      description: |
+        Flag di abilitazione (dove il concetto si applica) e link a ciascuna
+        sotto-risorsa. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Overview impostazioni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniOverview'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
 
   /profilo:
     get:
@@ -441,6 +533,367 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '502':
           description: Microservizio govpay-stampe irraggiungibile (solo PDF).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /flussi-rendicontazione:
+    get:
+      tags:
+        - Rendicontazioni
+      operationId: listFlussiRendicontazione
+      summary: Elenca i flussi di rendicontazione (FR) visibili all'operatore (paginati).
+      description: |
+        Consultazione read-only dei flussi di rendicontazione scaricati da
+        pagoPA (acquisizione batch lato core, `RecuperoFR`). Restituisce solo
+        metadati aggregati (`FlussoRendicontazioneSummary`): nessun dato
+        personale, quindi la lista non genera audit GDPR.
+
+        Filtri supportati:
+        - `idDominio`, `idFlusso`, `idPsp` — match esatto;
+        - `dataDa` / `dataA` — intervallo (incluso) sulla data di
+          acquisizione del flusso (non sulla data di emissione PSP);
+        - `stato` — match puntuale;
+        - `incassato` — shortcut booleano: il flusso ha un incasso (bonifico
+          SCT) associato;
+        - `iuv` — restituisce solo i flussi che contengono quello IUV (join a
+          `rendicontazioni`: costo aggiuntivo rispetto agli altri filtri).
+
+        Tutti i filtri sono opzionali e in AND.
+
+        ACL: filtro automatico sui domini visibili all'operatore corrente; un
+        operatore senza visibilita' riceve lista vuota (mai 403).
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(dataOraFlusso DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 con motivazione parlante. Cursor malformato → 400.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/IdFlusso'
+        - $ref: '#/components/parameters/IdPsp'
+        - $ref: '#/components/parameters/FrDataDa'
+        - $ref: '#/components/parameters/FrDataA'
+        - $ref: '#/components/parameters/StatoFlussoFilter'
+        - $ref: '#/components/parameters/Incassato'
+        - $ref: '#/components/parameters/IuvFilter'
+      responses:
+        '200':
+          description: Lista paginata di flussi di rendicontazione.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FlussoRendicontazioneSummary'
+        '400':
+          description: Filtro non supportato, parametro malformato o `limit > 200`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /flussi-rendicontazione/{idDominio}/{idFlusso}/{idPsp}/{revisione}:
+    get:
+      tags:
+        - Rendicontazioni
+      operationId: getFlussoRendicontazione
+      summary: Dettaglio di un flusso di rendicontazione, con download XML via content negotiation.
+      description: |
+        La quaterna `(idDominio, idFlusso, idPsp, revisione)` identifica
+        univocamente il flusso (vincolo gia' presente a DB). Le 3 varianti V1
+        di dettaglio (`{idFlusso}`, `{idFlusso}/{dataOraFlusso}`,
+        `{idDominio}/{idFlusso}/{dataOraFlusso}`) collassano in questa unica;
+        se il cruscotto ha ancora bookmark con la chiave V1 deve prima cercare
+        via `GET /flussi-rendicontazione?idFlusso=...` e poi navigare al
+        canonico.
+
+        Content negotiation tramite header `Accept`:
+        - `application/json` (default) → metadati del flusso (`FlussoRendicontazione`);
+        - `application/xml` → XML originale del flusso (schema pagoPA
+          `FlussoRiversamento`), byte-per-byte dal DB.
+
+        404 problem+json se il flusso non esiste o non è visibile per ACL
+        (indistinguibile, anti-leak); 404 anche se il record esiste ma l'XML
+        non è archiviato (flussi storici con soli metadati) ed è richiesto
+        `Accept: application/xml`. 406 se `Accept` non è ne' JSON ne' XML.
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/IdFlussoPath'
+        - $ref: '#/components/parameters/IdPspPath'
+        - $ref: '#/components/parameters/RevisionePath'
+      responses:
+        '200':
+          description: Flusso nel formato richiesto.
+          headers:
+            Cache-Control:
+              description: |
+                Il flusso è immutabile una volta acquisito: una nuova
+                revisione produce un nuovo record, non modifica questo.
+              schema:
+                type: string
+                example: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlussoRendicontazione'
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: 'Flusso non trovato, non visibile, oppure XML non archiviato (solo per `Accept: application/xml`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Formato richiesto non supportato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /eventi:
+    get:
+      tags:
+        - Giornale Eventi
+      operationId: listEventi
+      summary: Elenca gli eventi del giornale visibili all'operatore (paginati).
+      description: |
+        Consultazione read-only del giornale degli eventi (log strutturato di
+        ogni chiamata al Nodo pagoPA, invocazione API di backoffice,
+        esecuzione batch). La persistenza degli eventi avviene sempre lato
+        GDE; qui solo lettura.
+
+        Solo metadati (`EventoSummary`): niente `parametriRichiesta`/
+        `parametriRisposta` inline, quindi nessun audit GDPR sulla lista (i
+        payload sensibili sono sui sub-resource dedicati del dettaglio).
+
+        Filtri supportati: `idDominio`, `iuv`, `ccp`, `idA2A`, `idPendenza`
+        (match esatto), `componente`, `categoria`, `esito`, `ruolo`,
+        `tipoEvento`, `sottotipoEvento` (match esatto), `severitaDa`/
+        `severitaA` (range), `messaggi` (full-text, richiede intervallo
+        temporale entro 7 giorni). Tutti opzionali e in AND.
+
+        Se `dataDa`/`dataA` sono entrambi assenti vengono forzati
+        silenziosamente a "ultime 24 ore" per evitare la scansione completa
+        di una tabella che puo' crescere a milioni di righe.
+
+        ACL: filtro automatico sui domini visibili all'operatore corrente
+        (stesso pattern di `/pendenze` e `/flussi-rendicontazione`); un
+        operatore senza visibilita' riceve lista vuota (mai 403). Gli eventi
+        senza `idDominio` (batch di sistema, scheduler) sono visibili solo a
+        operatori con visibilita' su tutti i domini.
+
+        **Ordinamento fisso** `(dataEvento DESC, id DESC)`, non configurabile:
+        a differenza delle altre liste paginate qui non e' esposto `?sort=`.
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`.
+        In modalita' cursor `page` esplicito o `total=true` generano 400 con
+        motivazione parlante. Cursor malformato → 400.
+
+        `?total=true` e' rifiutato con 400 se non abbinato a un intervallo
+        temporale (`dataDa`/`dataA`) di al massimo 24 ore: il conteggio e'
+        l'operazione piu' costosa su questa tabella.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/EventoLimit'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/EventoDataDa'
+        - $ref: '#/components/parameters/EventoDataA'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/IuvFilter'
+        - $ref: '#/components/parameters/Ccp'
+        - $ref: '#/components/parameters/IdA2A'
+        - $ref: '#/components/parameters/IdPendenzaEventoFilter'
+        - $ref: '#/components/parameters/ComponenteEventoFilter'
+        - $ref: '#/components/parameters/CategoriaEventoFilter'
+        - $ref: '#/components/parameters/EsitoEventoFilter'
+        - $ref: '#/components/parameters/RuoloEventoFilter'
+        - $ref: '#/components/parameters/TipoEventoFilter'
+        - $ref: '#/components/parameters/SottotipoEventoFilter'
+        - $ref: '#/components/parameters/SeveritaDa'
+        - $ref: '#/components/parameters/SeveritaA'
+        - $ref: '#/components/parameters/Messaggi'
+      responses:
+        '200':
+          description: Lista paginata di eventi.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EventoSummary'
+        '400':
+          description: |
+            Filtro non supportato, parametro malformato, `messaggi` senza
+            intervallo temporale, o `total=true` con intervallo troppo ampio.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /eventi/{id}:
+    get:
+      tags:
+        - Giornale Eventi
+      operationId: getEvento
+      summary: Dettaglio metadata di un evento (senza payload di richiesta/risposta).
+      description: |
+        Solo metadata + link ai sub-resource sensibili: niente
+        `parametriRichiesta`/`parametriRisposta` inline (quelli richiedono
+        accesso esplicito a `/eventi/{id}/richiesta` o `/eventi/{id}/risposta`,
+        con audit GDPR dedicato). Nessun audit su questo endpoint: non espone
+        dati personali ne' credenziali.
+
+        404 problem+json se l'id non esiste o l'evento non e' visibile per
+        ACL (indistinguibile, anti-leak).
+      parameters:
+        - $ref: '#/components/parameters/EventoIdPath'
+      responses:
+        '200':
+          description: Metadata dell'evento.
+          headers:
+            Cache-Control:
+              description: L'evento e' immutabile una volta emesso.
+              schema:
+                type: string
+                example: "private, max-age=3600"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Evento non trovato o non visibile per ACL.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /eventi/{id}/richiesta:
+    get:
+      tags:
+        - Giornale Eventi
+      operationId: getEventoRichiesta
+      summary: Payload e header della richiesta registrata per l'evento.
+      description: |
+        Header sensibili (`Authorization`, `Cookie`, ecc. — lista configurabile
+        server-side, match case-insensitive) mascherati di default
+        (`***REDACTED***`, `redatto=true`). Con `?unmask=true` mostrati in
+        chiaro: nessun permesso aggiuntivo richiesto oltre alla normale
+        visibilita' dell'evento, ma l'accesso viene tracciato con un record di
+        audit distinto e piu' severo.
+
+        Ogni GET viene registrata in `gp_audit` (`EVENTO_RICHIESTA_VISUALIZZA`);
+        con `?unmask=true` viene scritto anche `EVENTO_CREDENZIALI_VISUALIZZA`.
+
+        404 problem+json se l'evento non esiste, non e' visibile per ACL, o la
+        richiesta non e' stata registrata da GDE (nessun payload ne' header) —
+        indistinguibile, anti-leak.
+      parameters:
+        - $ref: '#/components/parameters/EventoIdPath'
+        - $ref: '#/components/parameters/Unmask'
+      responses:
+        '200':
+          description: Richiesta registrata per l'evento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoRichiesta'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Evento non trovato, non visibile per ACL, o richiesta non registrata.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /eventi/{id}/risposta:
+    get:
+      tags:
+        - Giornale Eventi
+      operationId: getEventoRisposta
+      summary: Payload e header della risposta registrata per l'evento.
+      description: |
+        Simmetrico a `/eventi/{id}/richiesta`: header sensibili mascherati di
+        default, `?unmask=true` per vederli in chiaro (stesso permesso, audit
+        distinto). Nelle risposte le credenziali sono rare, ma `Set-Cookie` di
+        sessione o token OAuth in `Location` possono comparire.
+
+        Ogni GET viene registrata in `gp_audit` (`EVENTO_RISPOSTA_VISUALIZZA`);
+        con `?unmask=true` viene scritto anche `EVENTO_CREDENZIALI_VISUALIZZA`.
+
+        404 problem+json se l'evento non esiste, non e' visibile per ACL, o la
+        risposta non e' stata registrata da GDE — indistinguibile, anti-leak.
+      parameters:
+        - $ref: '#/components/parameters/EventoIdPath'
+        - $ref: '#/components/parameters/Unmask'
+      responses:
+        '200':
+          description: Risposta registrata per l'evento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoRisposta'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Evento non trovato, non visibile per ACL, o risposta non registrata.
           content:
             application/problem+json:
               schema:
@@ -4687,6 +5140,925 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /impostazioni/servizioGDE:
+    get:
+      tags:
+        - Impostazioni - Servizio GDE
+      operationId: getImpostazioniServizioGDE
+      summary: Connettore verso il Giornale degli Eventi (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Connettore GDE.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniServizioGDE'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Servizio GDE
+      operationId: replaceImpostazioniServizioGDE
+      summary: Sostituisce la configurazione del connettore GDE (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente e il
+        diritto di scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniServizioGDE'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniServizioGDE'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/servizioGDE/credenziali:
+    put:
+      tags:
+        - Impostazioni - Servizio GDE
+      operationId: putCredenzialiImpostazioniServizioGDE
+      summary: Imposta le credenziali del connettore GDE (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite dalle
+        GET. Richiede il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /impostazioni/giornale-eventi:
+    get:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: getImpostazioniGiornaleEventi
+      summary: Politica di logging verso il Giornale degli Eventi.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Impostazioni giornale eventi.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: replaceImpostazioniGiornaleEventi
+      summary: Sostituisce la politica di logging verso il Giornale degli Eventi.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+      responses:
+        '200':
+          description: Impostazioni aggiornate.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Giornale Eventi
+      operationId: patchImpostazioniGiornaleEventi
+      summary: Aggiorna un blocco della politica di logging (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/apiEnte`, valore l'intero blocco `{letture,
+        scritture}`). Richiede l'header `If-Match` e il diritto di scrittura
+        sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Impostazioni aggiornate.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniGiornaleEventi'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/mail/server:
+    get:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: getImpostazioniMailServer
+      summary: Server SMTP usato per l'invio dei promemoria (senza credenziali).
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Configurazione server SMTP.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: replaceImpostazioniMailServer
+      summary: Sostituisce la configurazione del server SMTP (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailServer'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: patchImpostazioniMailServer
+      summary: Aggiorna la configurazione del server SMTP (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `ssl` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/ssl`). Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/mail/server/password:
+    put:
+      tags:
+        - Impostazioni - Mail Server
+      operationId: putPasswordImpostazioniMailServer
+      summary: Imposta le credenziali del server SMTP (write-only).
+      description: |
+        Aggiorna password SMTP e/o password di keystore/truststore. Non
+        vengono mai restituite dalle GET. Richiede il diritto di scrittura
+        sul servizio ACL `Configurazione e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailServerCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /impostazioni/mail/template-promemoria:
+    get:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: getImpostazioniMailTemplatePromemoria
+      summary: Template FreeMarker dei promemoria spediti via mail.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template promemoria.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: replaceImpostazioniMailTemplatePromemoria
+      summary: Sostituisce i template dei promemoria via mail.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Mail Template Promemoria
+      operationId: patchImpostazioniMailTemplatePromemoria
+      summary: Aggiorna un template promemoria (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`, valore l'intero blocco).
+        Richiede l'header `If-Match` e il diritto di scrittura sul servizio
+        ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniMailTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/app-io/server:
+    get:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: getImpostazioniAppIoServer
+      summary: Connettore verso il servizio App IO (senza credenziali).
+      description: |
+        Se il connettore non e' configurato la GET restituisce `abilitato=false`
+        con i campi vuoti. Richiede il diritto di lettura sul servizio ACL
+        `Configurazione e manutenzione`.
+      responses:
+        '200':
+          description: Connettore App IO.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: replaceImpostazioniAppIoServer
+      summary: Sostituisce la configurazione del connettore App IO (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniAppIoServer'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: patchImpostazioniAppIoServer
+      summary: Aggiorna la configurazione del connettore App IO (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `auth` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/auth`). Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoServer'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/app-io/server/credenziali:
+    put:
+      tags:
+        - Impostazioni - App IO Server
+      operationId: putCredenzialiImpostazioniAppIoServer
+      summary: Imposta le credenziali del connettore App IO (write-only).
+      description: |
+        Aggiorna le credenziali del connettore. Non vengono mai restituite
+        dalle GET. Richiede il diritto di scrittura sul servizio ACL
+        `Configurazione e manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /impostazioni/app-io/template-promemoria:
+    get:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: getImpostazioniAppIoTemplatePromemoria
+      summary: Template FreeMarker dei promemoria spediti via notifica App IO.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template promemoria.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: replaceImpostazioniAppIoTemplatePromemoria
+      summary: Sostituisce i template dei promemoria via App IO.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - App IO Template Promemoria
+      operationId: patchImpostazioniAppIoTemplatePromemoria
+      summary: Aggiorna un template promemoria (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per blocco (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`, valore l'intero blocco).
+        Richiede l'header `If-Match` e il diritto di scrittura sul servizio
+        ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniAppIoTemplatePromemoria'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/tracciati-csv:
+    get:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: getImpostazioniTracciatiCsv
+      summary: Template FreeMarker per la generazione dei tracciati CSV di risposta.
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Template tracciati CSV.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: replaceImpostazioniTracciatiCsv
+      summary: Sostituisce i template dei tracciati CSV.
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Tracciati CSV
+      operationId: patchImpostazioniTracciatiCsv
+      summary: Aggiorna il template dei tracciati CSV (JSON Patch).
+      description: |
+        RFC 6902, schema piatto: ogni campo top-level e' patchabile
+        singolarmente. Richiede l'header `If-Match` e il diritto di
+        scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Template aggiornati.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniTracciatiCsv'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/hardening:
+    get:
+      tags:
+        - Impostazioni - Hardening
+      operationId: getImpostazioniHardening
+      summary: Configurazione Google reCAPTCHA (senza credenziali).
+      description: |
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      responses:
+        '200':
+          description: Configurazione hardening.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+    put:
+      tags:
+        - Impostazioni - Hardening
+      operationId: replaceImpostazioniHardening
+      summary: Sostituisce la configurazione hardening (senza credenziali).
+      description: |
+        Richiede l'header `If-Match` con l'`ETag` ottenuto da una GET
+        precedente e il diritto di scrittura sul servizio ACL `Configurazione
+        e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniHardening'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+    patch:
+      tags:
+        - Impostazioni - Hardening
+      operationId: patchImpostazioniHardening
+      summary: Aggiorna la configurazione hardening (JSON Patch).
+      description: |
+        RFC 6902, un'operazione per campo top-level; il campo `captcha` va
+        sostituito per intero in un'unica operazione (pointer a singolo
+        segmento, es. `/captcha`). Richiede l'header `If-Match` e il diritto
+        di scrittura sul servizio ACL `Configurazione e manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/JsonPatchOperation'
+      responses:
+        '200':
+          description: Configurazione aggiornata.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpostazioniHardening'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+
+  /impostazioni/hardening/credenziali:
+    put:
+      tags:
+        - Impostazioni - Hardening
+      operationId: putCredenzialiImpostazioniHardening
+      summary: Imposta la chiave segreta reCAPTCHA (write-only).
+      description: |
+        Aggiorna la chiave segreta. Non viene mai restituita dalle GET.
+        Richiede il diritto di scrittura sul servizio ACL `Configurazione e
+        manutenzione`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpostazioniHardeningCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
 components:
   schemas:
 
@@ -5336,6 +6708,383 @@ components:
           type: number
           format: double
           description: Importo totale pagato. Dato finanziario, non personale.
+
+    StatoFlussoRendicontazione:
+      type: string
+      description: |
+        Stato del flusso di rendicontazione. `OBSOLETO` prevale sugli altri
+        valori: marca una revisione superata dello stesso flusso (il PSP lo ha
+        riemesso con `revisione` incrementata), indipendentemente da come
+        pagoPA aveva classificato quella revisione.
+      enum:
+        - ACQUISITO
+        - ANOMALO
+        - RIFIUTATO
+        - OBSOLETO
+
+    FlussoRendicontazioneSummary:
+      type: object
+      description: |
+        Proiezione leggera (metadata-only) di un flusso di rendicontazione,
+        usata nelle liste. Nessun dato personale del debitore, quindi la
+        lista non genera audit GDPR. La quaterna `idDominio`, `idFlusso`,
+        `idPsp`, `revisione` identifica univocamente il flusso.
+      required:
+        - idDominio
+        - idFlusso
+        - idPsp
+        - revisione
+        - dataOraFlusso
+        - dataAcquisizione
+        - stato
+        - numeroPagamenti
+        - importoTotale
+      properties:
+        idDominio:
+          type: string
+          description: Codice fiscale dell'ente creditore (11 cifre).
+        idFlusso:
+          type: string
+          description: Identificativo del flusso assegnato dal PSP.
+        idPsp:
+          type: string
+          description: Identificativo del PSP mittente.
+        revisione:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Numero di revisione: i PSP possono ri-emettere lo stesso
+            `idFlusso` con revisione crescente.
+        dataOraFlusso:
+          type: string
+          format: date-time
+          description: Data di emissione del flusso dichiarata dal PSP.
+        dataAcquisizione:
+          type: string
+          format: date-time
+          description: Data in cui GovPay ha scaricato il flusso da pagoPA.
+        dataRegolamento:
+          type: string
+          format: date
+          description: Data valuta del bonifico SCT di regolamento.
+        sctBonifico:
+          type: string
+          description: Riferimento del bonifico SEPA Credit Transfer di regolamento.
+        stato:
+          $ref: '#/components/schemas/StatoFlussoRendicontazione'
+        descrizioneStato:
+          type: string
+          description: Dettaglio human-readable dello stato.
+        numeroPagamenti:
+          type: integer
+          format: int64
+        importoTotale:
+          type: number
+          format: double
+
+    EsitoEvento:
+      type: string
+      description: Esito dell'evento.
+      enum:
+        - OK
+        - KO
+        - FAIL
+
+    ComponenteEvento:
+      type: string
+      description: Modulo interno che ha emesso l'evento.
+      enum:
+        - API_BACKOFFICE
+        - API_ENTE
+        - API_PAGOPA
+        - API_PAGAMENTO
+        - API_PENDENZE
+        - API_RAGIONERIA
+        - API_BACKEND_IO
+        - API_SECIM
+        - API_MYPIVOT
+        - API_MAGGIOLI_JPPA
+        - API_GOVPAY
+        - API_HYPERSIC_APK
+        - API_USER
+        - GOVPAY
+        - API_LEGACY
+
+    CategoriaEvento:
+      type: string
+      description: Categoria funzionale dell'evento.
+      enum:
+        - INTERNO
+        - INTERFACCIA
+        - UTENTE
+
+    RuoloEvento:
+      type: string
+      description: Ruolo di GovPay nello scambio che ha generato l'evento.
+      enum:
+        - CLIENT
+        - SERVER
+
+    DatiPagoPA:
+      type: object
+      description: Dati specifici pagoPA correlati all'evento, quando applicabile.
+      properties:
+        idPsp:
+          type: string
+        idCanale:
+          type: string
+        idIntermediarioPsp:
+          type: string
+        tipoVersamento:
+          type: string
+        modelloPagamento:
+          type: string
+        idDominio:
+          type: string
+        idIntermediario:
+          type: string
+        idStazione:
+          type: string
+        idRiconciliazione:
+          type: string
+        sct:
+          type: string
+        idFlusso:
+          type: string
+        idTracciato:
+          type: number
+        identificativoErogatore:
+          type: string
+        identificativoFruitore:
+          type: string
+
+    EventoSummary:
+      type: object
+      description: |
+        Proiezione leggera (metadata-only) di un evento del giornale, usata
+        nelle liste. Nessun payload di richiesta/risposta (niente header,
+        niente body): quelli sono sui sub-resource dedicati del dettaglio,
+        con audit GDPR distinto.
+      required:
+        - id
+        - dataEvento
+        - componente
+        - categoriaEvento
+        - ruolo
+        - tipoEvento
+        - esito
+      properties:
+        id:
+          type: integer
+          format: int64
+        dataEvento:
+          type: string
+          format: date-time
+          description: Quando l'evento e' stato emesso.
+        durataEventoMs:
+          type: integer
+          format: int64
+          description: Durata dell'operazione in millisecondi (rinominato da V1 `durataEvento` per esplicitare l'unita').
+        componente:
+          $ref: '#/components/schemas/ComponenteEvento'
+        categoriaEvento:
+          $ref: '#/components/schemas/CategoriaEvento'
+        ruolo:
+          $ref: '#/components/schemas/RuoloEvento'
+        tipoEvento:
+          type: string
+          description: Es. `nodoInviaRPT`, `paGetPayment`, `getListaPendenze`.
+        sottotipoEvento:
+          type: string
+          description: Es. "richiesta verso il nodo".
+        esito:
+          $ref: '#/components/schemas/EsitoEvento'
+        sottotipoEsito:
+          type: string
+          description: Codice numerico o simbolico dell'esito (es. `"200"`, `"PAA_PAGAMENTO_SCONOSCIUTO"`).
+        dettaglioEsito:
+          type: string
+          description: Messaggio human-readable dell'esito.
+        severita:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 5
+          description: 0=info, crescente per warning/error/fatal/critical. Popolata solo per esiti KO/FAIL.
+        idDominio:
+          type: string
+          description: Assente per eventi di sistema (batch, scheduler) non attribuibili a un dominio.
+        iuv:
+          type: string
+        ccp:
+          type: string
+          description: Codice contesto pagamento (identificativo tecnico del Nodo).
+        idA2A:
+          type: string
+        idPendenza:
+          type: string
+        idPagamento:
+          type: string
+          description: Identificativo assegnato da GovPay al carrello di pagamento.
+        transactionId:
+          type: string
+          description: Identificativo di correlazione cross-log della transazione applicativa.
+        clusterId:
+          type: string
+          description: Nodo che ha registrato l'evento (deployment multi-istanza).
+        datiPagoPA:
+          $ref: '#/components/schemas/DatiPagoPA'
+
+    EventoLinks:
+      type: object
+      description: |
+        Hyperlink relativi all'evento. `self` sempre presente. `richiesta`/
+        `risposta` presenti solo se GDE ha registrato il payload corrispondente
+        (la presenza del link non implica l'accesso: l'audit GDPR scatta solo
+        sull'invocazione del sub-resource, non sulla presenza del link).
+        `dominio`/`pendenza`/`flusso` condizionali sui rispettivi dati disponibili.
+      required:
+        - self
+      properties:
+        self:
+          $ref: '#/components/schemas/Link'
+        richiesta:
+          $ref: '#/components/schemas/Link'
+        risposta:
+          $ref: '#/components/schemas/Link'
+        dominio:
+          $ref: '#/components/schemas/Link'
+        pendenza:
+          $ref: '#/components/schemas/Link'
+        flusso:
+          $ref: '#/components/schemas/Link'
+          description: Presente se l'evento e' correlato a un flusso di rendicontazione (acquisizione FR o riconciliazione incasso).
+
+    Evento:
+      description: |
+        Dettaglio metadata-only di un evento: `EventoSummary` + informazioni
+        sui payload di richiesta/risposta (content-type, dimensione, numero
+        header) senza includerli. I payload stessi sono sui sub-resource
+        dedicati (`/eventi/{id}/richiesta`, `/eventi/{id}/risposta`), con
+        audit GDPR distinto sull'accesso.
+      allOf:
+        - $ref: '#/components/schemas/EventoSummary'
+        - type: object
+          required:
+            - _links
+          properties:
+            contentTypeRichiesta:
+              type: string
+              description: Es. `application/xml`, `application/json`, `application/soap+xml`. Assente se la richiesta non e' stata registrata.
+            contentTypeRisposta:
+              type: string
+              description: Assente se la risposta non e' stata registrata.
+            dimensioneRichiesta:
+              type: integer
+              format: int64
+              description: Byte del payload di richiesta, se registrato.
+            dimensioneRisposta:
+              type: integer
+              format: int64
+              description: Byte del payload di risposta, se registrato.
+            numeroHeadersRichiesta:
+              type: integer
+              format: int32
+              description: Numero di header HTTP registrati sulla richiesta.
+            numeroHeadersRisposta:
+              type: integer
+              format: int32
+              description: Numero di header HTTP registrati sulla risposta.
+            _links:
+              $ref: '#/components/schemas/EventoLinks'
+
+    EventoHeader:
+      type: object
+      description: |
+        Header HTTP registrato su richiesta/risposta. Il valore e' mascherato
+        di default per gli header appartenenti alla lista configurabile degli
+        header sensibili (`Authorization`, `Cookie`, ecc., match case-insensitive);
+        `?unmask=true` (nessun permesso aggiuntivo oltre alla visibilita'
+        dell'evento, ma tracciato con audit dedicato) lo mostra in chiaro.
+      required:
+        - nome
+        - valore
+        - redatto
+      properties:
+        nome:
+          type: string
+        valore:
+          type: string
+        redatto:
+          type: boolean
+          description: true se il valore mostrato e' mascherato (`***REDACTED***`).
+
+    EventoRichiesta:
+      type: object
+      description: |
+        Payload e header della richiesta registrata per l'evento. Accesso
+        tracciato in `gp_audit` (`EVENTO_RICHIESTA_VISUALIZZA`).
+      required:
+        - headers
+      properties:
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventoHeader'
+        payload:
+          type: string
+          description: Corpo raw della richiesta come stringa, interpretabile secondo `contentTypeRichiesta` del dettaglio. Assente se non registrato.
+
+    EventoRisposta:
+      type: object
+      description: |
+        Payload e header della risposta registrata per l'evento. Accesso
+        tracciato in `gp_audit` (`EVENTO_RISPOSTA_VISUALIZZA`).
+      required:
+        - headers
+      properties:
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventoHeader'
+        payload:
+          type: string
+          description: Corpo raw della risposta come stringa, interpretabile secondo `contentTypeRisposta` del dettaglio. Assente se non registrato.
+
+    FlussoRendicontazioneLinks:
+      type: object
+      description: Hyperlink relativi al flusso. Il download XML non ha `_link` dedicato (stesso URL di `self`, con `Accept` diverso).
+      required:
+        - dominio
+      properties:
+        dominio:
+          $ref: '#/components/schemas/Link'
+
+    FlussoRendicontazione:
+      description: |
+        Dettaglio canonico di un flusso di rendicontazione: `FlussoRendicontazioneSummary`
+        + finestra temporale coperta dal flusso + `_links`. Niente `xml` inline:
+        si ottiene sullo stesso path via `Accept: application/xml`.
+      allOf:
+        - $ref: '#/components/schemas/FlussoRendicontazioneSummary'
+        - type: object
+          required:
+            - _links
+          properties:
+            dataInizio:
+              type: string
+              format: date-time
+              description: |
+                Data del pagamento più vecchio rendicontato dal flusso
+                (derivata da `MIN(rendicontazioni.data)`, non da un campo
+                proprio del flusso).
+            dataFine:
+              type: string
+              format: date-time
+              description: Data del pagamento più recente rendicontato dal flusso (`MAX(rendicontazioni.data)`).
+            _links:
+              $ref: '#/components/schemas/FlussoRendicontazioneLinks'
 
     Soggetto:
       type: object
@@ -7466,6 +9215,506 @@ components:
         urlTokenEndpoint:
           type: string
 
+    ImpostazioniServizioGDE:
+      type: object
+      description: |
+        Connettore verso il Giornale degli Eventi (GDE): endpoint a cui i
+        moduli GovPay inviano gli eventi. Sotto-risorsa `servizioGDE` del blob
+        V1 `configurazione`. Le credenziali non sono incluse: si impostano
+        tramite l'endpoint dedicato `.../credenziali` e non sono mai
+        restituite dalle GET.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+          description: URL del servizio GDE.
+          maxLength: 255
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    GdeEvento:
+      type: object
+      description: |
+        Politica di logging di un evento verso il Giornale degli Eventi:
+        `log` traccia il riepilogo dell'evento, `dump` include anche il
+        payload completo. Valori normalizzati da V1 (`sempre`/`mai`/`solo errore`).
+      required:
+        - log
+        - dump
+      properties:
+        log:
+          type: string
+          enum:
+            - SEMPRE
+            - MAI
+            - SOLO_ERRORE
+        dump:
+          type: string
+          enum:
+            - SEMPRE
+            - MAI
+            - SOLO_ERRORE
+
+    GdeInterfaccia:
+      type: object
+      description: |
+        Politica di logging di un'interfaccia API, separata per operazioni
+        di lettura e scrittura.
+      required:
+        - letture
+        - scritture
+      properties:
+        letture:
+          $ref: '#/components/schemas/GdeEvento'
+        scritture:
+          $ref: '#/components/schemas/GdeEvento'
+
+    ImpostazioniGiornaleEventiLinks:
+      type: object
+      description: Hyperlink correlati alle impostazioni del giornale degli eventi.
+      properties:
+        servizioGDE:
+          $ref: '#/components/schemas/Link'
+
+    ImpostazioniGiornaleEventi:
+      type: object
+      description: |
+        Politica di logging verso il Giornale degli Eventi (GDE), per ciascuna
+        delle 8 interfacce API di GovPay. Sotto-risorsa `giornaleEventi` del
+        blob V1 `configurazione` (il connettore GDE vero e proprio, cioe' url
+        e autenticazione, e' la sotto-risorsa indipendente `/impostazioni/servizioGDE`,
+        vedi `_links`).
+
+        Ogni campo e' un blocco patchabile atomicamente: il PATCH RFC 6902
+        opera con un pointer a singolo segmento top-level (es. `/apiEnte`),
+        sostituendo l'intero blocco `{letture, scritture}` in un'unica
+        operazione.
+      required:
+        - apiEnte
+        - apiPagamento
+        - apiRagioneria
+        - apiBackoffice
+        - apiPagoPA
+        - apiPendenze
+        - apiBackendIO
+        - apiMaggioliJPPA
+      properties:
+        apiEnte:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPagamento:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiRagioneria:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiBackoffice:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPagoPA:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiPendenze:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiBackendIO:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        apiMaggioliJPPA:
+          $ref: '#/components/schemas/GdeInterfaccia'
+        _links:
+          $ref: '#/components/schemas/ImpostazioniGiornaleEventiLinks'
+
+    MailKeyStore:
+      type: object
+      description: |
+        Riferimento a un keystore/truststore Java per l'autenticazione SSL
+        client verso il server SMTP. La password non e' inclusa: si imposta
+        tramite l'endpoint dedicato `/impostazioni/mail/server/password`.
+      properties:
+        location:
+          type: string
+          description: Path del file keystore/truststore.
+          maxLength: 255
+        tipo:
+          type: string
+          description: Tipo del keystore/truststore (es. JKS, PKCS12).
+          maxLength: 255
+        managementAlgorithm:
+          type: string
+          maxLength: 255
+
+    ImpostazioniMailServerSsl:
+      type: object
+      description: Configurazione SSL/TLS del server SMTP.
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        tipo:
+          type: string
+          description: Tipo di SSLContext (es. TLS).
+          maxLength: 255
+        hostnameVerifier:
+          type: boolean
+        trustStore:
+          $ref: '#/components/schemas/MailKeyStore'
+        keyStore:
+          $ref: '#/components/schemas/MailKeyStore'
+
+    ImpostazioniMailServer:
+      type: object
+      description: |
+        Server SMTP usato per l'invio dei promemoria. Sotto-risorsa
+        `mailBatch` del blob V1 `configurazione`. Le credenziali (password
+        SMTP e password di keystore/truststore) non sono incluse: si
+        impostano tramite l'endpoint dedicato `.../password` e non sono mai
+        restituite dalle GET; `passwordImpostata` indica solo se una password
+        SMTP e' stata configurata.
+
+        Il campo `ssl` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/ssl`).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        host:
+          type: string
+          maxLength: 255
+        port:
+          type: integer
+          format: int32
+        username:
+          type: string
+          maxLength: 35
+        from:
+          type: string
+          description: Indirizzo mittente del promemoria.
+          maxLength: 255
+        readTimeoutMs:
+          type: integer
+          format: int32
+        connectionTimeoutMs:
+          type: integer
+          format: int32
+        startTls:
+          type: boolean
+        ssl:
+          $ref: '#/components/schemas/ImpostazioniMailServerSsl'
+        passwordImpostata:
+          type: boolean
+          readOnly: true
+          description: Indica se una password SMTP e' stata configurata.
+
+    ImpostazioniMailServerCredenziali:
+      type: object
+      description: |
+        Credenziali del server SMTP (write-only). Non vengono mai restituite
+        dalle GET. `ksPassword`/`tsPassword` sono significative solo se
+        `ssl.keyStore`/`ssl.trustStore` sono configurati.
+      properties:
+        nuovaPassword:
+          type: string
+          description: Password HTTP del server SMTP.
+        ksPassword:
+          type: string
+        tsPassword:
+          type: string
+
+    TemplatePromemoriaAvviso:
+      type: object
+      description: Template del promemoria di avviso pagamento spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        allegaPdf:
+          type: boolean
+          description: Se true allega alla mail il pdf dell'avviso.
+
+    TemplatePromemoriaRicevuta:
+      type: object
+      description: Template del promemoria di ricevuta pagamento spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        soloEseguiti:
+          type: boolean
+          description: Se true limita l'invio ai soli pagamenti eseguiti.
+        allegaPdf:
+          type: boolean
+          description: Se true allega alla mail il pdf della ricevuta.
+
+    TemplatePromemoriaScadenza:
+      type: object
+      description: Template del promemoria di scadenza avviso spedito via mail.
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per l'oggetto della mail.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della mail.
+        preavviso:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Numero di giorni prima della scadenza per l'invio del promemoria.
+
+    ImpostazioniMailTemplatePromemoria:
+      type: object
+      description: |
+        Template FreeMarker dei promemoria spediti via mail. Sotto-risorsa
+        `avvisaturaMail` del blob V1 `configurazione`. Ogni campo e' un
+        blocco patchabile atomicamente (pointer a singolo segmento
+        top-level, es. `/promemoriaScadenza`).
+      required:
+        - promemoriaAvviso
+        - promemoriaRicevuta
+        - promemoriaScadenza
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TemplatePromemoriaAvviso'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TemplatePromemoriaRicevuta'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TemplatePromemoriaScadenza'
+
+    ImpostazioniAppIoServer:
+      type: object
+      description: |
+        Connettore verso il servizio App IO usato per l'invio delle notifiche
+        push. Sotto-risorsa `appIOBatch` del blob V1 `configurazione`, stessa
+        infrastruttura EAV dei connettori (`connettori`, come
+        `/impostazioni/servizioGDE`). Le credenziali non sono incluse: si
+        impostano tramite l'endpoint dedicato `.../credenziali` e non sono
+        mai restituite dalle GET.
+
+        Il campo `auth` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/auth`).
+      required:
+        - abilitato
+      properties:
+        abilitato:
+          type: boolean
+        url:
+          type: string
+          description: URL base del servizio App IO.
+          maxLength: 255
+        timeToLiveSecondi:
+          type: integer
+          format: int32
+          description: |
+            Tempo (in secondi) entro cui Agid tenta la consegna della
+            notifica prima di considerarla scaduta.
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+
+    TemplatePromemoriaAvvisoBase:
+      type: object
+      description: |
+        Template del promemoria di avviso pagamento spedito via notifica push
+        (nessun allegato, a differenza della variante mail).
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per il titolo della notifica.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della notifica.
+
+    TemplatePromemoriaRicevutaBase:
+      type: object
+      description: |
+        Template del promemoria di ricevuta pagamento spedito via notifica
+        push (nessun allegato, a differenza della variante mail).
+      required:
+        - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        oggetto:
+          type: string
+          description: Template FreeMarker per il titolo della notifica.
+        messaggio:
+          type: string
+          description: Template FreeMarker per il corpo della notifica.
+        soloEseguiti:
+          type: boolean
+          description: Se true limita l'invio ai soli pagamenti eseguiti.
+
+    ImpostazioniAppIoTemplatePromemoria:
+      type: object
+      description: |
+        Template FreeMarker dei promemoria spediti via notifica push App IO.
+        Sotto-risorsa `avvisaturaAppIO` del blob V1 `configurazione`.
+        `promemoriaScadenza` riusa lo stesso schema della sotto-risorsa mail
+        (`TemplatePromemoriaScadenza`): V1 usa la stessa classe per entrambi
+        i canali, nessuna differenza di campi. Ogni campo e' un blocco
+        patchabile atomicamente (pointer a singolo segmento top-level, es.
+        `/promemoriaScadenza`).
+      required:
+        - promemoriaAvviso
+        - promemoriaRicevuta
+        - promemoriaScadenza
+      properties:
+        promemoriaAvviso:
+          $ref: '#/components/schemas/TemplatePromemoriaAvvisoBase'
+        promemoriaRicevuta:
+          $ref: '#/components/schemas/TemplatePromemoriaRicevutaBase'
+        promemoriaScadenza:
+          $ref: '#/components/schemas/TemplatePromemoriaScadenza'
+
+    ImpostazioniTracciatiCsv:
+      type: object
+      description: |
+        Template FreeMarker per la generazione dei tracciati CSV di risposta.
+        Sotto-risorsa `tracciatoCsv` del blob V1 `configurazione`.
+      required:
+        - tipo
+        - intestazione
+        - richiesta
+        - risposta
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoTemplateTrasformazione'
+        intestazione:
+          type: string
+          description: Intestazione del file CSV di risposta.
+        richiesta:
+          type: string
+          description: Template FreeMarker per la trasformazione di un record da CSV a JSON.
+        risposta:
+          type: string
+          description: Template FreeMarker per la trasformazione di un record da JSON a CSV.
+
+    ConfigurazioneReCaptcha:
+      type: object
+      description: |
+        Configurazione Google reCAPTCHA. La chiave segreta non e' inclusa: si
+        imposta tramite l'endpoint dedicato `/impostazioni/hardening/credenziali`
+        e non e' mai restituita dalle GET.
+      properties:
+        serverURL:
+          type: string
+          description: URL del servizio di verifica.
+          maxLength: 255
+        siteKey:
+          type: string
+          description: Chiave sito reCAPTCHA.
+          maxLength: 255
+        soglia:
+          type: number
+          format: double
+          minimum: 0.1
+          maximum: 1.0
+          description: Soglia di accettazione della risposta di validazione.
+        parametro:
+          type: string
+          pattern: '[a-zA-Z0-9-_]+'
+          description: Nome del parametro che porta la response reCAPTCHA da inviare al server.
+        denyOnFail:
+          type: boolean
+          description: Se true nega la richiesta quando il server di verifica non e' raggiungibile.
+        connectionTimeoutMs:
+          type: integer
+          format: int32
+        readTimeoutMs:
+          type: integer
+          format: int32
+
+    ImpostazioniHardening:
+      type: object
+      description: |
+        Configurazione Google reCAPTCHA usata per irrobustire il login.
+        Sotto-risorsa `hardening` del blob V1 `configurazione`.
+
+        Il campo `captcha` e' un blocco patchabile atomicamente (pointer a
+        singolo segmento top-level, es. `/captcha`).
+      required:
+        - abilitato
+        - captcha
+      properties:
+        abilitato:
+          type: boolean
+        captcha:
+          $ref: '#/components/schemas/ConfigurazioneReCaptcha'
+
+    ImpostazioniHardeningCredenziali:
+      type: object
+      description: |
+        Chiave segreta reCAPTCHA (write-only). Non viene mai restituita
+        dalle GET.
+      properties:
+        secretKey:
+          type: string
+
+    AreaImpostazioni:
+      type: object
+      description: |
+        Riepilogo di una sotto-risorsa di impostazioni. `abilitata` e'
+        presente solo per le aree che hanno un vero flag di abilitazione
+        (connettori e hardening); le aree di solo template (giornale-eventi,
+        i due template-promemoria, tracciati-csv) non la espongono, non
+        avendo V1 alcun interruttore on/off. `ultimaModifica' e' assente se
+        l'area non e' mai stata modificata dopo il deploy.
+      required:
+        - codice
+        - nome
+        - href
+      properties:
+        codice:
+          type: string
+          example: servizioGDE
+        nome:
+          type: string
+          example: Servizio GDE
+        abilitata:
+          type: boolean
+        href:
+          type: string
+          example: /impostazioni/servizioGDE
+        ultimaModifica:
+          type: string
+          format: date-time
+
+    ImpostazioniOverview:
+      type: object
+      description: |
+        Overview delle 8 sotto-risorse indipendenti del blob V1
+        `configurazione`. `servizioGDE` e `giornaleEventi` sono due risorse
+        REST separate (auth/connettore vs politica di logging) nonostante
+        derivino dalla stessa area V1: vedi `_links.servizioGDE` dentro
+        `ImpostazioniGiornaleEventi`.
+      required:
+        - aree
+      properties:
+        aree:
+          type: array
+          items:
+            $ref: '#/components/schemas/AreaImpostazioni'
+
     ConnettoreIntermediarioPagopa:
       type: object
       description: Connettore pagoPA (PDD) dell'intermediario. Le credenziali non sono incluse.
@@ -8290,6 +10539,58 @@ components:
         type: string
         format: date
 
+    IdFlusso:
+      name: idFlusso
+      in: query
+      required: false
+      description: Identificativo del flusso di rendicontazione assegnato dal PSP, match esatto.
+      schema:
+        type: string
+
+    IdPsp:
+      name: idPsp
+      in: query
+      required: false
+      description: Identificativo del PSP mittente del flusso, match esatto.
+      schema:
+        type: string
+
+    FrDataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla data di acquisizione del flusso (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    FrDataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data di acquisizione del flusso (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    StatoFlussoFilter:
+      name: stato
+      in: query
+      required: false
+      description: Filtra per stato del flusso.
+      schema:
+        $ref: '#/components/schemas/StatoFlussoRendicontazione'
+
+    Incassato:
+      name: incassato
+      in: query
+      required: false
+      description: |
+        Se `true`, solo i flussi con un incasso (bonifico SCT) associato; se
+        `false`, solo quelli senza.
+      schema:
+        type: boolean
+
     IdDominioPath:
       name: idDominio
       in: path
@@ -8298,6 +10599,197 @@ components:
       schema:
         type: string
         pattern: '^[0-9]{11}$'
+
+    IdFlussoPath:
+      name: idFlusso
+      in: path
+      required: true
+      description: Identificativo del flusso di rendicontazione assegnato dal PSP.
+      schema:
+        type: string
+
+    IdPspPath:
+      name: idPsp
+      in: path
+      required: true
+      description: Identificativo del PSP mittente del flusso.
+      schema:
+        type: string
+
+    RevisionePath:
+      name: revisione
+      in: path
+      required: true
+      description: Numero di revisione del flusso.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+    EventoLimit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        Numero massimo di risultati per pagina. A differenza delle altre
+        liste (max 200), qui il tetto e' 100: vincolo tecnico reale del
+        servizio GDE, non solo convenzione UX. Nota: discrepanza nota rispetto
+        al parametro `Limit` condiviso, da riconciliare in futuro.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 25
+
+    EventoDataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: |
+        Limite inferiore (incluso) sulla data evento (ISO 8601 date-time). Se
+        omesso insieme a `dataA`, viene forzato silenziosamente a "adesso
+        meno 24 ore" per evitare una scansione completa della tabella.
+      schema:
+        type: string
+        format: date-time
+
+    EventoDataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data evento (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    Ccp:
+      name: ccp
+      in: query
+      required: false
+      description: Codice contesto pagamento (identificativo tecnico del Nodo), match esatto.
+      schema:
+        type: string
+
+    IdA2A:
+      name: idA2A
+      in: query
+      required: false
+      description: Identificativo del gestionale proprietario della pendenza (A2A), match esatto.
+      schema:
+        type: string
+
+    IdPendenzaEventoFilter:
+      name: idPendenza
+      in: query
+      required: false
+      description: Identificativo della pendenza nel gestionale proprietario, match esatto.
+      schema:
+        type: string
+
+    ComponenteEventoFilter:
+      name: componente
+      in: query
+      required: false
+      description: Filtra per componente interno che ha emesso l'evento.
+      schema:
+        $ref: '#/components/schemas/ComponenteEvento'
+
+    CategoriaEventoFilter:
+      name: categoria
+      in: query
+      required: false
+      description: Filtra per categoria funzionale dell'evento.
+      schema:
+        $ref: '#/components/schemas/CategoriaEvento'
+
+    EsitoEventoFilter:
+      name: esito
+      in: query
+      required: false
+      description: Filtra per esito dell'evento.
+      schema:
+        $ref: '#/components/schemas/EsitoEvento'
+
+    RuoloEventoFilter:
+      name: ruolo
+      in: query
+      required: false
+      description: Filtra per ruolo (CLIENT/SERVER) dell'evento.
+      schema:
+        $ref: '#/components/schemas/RuoloEvento'
+
+    TipoEventoFilter:
+      name: tipoEvento
+      in: query
+      required: false
+      description: Tipo evento (es. `nodoInviaRPT`, `getListaPendenze`), match esatto.
+      schema:
+        type: string
+
+    SottotipoEventoFilter:
+      name: sottotipoEvento
+      in: query
+      required: false
+      description: Sottotipo evento, match esatto.
+      schema:
+        type: string
+
+    SeveritaDa:
+      name: severitaDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla severita' (0-5).
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 5
+
+    SeveritaA:
+      name: severitaA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla severita' (0-5).
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 5
+
+    Messaggi:
+      name: messaggi
+      in: query
+      required: false
+      description: |
+        Ricerca full-text (case-insensitive) su `sottotipoEsito` e
+        `dettaglioEsito`. Richiede un intervallo temporale (`dataDa`/`dataA`)
+        entro 7 giorni: senza, 400 problem+json (costo pieno scan altrimenti).
+      schema:
+        type: string
+
+    EventoIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificativo tecnico dell'evento.
+      schema:
+        type: integer
+        format: int64
+
+    Unmask:
+      name: unmask
+      in: query
+      required: false
+      description: |
+        Se true, mostra in chiaro i valori degli header sensibili (credenziali)
+        normalmente mascherati. Nessun permesso aggiuntivo richiesto oltre alla
+        normale visibilita' dell'evento (ACL su dominio) — la salvaguardia e'
+        l'audit: oltre al record standard viene scritto anche
+        `EVENTO_CREDENZIALI_VISUALIZZA`.
+      schema:
+        type: boolean
+        default: false
 
     IuvPath:
       name: iuv

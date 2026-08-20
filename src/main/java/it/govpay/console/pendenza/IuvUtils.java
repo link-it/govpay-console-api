@@ -6,9 +6,7 @@ import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 
 /**
- * Costruisce QR-Code e bar-code dell'avviso pagoPA replicando byte-per-byte
- * le funzioni omonime di {@code it.govpay.core.utils.IuvUtils} di V1
- * (govpay-381/.../jars/core/.../IuvUtils.java).
+ * Costruisce QR-Code e bar-code dell'avviso pagoPA.
  *
  * <p>Riferimenti normativi:
  * <ul>
