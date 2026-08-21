@@ -20,6 +20,10 @@ tags:
     description: Pagamenti in attesa e spontanei.
   - name: Ricevute
     description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
+  - name: Pendenze - Tracciati
+    description: |
+      Caricamento massivo di pendenze via tracciati (JSON/CSV) ed elaborazione
+      asincrona; consultazione dei metadati dei tracciati caricati.
   - name: Rendicontazioni
     description: |
       Consultazione dei flussi di rendicontazione (FR) scaricati da pagoPA.
@@ -5139,6 +5143,237 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+
+  /pendenze/tracciati:
+    post:
+      tags:
+        - Pendenze - Tracciati
+      operationId: uploadTracciatoPendenze
+      summary: Carica un tracciato di pendenze (JSON, CSV o multipart) per elaborazione asincrona.
+      description: |
+        Sostituisce le 3 varianti di upload V1 (`POST /pendenze/tracciati`,
+        `POST /pendenze/tracciati/{idDominio}`, `POST /pendenze/tracciati/{idDominio}/{idTipoPendenza}`)
+        con un unico endpoint a content negotiation sul `Content-Type` della richiesta:
+
+        - `application/json` — body `TracciatoPendenzePost` (multi-dominio
+          supportato via `idDominio` per singola riga in `inserimenti`/`annullamenti`).
+        - `text/csv` — body CSV raw. Richiede `?idDominio` (senza dominio
+          esplicito nel CSV non e' possibile associare le pendenze a un ente
+          creditore). `?idTipoPendenza` opzionale se il CSV ha un solo tipo
+          pendenza fisso, per non ripeterlo su ogni riga.
+        - `multipart/form-data` — campo `file` (era `fileName` in V1). Il
+          sotto-formato e' desunto dall'estensione del `filename` (`.json`/`.csv`)
+          o dal query param `?formato=JSON|CSV` se esplicito.
+
+        Nessuna idempotenza applicativa: ogni POST crea sempre un nuovo
+        tracciato con `id` numerico interno appena assegnato, anche a fronte di
+        contenuto duplicato. Il core GovPay gestisce in fase di elaborazione
+        l'eventuale merge/aggiornamento di pendenze gia' presenti a sistema
+        (stessa `idA2A` + `idPendenza`).
+
+        La obbligatorieta' condizionale di `?idDominio` per `Content-Type:
+        text/csv` e la risoluzione del sotto-formato multipart sono business
+        logic non esprimibili nello schema OpenAPI: enforced lato controller.
+      parameters:
+        - name: idDominio
+          in: query
+          required: false
+          description: |
+            Dominio target del tracciato. Opzionale per `Content-Type:
+            application/json` (dove ogni riga puo' dichiarare il proprio
+            dominio), **richiesto** per `Content-Type: text/csv` (400 se
+            assente).
+          schema:
+            type: string
+            pattern: '^[0-9]{11}$'
+        - name: idTipoPendenza
+          in: query
+          required: false
+          description: |
+            Tipo pendenza da applicare a tutte le righe. Significativo solo per
+            `Content-Type: text/csv`.
+          schema:
+            type: string
+            pattern: '(^[a-zA-Z0-9\-_\.]{1,35}$)'
+        - name: stampaAvvisi
+          in: query
+          required: false
+          description: Se richiedere la generazione delle stampe PDF degli avvisi per le pendenze del tracciato.
+          schema:
+            type: boolean
+            default: true
+        - name: formato
+          in: query
+          required: false
+          description: |
+            Sotto-formato del contenuto per `Content-Type:
+            multipart/form-data`. Se assente viene desunto dall'estensione del
+            `filename` del campo `file`.
+          schema:
+            $ref: '#/components/schemas/FormatoTracciato'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TracciatoPendenzeMultipart'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TracciatoPendenzePost'
+          text/csv:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '202':
+          description: Tracciato accettato per elaborazione asincrona (stato iniziale `IN_ATTESA`).
+          headers:
+            Location:
+              description: URI del tracciato appena creato.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracciatoPendenze'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '413':
+          $ref: '#/components/responses/Problem413'
+        '415':
+          $ref: '#/components/responses/Problem415'
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: listTracciatiPendenze
+      summary: Elenca i tracciati di pendenze visibili all'operatore autenticato (paginati).
+      description: |
+        Filtri supportati (opzionali e ortogonali, AND):
+        - `idDominio` — match esatto;
+        - `stato` — match esatto (`StatoTracciatoPendenza`);
+        - `dataDa`/`dataA` — intervallo su `dataOraCaricamento`;
+        - `operatoreMittente` — match parziale;
+        - `formatoRichiesta` — match esatto (`JSON`/`CSV`).
+
+        ACL: filtro automatico su `dominio.idDominio` in base al principal
+        (stesso pattern di `GET /pendenze`). Non esistono, in questo commit,
+        tracciati multi-dominio: `idDominio` e' sempre `required` in fase di
+        caricamento (vedi `TracciatoPendenzePost`).
+
+        **Paginazione**: due modalita' mutuamente esclusive, stesso pattern di
+        `GET /pendenze`.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination` valorizzato.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(dataOraCaricamento DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 problem+json con motivazione parlante. Cursor malformato
+        → 400.
+
+        Sort whitelist (modalita' offset): `dataOraCaricamento`,
+        `dataOraUltimoAggiornamento`, `numeroOperazioniTotali`.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IdDominio'
+        - name: stato
+          in: query
+          required: false
+          description: Match esatto sullo stato del tracciato.
+          schema:
+            $ref: '#/components/schemas/StatoTracciatoPendenza'
+        - name: dataDa
+          in: query
+          required: false
+          description: Limite inferiore (incluso) su `dataOraCaricamento`.
+          schema:
+            type: string
+            format: date-time
+        - name: dataA
+          in: query
+          required: false
+          description: Limite superiore (incluso) su `dataOraCaricamento`.
+          schema:
+            type: string
+            format: date-time
+        - name: operatoreMittente
+          in: query
+          required: false
+          description: Match parziale sul principal che ha caricato il tracciato.
+          schema:
+            type: string
+        - name: formatoRichiesta
+          in: query
+          required: false
+          description: Match esatto sul formato del file caricato.
+          schema:
+            $ref: '#/components/schemas/FormatoTracciato'
+      responses:
+        '200':
+          description: Lista paginata di tracciati.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TracciatoPendenze'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+
+  /pendenze/tracciati/{id}:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: getTracciatoPendenze
+      summary: Dettaglio metadata di un tracciato di pendenze.
+      description: |
+        Ritorna solo i metadati del tracciato (`TracciatoPendenze`), coerente
+        con V1 `tracciatoPendenzeIndex`: nessun campo con dati personali,
+        nessun `contenuto` inline (a differenza della V1 `tracciatoPendenze`
+        "dettaglio" — scartata in V2 a favore della sub-resource `/richiesta`,
+        fuori scope di questo commit).
+
+        404 se `id` sconosciuto o non visibile per l'operatore corrente (ACL,
+        indistinguibile). `Cache-Control: private, max-age=60` (lo stato puo'
+        cambiare rapidamente durante l'elaborazione, utile per il polling).
+        Nessun audit: solo metadata tecnici, nessun dato personale.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificativo numerico del tracciato.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Metadati del tracciato.
+          headers:
+            Cache-Control:
+              description: 'private, max-age=60'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracciatoPendenze'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
 
   /impostazioni/servizioGDE:
     get:
@@ -10341,6 +10576,650 @@ components:
           type: boolean
           default: false
           description: Forza l'avvio anche se e' gia' in corso un'esecuzione della stessa operazione.
+
+    StatoTracciatoPendenza:
+      type: string
+      description: Stato di elaborazione del tracciato. Stessi valori esatti di V1.
+      example: ESEGUITO
+      enum:
+        - IN_ATTESA
+        - IN_ELABORAZIONE
+        - ESEGUITO
+        - ESEGUITO_CON_ERRORI
+        - SCARTATO
+        - ELABORAZIONE_STAMPA
+
+    FormatoTracciato:
+      type: string
+      description: Formato del file caricato/da caricare per un tracciato di pendenze.
+      enum:
+        - JSON
+        - CSV
+
+    TracciatoPendenze:
+      type: object
+      description: |
+        Metadati di un tracciato di caricamento pendenze. Schema unico per
+        lista e dettaglio, coerente con V1 `tracciatoPendenzeIndex`. Non
+        include il contenuto del tracciato: per il payload originale e'
+        prevista la sub-resource `/richiesta` (fuori scope di questo commit).
+      required:
+        - id
+        - nomeFile
+        - dominio
+        - dataOraCaricamento
+        - stato
+        - formatoRichiesta
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificativo numerico del tracciato.
+          example: 123456
+        nomeFile:
+          type: string
+          description: Nome del file tracciato.
+          example: "pendenze_0000000001.json"
+        dominio:
+          $ref: '#/components/schemas/DominioRef'
+        idTipoPendenza:
+          type: string
+          nullable: true
+          description: Tipo pendenza bersaglio se noto (tipicamente tracciati CSV caricati con `?idTipoPendenza`).
+        dataOraCaricamento:
+          type: string
+          format: date-time
+          description: Data di caricamento del tracciato.
+          example: '2018-12-31T12:00:00Z'
+        dataOraUltimoAggiornamento:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data ultimo aggiornamento dello stato di elaborazione del tracciato.
+          example: '2018-12-31T12:01:00Z'
+        stato:
+          $ref: '#/components/schemas/StatoTracciatoPendenza'
+        descrizioneStato:
+          type: string
+          nullable: true
+          description: Descrizione dello stato del tracciato.
+          example: Errore di validazione
+        numeroOperazioniTotali:
+          type: integer
+          format: int64
+          description: Numero totale di operazioni previste.
+          example: 100
+        numeroOperazioniEseguite:
+          type: integer
+          format: int64
+          description: Numero totale di operazioni eseguite con successo.
+          example: 100
+        numeroOperazioniFallite:
+          type: integer
+          format: int64
+          description: Numero totale di operazioni fallite.
+          example: 0
+        numeroAvvisiTotali:
+          type: integer
+          format: int64
+          nullable: true
+          description: Numero totale di stampe previste. Presente solo se `stampaAvvisi=true`.
+          example: 100
+        numeroAvvisiStampati:
+          type: integer
+          format: int64
+          nullable: true
+          description: Numero totale di stampe eseguite con successo. Presente solo se `stampaAvvisi=true`.
+          example: 100
+        numeroAvvisiFalliti:
+          type: integer
+          format: int64
+          nullable: true
+          description: Numero totale di stampe non eseguite a causa di errori. Presente solo se `stampaAvvisi=true`.
+          example: 0
+        operatoreMittente:
+          type: string
+          description: Principal del cruscotto che ha effettuato il caricamento del tracciato.
+          example: "Marco Rossi"
+        stampaAvvisi:
+          type: boolean
+          description: Indica se il tracciato prevede la generazione delle stampe PDF degli avvisi.
+          example: true
+        formatoRichiesta:
+          $ref: '#/components/schemas/FormatoTracciato'
+        _links:
+          type: object
+          description: |
+            Hyperlink relativi al tracciato. In questo commit e' popolato solo
+            `self`; i link condizionali (richiesta/esito/stampe/operazioni)
+            sono scope di un commit successivo.
+          properties:
+            self:
+              $ref: '#/components/schemas/Link'
+
+    TracciatoPendenzePost:
+      type: object
+      description: |
+        Body JSON per il caricamento di un tracciato di pendenze (`POST
+        /pendenze/tracciati` con `Content-Type: application/json`).
+      required:
+        - idDominio
+      properties:
+        idTracciato:
+          type: string
+          description: |
+            Identificativo logico del tracciato assegnato dal client.
+            Informativo, non usato per idempotenza: il core assegna sempre un
+            nuovo `id` numerico interno al tracciato ad ogni upload.
+          example: "1528380303573122"
+        idDominio:
+          type: string
+          description: Identificativo del Dominio target del tracciato.
+          example: "01234567890"
+        inserimenti:
+          type: array
+          items:
+            $ref: '#/components/schemas/NuovaPendenzaTracciato'
+        annullamenti:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnullamentoPendenza'
+
+    TracciatoPendenzeMultipart:
+      type: object
+      description: |
+        Body multipart per il caricamento di un tracciato di pendenze (`POST
+        /pendenze/tracciati` con `Content-Type: multipart/form-data`).
+        `file` non e' `required` nello schema (a differenza della semantica
+        business, dove e' obbligatorio per il multipart): l'unico
+        `requestBody` dell'operazione copre 3 content-type eterogenei e
+        openapi-generator (spring) genera un binding `@RequestPart` reale
+        solo per il campo multipart. Se marcato `required` li',
+        `RequestPartMethodArgumentResolver` lancia `MultipartException` anche
+        per le richieste `application/json`/`text/csv` (Content-Type diverso
+        da multipart), prima ancora di raggiungere il controller. La
+        validazione "file obbligatorio quando il Content-Type e' multipart"
+        resta enforced lato service (`TracciatoUploadService`).
+      properties:
+        file:
+          type: string
+          format: binary
+          description: |
+            Contenuto del tracciato (JSON o CSV). Il sotto-formato e' desunto
+            dall'estensione del filename o da `?formato=`.
+
+    NuovaPendenzaTracciato:
+      type: object
+      description: Nuova pendenza da inserire, in una riga `inserimenti` di un tracciato di caricamento.
+      required:
+        - idDominio
+        - importo
+        - causale
+        - voci
+        - idA2A
+        - idPendenza
+      properties:
+        idDominio:
+          type: string
+          description: Identificativo del dominio creditore
+          example: '12345678901'
+        idUnitaOperativa:
+          type: string
+          description: Identificativo dell'unita' operativa
+          example: UO33132
+        idTipoPendenza:
+          type: string
+          description: Identificativo della tipologia pendenza
+          example: IMU
+          pattern: '(^[a-zA-Z0-9\-_\.]{1,35}$)'
+        nome:
+          type: string
+          description: Nome della pendenza da visualizzare sui portali di pagamento e console di gestione.
+          example: 'Immatricolazione AA 2017/2018'
+        causale:
+          type: string
+          description: Descrizione da inserire nell'avviso di pagamento
+          example: 'Sanzione CdS n. abc00000'
+        soggettoPagatore:
+          $ref: '#/components/schemas/Soggetto'
+        importo:
+          type: number
+          format: double
+          description: Importo della pendenza. Deve corrispondere alla somma delle singole voci.
+          example: 10.01
+        numeroAvviso:
+          type: string
+          description: Numero avviso, assegnato se pagabile da psp
+          example: '001000000000012345'
+        dataCaricamento:
+          type: string
+          format: date
+          description: Data di emissione della pendenza
+          example: '2010-12-31'
+        dataValidita:
+          type: string
+          format: date
+          description: Data di validita dei dati della pendenza, decorsa la quale la pendenza può subire variazioni.
+          example: '2019-12-31'
+        dataScadenza:
+          type: string
+          format: date
+          description: Data di scadenza della pendenza, decorsa la quale non è più pagabile.
+          example: '2020-12-31'
+        annoRiferimento:
+          type: integer
+          format: int32
+          description: Anno di riferimento della pendenza
+          example: 2020
+        cartellaPagamento:
+          type: string
+          description: Identificativo della cartella di pagamento a cui afferisce la pendenza
+          example: ABC00000001
+        datiAllegati:
+          type: object
+          description: Dati applicativi allegati dal gestionale secondo un formato proprietario.
+        tassonomia:
+          type: string
+          description: Macro categoria della pendenza secondo la classificazione del creditore
+          example: Sanzioni
+        tassonomiaAvviso:
+          $ref: '#/components/schemas/TassonomiaAvviso'
+        direzione:
+          type: string
+          description: Identificativo della direzione interna all'ente creditore
+          example: Direzione ABC
+        divisione:
+          type: string
+          description: Identificativo della divisione interna all'ente creditore
+          example: Divisione001
+        documento:
+          $ref: '#/components/schemas/Documento'
+        proprieta:
+          $ref: '#/components/schemas/ProprietaPendenza'
+        voci:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/NuovaVocePendenza'
+        allegati:
+          type: array
+          items:
+            $ref: '#/components/schemas/NuovoAllegatoPendenza'
+        idA2A:
+          type: string
+          description: Identificativo del gestionale responsabile della pendenza
+          example: A2A_12345
+        idPendenza:
+          type: string
+          description: Identificativo della pendenza nel gestionale responsabile
+          example: abcdef12345
+
+    AnnullamentoPendenza:
+      type: object
+      description: Annullamento di una pendenza esistente, in una riga `annullamenti` di un tracciato di caricamento.
+      required:
+        - idA2A
+        - idPendenza
+        - motivoAnnullamento
+      properties:
+        idA2A:
+          type: string
+          description: Identificativo del gestionale responsabile della pendenza
+          example: A2A_12345
+        idPendenza:
+          type: string
+          description: Identificativo della pendenza nel gestionale responsabile
+          example: abcdef12345
+        motivoAnnullamento:
+          type: string
+          description: Descrizione dell'operazione
+          example: Pendenza non piu' valida
+
+    NuovaVocePendenza:
+      description: Voce di una nuova pendenza, dentro `NuovaPendenzaTracciato.voci` (max 5 per pendenza).
+      allOf:
+        - type: object
+          required:
+            - idVocePendenza
+            - importo
+            - descrizione
+            - stato
+          properties:
+            indice:
+              type: integer
+              format: int32
+              description: indice di voce all'interno della pendenza
+              example: 1
+            idVocePendenza:
+              type: string
+              description: Identificativo della voce di pedenza nel gestionale proprietario
+              example: abcdef12345_1
+            importo:
+              type: number
+              format: double
+              description: Importo della voce
+              example: 10.01
+            descrizione:
+              type: string
+              description: descrizione della voce di pagamento
+              example: Sanzione CdS n. abc00000
+            stato:
+              $ref: '#/components/schemas/StatoVocePendenza'
+            descrizioneCausaleRPT:
+              type: string
+              description: Testo libero per la causale versamento
+              example: Sanzione CdS n. abc00000
+              maxLength: 140
+            contabilita:
+              $ref: '#/components/schemas/Contabilita'
+            metadata:
+              $ref: '#/components/schemas/Metadata'
+        - type: object
+          properties:
+            idDominio:
+              type: string
+              description: Identificativo del dominio creditore
+              example: '12345678901'
+            datiAllegati:
+              type: object
+              description: Dati applicativi allegati dal gestionale secondo un formato proprietario.
+        # NB: niente 'required' dentro i singoli rami — openapi-generator
+        # (spring, senza discriminator) genera una classe flat unica dai 3
+        # rami e fonde i 'required' di TUTTI come @NotNull sulla stessa
+        # classe: renderebbe impossibile soddisfare lo schema (nessun payload
+        # potrebbe mai avere contemporaneamente codEntrata E ibanAccredito E
+        # tipoBollo). La regola "esattamente un ramo valorizzato" resta
+        # implicita/non enforced a livello di Bean Validation, coerente col
+        # limite noto del generatore sui oneOf senza discriminator.
+        - oneOf:
+            - description: Definisce i dettagli di incasso tramite riferimento in anagrafica GovPay.
+              type: object
+              properties:
+                codEntrata:
+                  type: string
+                  pattern: '(^[a-zA-Z0-9\-_\.]{1,35}$)'
+            - description: Definisce i dettagli di incasso.
+              type: object
+              properties:
+                ibanAccredito:
+                  type: string
+                  example: IT60X0542811101000000123456
+                ibanAppoggio:
+                  type: string
+                  example: IT60X0542811101000000123456
+                tipoContabilita:
+                  $ref: '#/components/schemas/TipoContabilita'
+                codiceContabilita:
+                  description: Codifica del capitolo di bilancio
+                  type: string
+                  example: '3321'
+            - description: Definisce i dati di un bollo telematico
+              type: object
+              properties:
+                tipoBollo:
+                  description: Tipologia di Bollo digitale
+                  type: string
+                  enum:
+                    - Imposta di bollo
+                hashDocumento:
+                  description: Digest in base64 del documento informatico associato alla marca da bollo
+                  type: string
+                provinciaResidenza:
+                  description: Sigla automobilistica della provincia di residenza del soggetto pagatore
+                  type: string
+
+    NuovoAllegatoPendenza:
+      type: object
+      description: Nuovo allegato di una pendenza, dentro `NuovaPendenzaTracciato.allegati`.
+      required:
+        - nome
+        - contenuto
+      properties:
+        nome:
+          type: string
+          description: nome del file
+          minLength: 1
+          maxLength: 255
+        tipo:
+          type: string
+          description: mime type del file
+          default: "application/octet-stream"
+          minLength: 1
+          maxLength: 255
+        descrizione:
+          type: string
+          description: descrizione del file
+          minLength: 1
+          maxLength: 255
+        contenuto:
+          type: string
+          format: byte
+          description: contenuto del file
+
+    Documento:
+      allOf:
+        - type: object
+          required:
+            - identificativo
+            - descrizione
+          properties:
+            identificativo:
+              type: string
+              description: Identificativo del documento
+              example: abcdef12345_1
+              minLength: 1
+              maxLength: 35
+            descrizione:
+              type: string
+              description: descrizione del documento
+              example: Sanzione CdS n. abc00000
+              minLength: 1
+              maxLength: 80
+        - $ref: '#/components/schemas/TipoRiferimentoDocumento'
+
+    TipoRiferimentoDocumento:
+      type: object
+      oneOf:
+        - $ref: '#/components/schemas/RataDocumento'
+        - $ref: '#/components/schemas/VincoloDocumento'
+
+    RataDocumento:
+      type: object
+      required:
+        - rata
+      properties:
+        rata:
+          type: integer
+          format: int32
+          description: Rata del documento
+          example: 1
+          minimum: 1
+
+    VincoloDocumento:
+      type: object
+      required:
+        - soglia
+      properties:
+        soglia:
+          $ref: '#/components/schemas/VincoloPagamento'
+
+    VincoloPagamento:
+      type: object
+      required:
+        - tipo
+        - giorni
+      properties:
+        giorni:
+          type: integer
+          format: int32
+          description: numero di giorni vincolo per il pagamento
+          example: 5
+          minimum: 1
+        tipo:
+          $ref: '#/components/schemas/TipoSogliaVincoloPagamento'
+
+    TipoSogliaVincoloPagamento:
+      description: Indica se il pagamento deve avvenire entro o oltre la soglia di giorni indicata
+      type: string
+      enum:
+        - ENTRO
+        - OLTRE
+      example: ENTRO
+
+    TassonomiaAvviso:
+      description: Macro categoria della pendenza Agid
+      type: string
+      enum:
+        - Cartelle esattoriali
+        - Diritti e concessioni
+        - Imposte e tasse
+        - IMU, TASI e altre tasse comunali
+        - Ingressi a mostre e musei
+        - Multe e sanzioni amministrative
+        - Previdenza e infortuni
+        - Servizi erogati dal comune
+        - Servizi erogati da altri enti
+        - Servizi scolastici
+        - Tassa automobilistica
+        - Ticket e prestazioni sanitarie
+        - Trasporti, mobilità e parcheggi
+      example: Ticket e prestazioni sanitarie
+
+    Contabilita:
+      type: object
+      properties:
+        quote:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotaContabilita'
+        proprietaCustom:
+          type: object
+          description: Dati specifici del gestionale di contabilità
+
+    QuotaContabilita:
+      type: object
+      required:
+        - capitolo
+        - annoEsercizio
+        - importo
+      properties:
+        capitolo:
+          type: string
+          description: Codice del capitolo
+          maxLength: 64
+        annoEsercizio:
+          type: integer
+          format: int32
+          description: Anno di esercizio
+          example: 2020
+        importo:
+          type: number
+          format: double
+          description: Importo della voce di contabilita'
+          example: 10.01
+        accertamento:
+          type: string
+          description: Codice dell'accertamento
+          maxLength: 64
+        proprietaCustom:
+          type: object
+          description: Dati specifici del gestionale di contabilità
+        titolo:
+          type: string
+          description: Classificazione delle entrate in bilancio
+          maxLength: 64
+          example: 'titolo'
+        tipologia:
+          type: string
+          description: Classificazione delle entrate in bilancio
+          maxLength: 64
+          example: 'tipologia'
+        categoria:
+          type: string
+          description: Classificazione delle entrate in bilancio
+          maxLength: 64
+          example: 'categoria'
+        articolo:
+          type: string
+          description: Classificazione delle entrate in bilancio
+          maxLength: 64
+          example: 'articolo'
+
+    Metadata:
+      type: object
+      description: Metadata Custom da inserire nella ricevuta di pagamento
+      properties:
+        mapEntries:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapEntry'
+          minItems: 1
+          maxItems: 5
+
+    MapEntry:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          description: chiave del metadata
+          minLength: 1
+          maxLength: 140
+        value:
+          type: string
+          description: valore del metadata
+          minLength: 1
+          maxLength: 140
+
+    ProprietaPendenza:
+      type: object
+      description: Dati supporto per la gestione del ciclo di vita della pendenza.
+      properties:
+        linguaSecondaria:
+          $ref: '#/components/schemas/LinguaSecondaria'
+        descrizioneImporto:
+          type: array
+          items:
+            $ref: '#/components/schemas/VoceDescrizioneImporto'
+        lineaTestoRicevuta1:
+          type: string
+          description: stringa personalizzata da inserire nella ricevuta
+        lineaTestoRicevuta2:
+          type: string
+          description: stringa personalizzata da inserire nella ricevuta
+        linguaSecondariaCausale:
+          type: string
+          description: causale della pendenza nella lingua secondaria da inserire nell'avviso
+        informativaImportoAvviso:
+          type: string
+          description: |
+            se valorizzato, sostituisce il testo standard. Se valorizzato con stringa vuota, l'informativa viene omessa.
+          maxLength: 255
+        linguaSecondariaInformativaImportoAvviso:
+          type: string
+          description: |
+            se valorizzato, sostituisce il testo standard. Se valorizzato con stringa vuota, l'informativa viene omessa.
+          maxLength: 255
+        dataScandenzaAvviso:
+          type: string
+          format: date
+          description: se valorizzata, sostituisce la data di scadenza standard.
+
+    VoceDescrizioneImporto:
+      type: object
+      properties:
+        voce:
+          type: string
+          description: voce importo
+          example: canone annuo
+        importo:
+          type: number
+          format: double
+          description: importo
+          example: 10.01
 
   responses:
 
