@@ -82,6 +82,9 @@ public class Tracciato {
     @Column(name = "raw_richiesta", columnDefinition = "BYTEA")
     private byte[] rawRichiesta;
 
+    @Column(name = "raw_esito", columnDefinition = "BYTEA")
+    private byte[] rawEsito;
+
     public Long getId() {
         return id;
     }
@@ -192,5 +195,13 @@ public class Tracciato {
 
     public void setRawRichiesta(byte[] rawRichiesta) {
         this.rawRichiesta = rawRichiesta;
+    }
+
+    public byte[] getRawEsito() {
+        return rawEsito;
+    }
+
+    public void setRawEsito(byte[] rawEsito) {
+        this.rawEsito = rawEsito;
     }
 }

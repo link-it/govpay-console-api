@@ -17,6 +17,7 @@ import it.govpay.console.entity.Tracciato;
 import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.FormatoTracciato;
 import it.govpay.console.model.Link;
+import it.govpay.console.model.StatoTracciatoPendenza;
 import it.govpay.console.model.TracciatoPendenze;
 import it.govpay.console.model.TracciatoPendenzeLinks;
 import tools.jackson.core.JacksonException;
@@ -43,13 +44,14 @@ public class TracciatoMapper {
 
     public TracciatoPendenze toDto(Tracciato entity) {
         TracciatoBeanDati beanDati = parseBeanDati(entity);
+        StatoTracciatoPendenza stato = TracciatoStatoMapper.toRest(entity.getStato(), beanDati.getStepElaborazione());
 
         TracciatoPendenze dto = new TracciatoPendenze(
                 entity.getId(),
                 entity.getFileNameRichiesta(),
                 toDominioRef(entity.getDominio()),
                 entity.getDataCaricamento(),
-                TracciatoStatoMapper.toRest(entity.getStato(), beanDati.getStepElaborazione()),
+                stato,
                 FormatoTracciato.fromValue(entity.getFormato()));
 
         dto.setIdTipoPendenza(JsonNullable.of(entity.getCodTipoVersamento()));
@@ -72,8 +74,36 @@ public class TracciatoMapper {
             dto.setOperatoreMittente(operatore.getUtenza().getPrincipal());
         }
 
-        dto.setLinks(new TracciatoPendenzeLinks().self(new Link("/pendenze/tracciati/" + entity.getId())));
+        dto.setLinks(buildLinks(entity.getId(), stato, beanDati.isStampaAvvisi()));
         return dto;
+    }
+
+    /**
+     * {@code richiesta}/{@code operazioni} sempre presenti (il contenuto
+     * caricato e l'elenco operazioni esistono sempre, anche a tracciato
+     * appena creato). {@code esito} presente solo quando lo stato indica che
+     * un esito e' gia' stato prodotto (non su IN_ATTESA/IN_ELABORAZIONE).
+     * {@code stampe} presente solo se {@code stampaAvvisi=true} e lo stato
+     * indica stampe gia' prodotte o in corso.
+     */
+    private static TracciatoPendenzeLinks buildLinks(Long id, StatoTracciatoPendenza stato, boolean stampaAvvisi) {
+        String base = "/pendenze/tracciati/" + id;
+        TracciatoPendenzeLinks links = new TracciatoPendenzeLinks()
+                .self(new Link(base))
+                .richiesta(new Link(base + "/richiesta"))
+                .operazioni(new Link(base + "/operazioni"));
+
+        boolean esitoProdotto = switch (stato) {
+            case ESEGUITO, ESEGUITO_CON_ERRORI, ELABORAZIONE_STAMPA, SCARTATO -> true;
+            case IN_ATTESA, IN_ELABORAZIONE -> false;
+        };
+        if (esitoProdotto) {
+            links.esito(new Link(base + "/esito"));
+        }
+        if (stampaAvvisi && (stato == StatoTracciatoPendenza.ESEGUITO || stato == StatoTracciatoPendenza.ELABORAZIONE_STAMPA)) {
+            links.stampe(new Link(base + "/stampe"));
+        }
+        return links;
     }
 
     private TracciatoBeanDati parseBeanDati(Tracciato entity) {

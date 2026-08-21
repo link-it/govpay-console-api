@@ -5343,8 +5343,7 @@ paths:
         Ritorna solo i metadati del tracciato (`TracciatoPendenze`), coerente
         con V1 `tracciatoPendenzeIndex`: nessun campo con dati personali,
         nessun `contenuto` inline (a differenza della V1 `tracciatoPendenze`
-        "dettaglio" — scartata in V2 a favore della sub-resource `/richiesta`,
-        fuori scope di questo commit).
+        "dettaglio" — scartata in V2 a favore della sub-resource `/richiesta`).
 
         404 se `id` sconosciuto o non visibile per l'operatore corrente (ACL,
         indistinguibile). `Cache-Control: private, max-age=60` (lo stato puo'
@@ -5370,6 +5369,224 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TracciatoPendenze'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /pendenze/tracciati/{id}/richiesta:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: getTracciatoPendenzeRichiesta
+      summary: Contenuto originale caricato per il tracciato.
+      description: |
+        Ritorna il payload esattamente come caricato dall'operatore (JSON
+        `TracciatoPendenzePost` o CSV raw, secondo `formatoRichiesta` del
+        tracciato) — include l'anagrafica del soggetto pagatore di
+        potenzialmente centinaia di soggetti.
+
+        Content negotiation via `Accept`: solo il formato nativo del
+        tracciato e' disponibile (nessuna conversione lossless tra JSON e
+        CSV) — `Accept` incompatibile con `formatoRichiesta` → 406.
+
+        **Audit obbligatorio** (`TRACCIATO_RICHIESTA_VISUALIZZA`, severity
+        MEDIUM): il payload contiene anagrafica debitore in chiaro.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Contenuto originale del tracciato.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracciatoPendenzePost'
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '406':
+          description: 'Accept incompatibile con il formato nativo del tracciato (nessuna conversione lossless JSON/CSV).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /pendenze/tracciati/{id}/esito:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: getTracciatoPendenzeEsito
+      summary: Esito di elaborazione del tracciato, riga per riga.
+      description: |
+        Outcome per riga (`TracciatoPendenzeEsito`): nessun dato personale,
+        solo identificativi tecnici ed esito. Content negotiation via
+        `Accept` come `/richiesta`. 404 se l'esito non e' ancora stato
+        prodotto (tracciato non ancora elaborato). Nessun audit.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Esito di elaborazione del tracciato.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracciatoPendenzeEsito'
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '406':
+          description: 'Accept incompatibile con il formato nativo del tracciato.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /pendenze/tracciati/{id}/stampe:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: getTracciatoPendenzeStampe
+      summary: ZIP degli avvisi di pagamento stampati per il tracciato.
+      description: |
+        404 se `stampaAvvisi=false` o se le stampe non sono ancora
+        disponibili. Nessun audit: gli avvisi PDF sono documenti gia'
+        destinati al debitore stesso (invio via mail/SMS), accedervi dal
+        cruscotto non e' un'esposizione ulteriore.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: ZIP degli avvisi.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /pendenze/tracciati/{id}/operazioni:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: listTracciatoPendenzeOperazioni
+      summary: Elenco delle operazioni (righe) del tracciato.
+      description: |
+        Solo metadata tecnici (nessun riferimento al soggetto pagatore, ne'
+        anagrafica ne' CF/PIVA) — per il dettaglio con l'anagrafica vedi
+        `GET .../operazioni/{numero}`. Paginazione cursor, ordinamento fisso
+        `numero ASC`. Nessun audit.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: stato
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/StatoOperazionePendenza'
+        - name: tipoOperazione
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TipoOperazionePendenza'
+      responses:
+        '200':
+          description: Lista paginata delle operazioni del tracciato.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OperazionePendenzaSummary'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
+  /pendenze/tracciati/{id}/operazioni/{numero}:
+    get:
+      tags:
+        - Pendenze - Tracciati
+      operationId: getTracciatoPendenzeOperazione
+      summary: Dettaglio di una singola operazione del tracciato.
+      description: |
+        Estende la summary con `soggettoPagatore` (anagrafica del debitore),
+        `richiesta` (payload originale della riga) e `risposta` (esito
+        prodotto). **Audit obbligatorio** (`TRACCIATO_OPERAZIONE_VISUALIZZA`,
+        severity MEDIUM): espone dati personali del singolo debitore.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: numero
+          in: path
+          required: true
+          description: Progressivo dell'operazione nel tracciato.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Dettaglio dell'operazione.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperazionePendenza'
         '401':
           $ref: '#/components/responses/Problem401'
         '404':
@@ -10690,11 +10907,21 @@ components:
         _links:
           type: object
           description: |
-            Hyperlink relativi al tracciato. In questo commit e' popolato solo
-            `self`; i link condizionali (richiesta/esito/stampe/operazioni)
-            sono scope di un commit successivo.
+            Hyperlink relativi al tracciato. `self`/`richiesta`/`operazioni`
+            sempre presenti; `esito`/`stampe` condizionali (la presenza del
+            link non implica che l'accesso sia autorizzato o che il
+            contenuto sia gia' disponibile: gli endpoint restano la fonte di
+            verita', vedi audit su `/richiesta` e `/operazioni/{numero}`).
           properties:
             self:
+              $ref: '#/components/schemas/Link'
+            richiesta:
+              $ref: '#/components/schemas/Link'
+            esito:
+              $ref: '#/components/schemas/Link'
+            stampe:
+              $ref: '#/components/schemas/Link'
+            operazioni:
               $ref: '#/components/schemas/Link'
 
     TracciatoPendenzePost:
@@ -11220,6 +11447,192 @@ components:
           format: double
           description: importo
           example: 10.01
+
+    StatoOperazionePendenza:
+      type: string
+      description: Esito di elaborazione di una singola operazione (riga) del tracciato.
+      enum:
+        - ESEGUITO
+        - SCARTATO
+        - NON_VALIDO
+
+    TipoOperazionePendenza:
+      type: string
+      description: Tipologia dell'operazione (riga) del tracciato.
+      enum:
+        - ADD
+        - DEL
+        - NON_VALIDA
+
+    FaultBean:
+      type: object
+      description: Errore applicativo restituito per un'operazione in esito negativo.
+      required:
+        - categoria
+        - codice
+        - descrizione
+      properties:
+        categoria:
+          type: string
+          description: |
+            Categoria dell'errore riscontrato:
+             * `AUTORIZZAZIONE` - Operazione non autorizzata
+             * `RICHIESTA` - Richiesta non valida
+             * `OPERAZIONE` - Operazione non eseguibile
+             * `PAGOPA` - Errore da PagoPA
+             * `EC` - Errore da Ente Creditore
+             * `INTERNO` - Errore interno
+          enum:
+            - AUTORIZZAZIONE
+            - RICHIESTA
+            - OPERAZIONE
+            - PAGOPA
+            - EC
+            - INTERNO
+        codice:
+          type: string
+          description: Codice di errore
+        descrizione:
+          type: string
+          description: Descrizione dell'errore
+        dettaglio:
+          type: string
+          description: Descrizione aggiuntiva
+
+    EsitoOperazionePendenza:
+      type: object
+      description: Esito di elaborazione di una singola riga (`inserimenti`/`annullamenti`) del tracciato.
+      required:
+        - stato
+        - tipoOperazione
+        - esito
+        - descrizioneEsito
+        - numero
+        - idA2A
+        - idPendenza
+      properties:
+        idA2A:
+          type: string
+          description: Identificativo del gestionale responsabile della pendenza
+          example: A2A_12345
+        idPendenza:
+          type: string
+          description: Identificativo della pendenza nel gestionale responsabile
+          example: abcdef12345
+        tipoOperazione:
+          $ref: '#/components/schemas/TipoOperazionePendenza'
+        stato:
+          $ref: '#/components/schemas/StatoOperazionePendenza'
+        esito:
+          type: string
+          description: Esito operazione
+          example: 'ADD_OK'
+        descrizioneEsito:
+          type: string
+          description: Descrizione esito operazione
+          example: 'Operazione completata con successo'
+        numero:
+          type: integer
+          format: int64
+          description: Progressivo dell'operazione nel tracciato
+          example: 1
+        dati:
+          description: Avviso generato (esito positivo) o dettaglio dell'errore (esito negativo).
+          oneOf:
+            - $ref: '#/components/schemas/Avviso'
+            - $ref: '#/components/schemas/FaultBean'
+
+    TracciatoPendenzeEsito:
+      type: object
+      description: |
+        Esito di elaborazione del tracciato, riga per riga (`GET
+        .../tracciati/{id}/esito`). Nessun dato personale: solo identificativi
+        tecnici ed esito dell'operazione.
+      required:
+        - idTracciato
+      properties:
+        idTracciato:
+          type: string
+          example: '1528380303573122'
+        idDominio:
+          type: string
+          example: '01234567890'
+        inserimenti:
+          type: array
+          items:
+            $ref: '#/components/schemas/EsitoOperazionePendenza'
+        annullamenti:
+          type: array
+          items:
+            $ref: '#/components/schemas/EsitoOperazionePendenza'
+
+    OperazionePendenzaSummary:
+      type: object
+      description: |
+        Voce della lista `GET .../tracciati/{id}/operazioni`: solo metadata
+        tecnici, nessun riferimento al soggetto pagatore (ne' anagrafica ne'
+        CF/PIVA). Per il dettaglio con l'anagrafica vedi `OperazionePendenza`.
+      required:
+        - numero
+        - tipoOperazione
+        - stato
+      properties:
+        numero:
+          type: integer
+          format: int64
+          description: Progressivo dell'operazione nel tracciato.
+          example: 1
+        tipoOperazione:
+          $ref: '#/components/schemas/TipoOperazionePendenza'
+        stato:
+          $ref: '#/components/schemas/StatoOperazionePendenza'
+        descrizioneStato:
+          type: string
+          nullable: true
+        identificativoPendenza:
+          type: string
+          nullable: true
+          description: Identificativo della pendenza (`cod_versamento_ente`) se l'operazione e' andata a buon fine.
+        numeroAvviso:
+          type: string
+          nullable: true
+        idDominio:
+          type: string
+          nullable: true
+          description: Dominio dell'operazione, se esplicito sulla riga.
+        _links:
+          type: object
+          properties:
+            self:
+              $ref: '#/components/schemas/Link'
+
+    OperazionePendenza:
+      description: |
+        Dettaglio di una singola operazione (`GET .../tracciati/{id}/operazioni/{numero}`):
+        estende `OperazionePendenzaSummary` con dati personali del soggetto
+        pagatore — solo qui, mai nella lista.
+      allOf:
+        - $ref: '#/components/schemas/OperazionePendenzaSummary'
+        - type: object
+          properties:
+            enteCreditore:
+              $ref: '#/components/schemas/DominioRef'
+            soggettoPagatore:
+              $ref: '#/components/schemas/Soggetto'
+            applicazione:
+              type: string
+              nullable: true
+            richiesta:
+              description: Payload originale della riga, cosi' come caricato.
+              nullable: true
+              oneOf:
+                - $ref: '#/components/schemas/NuovaPendenzaTracciato'
+                - $ref: '#/components/schemas/AnnullamentoPendenza'
+            risposta:
+              allOf:
+                - $ref: '#/components/schemas/EsitoOperazionePendenza'
+              nullable: true
+              description: Null se l'operazione non e' ancora stata elaborata.
 
   responses:
 

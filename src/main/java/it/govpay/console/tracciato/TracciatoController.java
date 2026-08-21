@@ -11,10 +11,17 @@ import org.springframework.web.multipart.MultipartFile;
 import it.govpay.console.api.PendenzeTracciatiApi;
 import it.govpay.console.model.FormatoTracciato;
 import it.govpay.console.model.ListTracciatiPendenze200Response;
+import it.govpay.console.model.ListTracciatoPendenzeOperazioni200Response;
+import it.govpay.console.model.OperazionePendenza;
+import it.govpay.console.model.StatoOperazionePendenza;
 import it.govpay.console.model.StatoTracciatoPendenza;
+import it.govpay.console.model.TipoOperazionePendenza;
 import it.govpay.console.model.TracciatoPendenze;
+import it.govpay.console.model.TracciatoPendenzePost;
+import it.govpay.console.model.TracciatoPendenzeEsito;
 import it.govpay.console.web.ListQueryValidator;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 public class TracciatoController implements PendenzeTracciatiApi {
@@ -26,15 +33,31 @@ public class TracciatoController implements PendenzeTracciatiApi {
             "page", "limit", "sort", "total", "cursor",
             "idDominio", "stato", "dataDa", "dataA", "operatoreMittente", "formatoRichiesta");
 
+    private static final Set<String> OPERAZIONI_LIST_QUERY_PARAMS = Set.of(
+            "limit", "cursor", "stato", "tipoOperazione");
+
     private final TracciatoUploadService uploadService;
     private final TracciatoSearchService searchService;
+    private final TracciatoContentService contentService;
+    private final TracciatoStampeService stampeService;
+    private final OperazioneSearchService operazioneSearchService;
 
     @Autowired(required = false)
     private HttpServletRequest currentRequest;
 
-    public TracciatoController(TracciatoUploadService uploadService, TracciatoSearchService searchService) {
+    @Autowired(required = false)
+    private HttpServletResponse currentResponse;
+
+    public TracciatoController(TracciatoUploadService uploadService,
+                               TracciatoSearchService searchService,
+                               TracciatoContentService contentService,
+                               TracciatoStampeService stampeService,
+                               OperazioneSearchService operazioneSearchService) {
         this.uploadService = uploadService;
         this.searchService = searchService;
+        this.contentService = contentService;
+        this.stampeService = stampeService;
+        this.operazioneSearchService = operazioneSearchService;
     }
 
     @Override
@@ -88,5 +111,40 @@ public class TracciatoController implements PendenzeTracciatiApi {
         return ResponseEntity.ok()
                 .header("Cache-Control", "private, max-age=60")
                 .body(dto);
+    }
+
+    /**
+     * Il service scrive il body direttamente su {@link HttpServletResponse}
+     * (streaming, evita di passare per gli {@code HttpMessageConverter} che
+     * non saprebbero gestire indifferentemente JSON/CSV sullo stesso metodo).
+     * Stesso pattern di {@code PendenzaController#getPendenzaAvviso}.
+     */
+    @Override
+    public ResponseEntity<TracciatoPendenzePost> getTracciatoPendenzeRichiesta(Long id) {
+        contentService.richiesta(id, currentRequest, currentResponse);
+        return ResponseEntity.ok().build();
+    }
+
+    @Override
+    public ResponseEntity<TracciatoPendenzeEsito> getTracciatoPendenzeEsito(Long id) {
+        contentService.esito(id, currentRequest, currentResponse);
+        return ResponseEntity.ok().build();
+    }
+
+    @Override
+    public ResponseEntity<org.springframework.core.io.Resource> getTracciatoPendenzeStampe(Long id) {
+        return stampeService.get(id);
+    }
+
+    @Override
+    public ResponseEntity<ListTracciatoPendenzeOperazioni200Response> listTracciatoPendenzeOperazioni(
+            Long id, Integer limit, String cursor, StatoOperazionePendenza stato, TipoOperazionePendenza tipoOperazione) {
+        ListQueryValidator.rejectUnsupported(currentRequest, OPERAZIONI_LIST_QUERY_PARAMS);
+        return ResponseEntity.ok(operazioneSearchService.list(id, limit, cursor, stato, tipoOperazione));
+    }
+
+    @Override
+    public ResponseEntity<OperazionePendenza> getTracciatoPendenzeOperazione(Long id, Long numero) {
+        return ResponseEntity.ok(operazioneSearchService.get(id, numero, currentRequest));
     }
 }

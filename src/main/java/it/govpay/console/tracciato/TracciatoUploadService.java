@@ -147,6 +147,11 @@ public class TracciatoUploadService {
         operatoreRepository.findByIdUtenza(operatore.idUtenza()).ifPresent(tracciato::setOperatore);
 
         tracciato = tracciatoRepository.save(tracciato);
+        // flush esplicito: zip_stampe/eventuali letture JDBC dirette (es.
+        // TracciatoStampeService) bypassano la persistence context di
+        // Hibernate e vedono solo righe fisicamente scritte, non quelle
+        // ancora in attesa di flush lato ORM.
+        tracciatoRepository.flush();
 
         Map<String, Object> dettaglio = new HashMap<>();
         dettaglio.put("idDominio", idDominio);
