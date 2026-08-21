@@ -19,20 +19,39 @@ public enum ConnettoreDominioCanale {
     SECIM("SECIM", false, Dominio::getCodConnettoreSecim, Dominio::setCodConnettoreSecim),
     GOVPAY("GOVPAY", true, Dominio::getCodConnettoreGovPay, Dominio::setCodConnettoreGovPay),
     HYPER_SIC_APKAPPA("HYPER_SIC_APKAPPA", false, Dominio::getCodConnettoreHyperSicApk, Dominio::setCodConnettoreHyperSicApk),
-    MAGGIOLI_JPPA("MAGGIOLI_JPPA", true, null, null);
+    MAGGIOLI_JPPA("MAGGIOLI_JPPA", true, null, null),
+    /**
+     * Connettore verso il servizio SEND (issue #22, integrazione govpay-core
+     * #721): attualizzazione dell'importo con le spese di notifica. A
+     * differenza degli altri 5 canali (tutti {@code DOM_<codDominio>_<TIPO>})
+     * il {@code cod_connettore} di SEND e' {@code <codDominio>_SEND} — verificato
+     * su {@code DominiBD.getIDConnettoreSend} lato govpay-core, format diverso
+     * gia' fissato li' e non modificabile da qui.
+     */
+    SEND("SEND", true, Dominio::getCodConnettoreSend, Dominio::setCodConnettoreSend,
+            codDominio -> codDominio + "_SEND");
 
     private final String tipo;
     private final boolean credenziali;
     private final Function<Dominio, String> codGetter;
     private final BiConsumer<Dominio, String> codSetter;
+    private final Function<String, String> codConnettoreFormat;
 
     ConnettoreDominioCanale(String tipo, boolean credenziali,
                             Function<Dominio, String> codGetter,
                             BiConsumer<Dominio, String> codSetter) {
+        this(tipo, credenziali, codGetter, codSetter, codDominio -> "DOM_" + codDominio + "_" + tipo);
+    }
+
+    ConnettoreDominioCanale(String tipo, boolean credenziali,
+                            Function<Dominio, String> codGetter,
+                            BiConsumer<Dominio, String> codSetter,
+                            Function<String, String> codConnettoreFormat) {
         this.tipo = tipo;
         this.credenziali = credenziali;
         this.codGetter = codGetter;
         this.codSetter = codSetter;
+        this.codConnettoreFormat = codConnettoreFormat;
     }
 
     /** Valore della proprieta' {@code TIPO_TRACCIATO} e suffisso del {@code cod_connettore}. */
@@ -59,8 +78,8 @@ public enum ConnettoreDominioCanale {
         codSetter.accept(dominio, codConnettore);
     }
 
-    /** {@code cod_connettore} da generare per questo canale: {@code DOM_<codDominio>_<TIPO>}. */
+    /** {@code cod_connettore} da generare per questo canale: {@code DOM_<codDominio>_<TIPO>}, tranne SEND. */
     public String generaCodConnettore(String codDominio) {
-        return "DOM_" + codDominio + "_" + tipo;
+        return codConnettoreFormat.apply(codDominio);
     }
 }
