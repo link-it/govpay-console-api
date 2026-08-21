@@ -1,6 +1,7 @@
 package it.govpay.console.connettoredominio;
 
 import static it.govpay.console.connettoredominio.ConnettoreDominioProprietaKeys.ABILITATO;
+import static it.govpay.console.connettoredominio.ConnettoreDominioProprietaKeys.ABILITA_GDE;
 import static it.govpay.console.connettoredominio.ConnettoreDominioProprietaKeys.API_ID;
 import static it.govpay.console.connettoredominio.ConnettoreDominioProprietaKeys.CODICE_CLIENTE;
 import static it.govpay.console.connettoredominio.ConnettoreDominioProprietaKeys.CODICE_IPA;
@@ -150,6 +151,12 @@ public class ConnettoreDominioMapper {
                     new FieldSpec("emailAllegato", EMAIL_ALLEGATO, Kind.BOOL),
                     new FieldSpec("downloadBaseUrl", DOWNLOAD_BASE_URL, Kind.STRING),
                     new FieldSpec("url", URL, Kind.STRING));
+            // SEND (issue #22 + govpay-core #721): solo url+abilitaGDE+auth, niente
+            // 'abilitato' (V1 ConnettoreSendConverter lo forza sempre a true — non
+            // e' un flag esposto) ne' i campi da export-tracciato degli altri canali.
+            case SEND -> List.of(
+                    new FieldSpec("url", URL, Kind.STRING),
+                    new FieldSpec("abilitaGDE", ABILITA_GDE, Kind.BOOL));
         };
     }
 

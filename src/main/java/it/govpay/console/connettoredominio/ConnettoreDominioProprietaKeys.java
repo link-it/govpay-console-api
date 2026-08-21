@@ -53,6 +53,8 @@ public final class ConnettoreDominioProprietaKeys {
     public static final String OAUTH2_CLIENT_ID = ConnettoreProprietaKeys.OAUTH2_CLIENT_ID;
     public static final String OAUTH2_SCOPE = ConnettoreProprietaKeys.OAUTH2_SCOPE;
     public static final String OAUTH2_URL_TOKEN_ENDPOINT = ConnettoreProprietaKeys.OAUTH2_URL_TOKEN_ENDPOINT;
+    /** Riusata per il canale SEND (issue #22 + govpay-core #721); nessun altro canale dominio la espone. */
+    public static final String ABILITA_GDE = ConnettoreProprietaKeys.ABILITA_GDE;
 
     private static final Set<String> NOTIFICA_CONFIG_KEYS = Set.of(
             ABILITATO, TIPO_CONNETTORE, TIPO_TRACCIATO, VERSIONE_CSV, CODICE_IPA, CODICE_CLIENTE,
@@ -60,7 +62,7 @@ public final class ConnettoreDominioProprietaKeys {
             FILE_SYSTEM_PATH, TIPI_PENDENZA, CONTENUTI, INTERVALLO_CREAZIONE_TRACCIATO,
             INVIA_TRACCIATO_ESITO, VERSIONE, URL, TIPOAUTENTICAZIONE, TIPOSSL, HTTPUSER,
             SSLKSLOCATION, SSLKSTYPE, SSLTSLOCATION, SSLTSTYPE, SSLTYPE, HTTP_HEADER_NAME,
-            API_ID, OAUTH2_CLIENT_ID, OAUTH2_SCOPE, OAUTH2_URL_TOKEN_ENDPOINT);
+            API_ID, OAUTH2_CLIENT_ID, OAUTH2_SCOPE, OAUTH2_URL_TOKEN_ENDPOINT, ABILITA_GDE);
 
     public static final Set<String> CONFIG_KEYS = NOTIFICA_CONFIG_KEYS;
 

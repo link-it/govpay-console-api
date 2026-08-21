@@ -92,6 +92,15 @@ public class Dominio {
     @Column(name = "cod_connettore_hyper_sic_apk", length = 255)
     private String codConnettoreHyperSicApk;
 
+    /**
+     * Riferimento al connettore verso il servizio SEND (issue #22, integrazione
+     * govpay-core #721: attualizzazione importo con le spese di notifica).
+     * Colonna gia' presente sui DB aggiornati alla versione di govpay-core con
+     * quell'integrazione.
+     */
+    @Column(name = "cod_connettore_send", length = 255)
+    private String codConnettoreSend;
+
     public Long getId() {
         return id;
     }
@@ -242,5 +251,13 @@ public class Dominio {
 
     public void setCodConnettoreHyperSicApk(String codConnettoreHyperSicApk) {
         this.codConnettoreHyperSicApk = codConnettoreHyperSicApk;
+    }
+
+    public String getCodConnettoreSend() {
+        return codConnettoreSend;
+    }
+
+    public void setCodConnettoreSend(String codConnettoreSend) {
+        this.codConnettoreSend = codConnettoreSend;
     }
 }

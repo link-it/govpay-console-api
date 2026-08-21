@@ -274,6 +274,59 @@ class ConnettoreDominioControllerIntegrationTest {
         assertThat(reloaded.getDataUltimaRt().toInstant()).isEqualTo(rt.toInstant());
     }
 
+    // --- send: naming cod_connettore diverso (<codDominio>_SEND, no DOM_ prefix) ---
+
+    @Test
+    void sendChannelIsRoutableAndEmpty() throws Exception {
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/connettori/send").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.url").doesNotExist())
+                .andExpect(jsonPath("$.abilitato").doesNotExist());
+    }
+
+    @Test
+    void replaceSendRoundTripsAndUsesDedicatedCodConnettoreFormat() throws Exception {
+        String etag = currentEtag("send");
+        String body = """
+                {"url":"https://api.platform.pagopa.it/send/api/v1","abilitaGDE":true,
+                 "auth":{"tipoAutenticazione":"HTTPBASIC","username":"u"}}""";
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/connettori/send")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)).header("If-Match", etag)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url", is("https://api.platform.pagopa.it/send/api/v1")))
+                .andExpect(jsonPath("$.abilitaGDE", is(true)))
+                .andExpect(jsonPath("$.auth.tipoAutenticazione", is("HTTPBASIC")));
+
+        // Diverge dagli altri 5 canali (DOM_<codDominio>_<TIPO>): verificato su
+        // DominiBD.getIDConnettoreSend lato govpay-core.
+        String cod = ID_DOMINIO + "_SEND";
+        assertThat(dominioRepository.findByCodDominio(ID_DOMINIO).orElseThrow().getCodConnettoreSend())
+                .isEqualTo(cod);
+        assertThat(propertyValue(cod, "URL")).isEqualTo("https://api.platform.pagopa.it/send/api/v1");
+        assertThat(propertyValue(cod, "ABILITA_GDE")).isEqualTo("true");
+        assertThat(propertyValue(cod, "TIPOAUTENTICAZIONE")).isEqualTo("HTTPBasic");
+        assertThat(propertyValue(cod, "ABILITATO")).isNull();
+    }
+
+    @Test
+    void sendCredenzialiPersistWriteOnly() throws Exception {
+        String body = """
+                {"subscriptionKey":"sub-send-1"}""";
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/connettori/send/credenziali")
+                        .with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+
+        String cod = ID_DOMINIO + "_SEND";
+        assertThat(propertyValue(cod, "SUBSCRIPTION_KEY_VALUE")).isEqualTo("sub-send-1");
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/connettori/send").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscriptionKey").doesNotExist());
+    }
+
     // --- concorrenza + audit ---
 
     @Test

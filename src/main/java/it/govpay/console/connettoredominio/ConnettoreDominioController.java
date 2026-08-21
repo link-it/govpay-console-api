@@ -11,6 +11,7 @@ import it.govpay.console.model.ConnettoreDominioHypersicApk;
 import it.govpay.console.model.ConnettoreDominioMaggioliJppa;
 import it.govpay.console.model.ConnettoreDominioMypivot;
 import it.govpay.console.model.ConnettoreDominioSecim;
+import it.govpay.console.model.ConnettoreDominioSend;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -100,5 +101,24 @@ public class ConnettoreDominioController implements ConnettoriDominioApi {
     public ResponseEntity<Void> putCredenzialiConnettoreDominioMaggioliJppa(
             String idDominio, ConnettoreCredenziali body) {
         return service.putCredenziali(idDominio, ConnettoreDominioCanale.MAGGIOLI_JPPA, body, currentRequest);
+    }
+
+    // --- send ---
+    @Override
+    public ResponseEntity<ConnettoreDominioSend> getConnettoreDominioSend(String idDominio) {
+        return service.get(idDominio, ConnettoreDominioCanale.SEND, ConnettoreDominioSend.class);
+    }
+
+    @Override
+    public ResponseEntity<ConnettoreDominioSend> replaceConnettoreDominioSend(
+            String idDominio, String ifMatch, ConnettoreDominioSend body) {
+        return service.replace(idDominio, ConnettoreDominioCanale.SEND, body, ifMatch,
+                ConnettoreDominioSend.class, currentRequest);
+    }
+
+    @Override
+    public ResponseEntity<Void> putCredenzialiConnettoreDominioSend(
+            String idDominio, ConnettoreCredenziali body) {
+        return service.putCredenziali(idDominio, ConnettoreDominioCanale.SEND, body, currentRequest);
     }
 }

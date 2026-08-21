@@ -4129,6 +4129,102 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
 
+  /domini/{idDominio}/connettori/send:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    get:
+      tags:
+        - Connettori Dominio
+      operationId: getConnettoreDominioSend
+      summary: Connettore verso il servizio SEND del dominio (senza credenziali).
+      description: |
+        Integrazione al servizio SEND (NotificationPriceV23) per l'attualizzazione
+        dell'importo delle pendenze con le spese di notifica. A differenza degli
+        altri canali non ha un flag `abilitato` distinto: e' configurato (`url`
+        valorizzato) o non lo e'. Se non configurato la GET restituisce i campi
+        vuoti.
+      responses:
+        '200':
+          description: Connettore SEND.
+          headers:
+            ETag:
+              description: Validatore di concorrenza della configurazione corrente.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioSend'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: replaceConnettoreDominioSend
+      summary: Sostituisce la configurazione del connettore SEND (senza credenziali).
+      description: |
+        Aggiorna la configurazione del connettore (credenziali escluse). Richiede
+        l'header `If-Match` con l'`ETag` ottenuto da una GET precedente.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreDominioSend'
+      responses:
+        '200':
+          description: Connettore aggiornato.
+          headers:
+            ETag:
+              description: Nuovo validatore di concorrenza.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnettoreDominioSend'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+        '412':
+          $ref: '#/components/responses/Problem412'
+        '428':
+          $ref: '#/components/responses/Problem428'
+  /domini/{idDominio}/connettori/send/credenziali:
+    parameters:
+      - $ref: '#/components/parameters/IdDominioPath'
+    put:
+      tags:
+        - Connettori Dominio
+      operationId: putCredenzialiConnettoreDominioSend
+      summary: Imposta le credenziali del connettore SEND (write-only).
+      description: |
+        Aggiorna le credenziali del connettore (`subscriptionKey` per l'API
+        Management di SEND, oltre alle credenziali generiche di `auth` se
+        previste dal tipo di autenticazione). Non vengono mai restituite dalle GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnettoreCredenziali'
+      responses:
+        '204':
+          description: Credenziali aggiornate.
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '404':
+          $ref: '#/components/responses/Problem404'
+
   /applicazioni:
     get:
       tags:
@@ -10495,6 +10591,26 @@ components:
           description: URL base del servizio REST di ricezione dei dati.
         auth:
           $ref: '#/components/schemas/ConnettoreAuth'
+
+    ConnettoreDominioSend:
+      type: object
+      description: |
+        Connettore verso il servizio SEND (NotificationPriceV23) per
+        l'attualizzazione dell'importo delle pendenze con le spese di notifica.
+        Le credenziali non sono incluse. A differenza degli altri canali di
+        notifica pagamenti del dominio non ha un flag `abilitato` distinto
+        (V1: il connettore e' considerato attivo appena configurato) ne' i
+        campi di export tracciato (tipoConnettore, tipiPendenza, contenuti, ...).
+      properties:
+        url:
+          type: string
+          description: URL base del servizio SEND.
+          example: https://api.platform.pagopa.it/send/api/v1
+        auth:
+          $ref: '#/components/schemas/ConnettoreAuth'
+        abilitaGDE:
+          type: boolean
+          description: Indica se abilitare l'invio degli eventi al Giornale degli Eventi (GDE).
 
     ConnettoreCredenziali:
       type: object
