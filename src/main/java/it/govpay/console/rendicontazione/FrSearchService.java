@@ -15,11 +15,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.entity.Fr;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ListFlussiRendicontazione200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.FlussoRendicontazioneSummary;
 import it.govpay.console.pagination.CursorCodec;
 import it.govpay.console.repository.FrRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -52,20 +54,24 @@ public class FrSearchService {
     private final FrRepository frRepository;
     private final FrMapper mapper;
     private final CurrentOperatorService currentOperatorService;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public FrSearchService(FrRepository frRepository,
                            FrMapper mapper,
-                           CurrentOperatorService currentOperatorService) {
+                           CurrentOperatorService currentOperatorService,
+                           AclAuthorizer aclAuthorizer) {
         this.frRepository = frRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListFlussiRendicontazione200Response search(FrListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.RENDICONTAZIONI_E_INCASSI);
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listFlussiRendicontazione filtri[idDominio={}, idFlusso={}, idPsp={}, dataDa={}, dataA={}, "
                         + "stato={}, incassato={}, iuv={}], page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
