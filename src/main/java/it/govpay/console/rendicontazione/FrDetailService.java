@@ -12,10 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.FrXml;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.FlussoRendicontazione;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.FrXmlRepository;
 import it.govpay.console.repository.RendicontazioneRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -43,23 +45,27 @@ public class FrDetailService {
     private final RendicontazioneRepository rendicontazioneRepository;
     private final FrMapper mapper;
     private final CurrentOperatorService currentOperatorService;
+    private final AclAuthorizer aclAuthorizer;
 
     public FrDetailService(FrRepository frRepository,
                            FrXmlRepository frXmlRepository,
                            RendicontazioneRepository rendicontazioneRepository,
                            FrMapper mapper,
-                           CurrentOperatorService currentOperatorService) {
+                           CurrentOperatorService currentOperatorService,
+                           AclAuthorizer aclAuthorizer) {
         this.frRepository = frRepository;
         this.frXmlRepository = frXmlRepository;
         this.rendicontazioneRepository = rendicontazioneRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ResponseEntity<FlussoRendicontazione> get(String idDominio, String idFlusso, String idPsp,
                                                      Long revisione, HttpServletRequest request,
                                                      HttpServletResponse response) {
+        aclAuthorizer.requireLettura(AclServizio.RENDICONTAZIONI_E_INCASSI);
         Fr fr = loadVisibile(idDominio, idFlusso, idPsp, revisione);
         MediaType chosen = chooseContentType(request);
 

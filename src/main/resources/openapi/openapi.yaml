@@ -29,6 +29,12 @@ tags:
       Consultazione dei flussi di rendicontazione (FR) scaricati da pagoPA.
       Acquisizione read-only lato core (`RecuperoFR`); qui solo lettura per il
       cruscotto.
+  - name: Riconciliazioni
+    description: |
+      Consultazione delle riconciliazioni (V1: *incassi*): il movimento
+      bancario con cui la banca tesoriera accredita all'ente i fondi di un
+      flusso di rendicontazione già acquisito. Qui solo lettura; la
+      registrazione (`PUT`) è materia di una issue successiva.
   - name: Giornale Eventi
     description: |
       Consultazione del giornale degli eventi (log strutturato di chiamate al
@@ -566,8 +572,10 @@ paths:
 
         Tutti i filtri sono opzionali e in AND.
 
-        ACL: filtro automatico sui domini visibili all'operatore corrente; un
-        operatore senza visibilita' riceve lista vuota (mai 403).
+        ACL: richiede il diritto di lettura sul servizio "Rendicontazioni e
+        Incassi" (altrimenti 403); a parita' di diritto, filtro automatico
+        sui domini visibili all'operatore corrente — un operatore senza
+        visibilita' su alcun dominio riceve lista vuota, non 403.
 
         **Paginazione**: due modalita' mutuamente esclusive.
         - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
@@ -615,6 +623,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
 
   /flussi-rendicontazione/{idDominio}/{idFlusso}/{idPsp}/{revisione}:
     get:
@@ -636,10 +646,13 @@ paths:
         - `application/xml` → XML originale del flusso (schema pagoPA
           `FlussoRiversamento`), byte-per-byte dal DB.
 
-        404 problem+json se il flusso non esiste o non è visibile per ACL
-        (indistinguibile, anti-leak); 404 anche se il record esiste ma l'XML
-        non è archiviato (flussi storici con soli metadati) ed è richiesto
-        `Accept: application/xml`. 406 se `Accept` non è ne' JSON ne' XML.
+        ACL: richiede il diritto di lettura sul servizio "Rendicontazioni e
+        Incassi" (altrimenti 403, prima di qualunque lookup — vale anche per
+        il ramo XML). A parita' di diritto, 404 problem+json se il flusso non
+        esiste o non è visibile per dominio (indistinguibile, anti-leak); 404
+        anche se il record esiste ma l'XML non è archiviato (flussi storici
+        con soli metadati) ed è richiesto `Accept: application/xml`. 406 se
+        `Accept` non è ne' JSON ne' XML.
       parameters:
         - $ref: '#/components/parameters/IdDominioPath'
         - $ref: '#/components/parameters/IdFlussoPath'
@@ -670,6 +683,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
         '404':
           description: 'Flusso non trovato, non visibile, oppure XML non archiviato (solo per `Accept: application/xml`).'
           content:
@@ -678,6 +693,240 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '406':
           description: Formato richiesto non supportato.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /riconciliazioni:
+    get:
+      tags:
+        - Riconciliazioni
+      operationId: listRiconciliazioni
+      summary: Elenca le riconciliazioni visibili all'operatore (paginate).
+      description: |
+        Consultazione read-only delle riconciliazioni (V1: *incassi*): il
+        movimento bancario con cui la banca tesoriera accredita all'ente i
+        fondi di un flusso di rendicontazione già acquisito. La
+        registrazione (`PUT`) non è ancora esposta da questa risorsa.
+
+        Filtri supportati:
+        - `idDominio` — match esatto;
+        - `dataDa` / `dataA` — intervallo (incluso) sulla data di
+          registrazione della riconciliazione;
+        - `stato` — match puntuale;
+        - `sct` — match **parziale**, come V1;
+        - `idFlusso` — match esatto;
+        - `iuv` — filtro **legacy**: restituisce solo le riconciliazioni
+          singole registrate dalle versioni precedenti (V2 non supporta più
+          la modalità singola in scrittura, ma i record storici restano
+          consultabili).
+
+        Tutti i filtri sono opzionali e in AND.
+
+        ACL: richiede il diritto di lettura sul servizio "Rendicontazioni e
+        Incassi" (altrimenti 403); a parita' di diritto, filtro automatico
+        sui domini visibili all'operatore corrente — un operatore senza
+        visibilita' su alcun dominio riceve lista vuota, non 403.
+
+        **Paginazione**: due modalita' mutuamente esclusive.
+        - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
+        - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
+          ordinamento fisso `(data DESC, id DESC)`.
+        In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
+        generano 400 con motivazione parlante. Cursor malformato → 400.
+
+        **Ordinamento** via `?sort`, whitelist: `data`, `importo`. Default `-data,-id`.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Total'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IdDominio'
+        - $ref: '#/components/parameters/RiconciliazioneDataDa'
+        - $ref: '#/components/parameters/RiconciliazioneDataA'
+        - $ref: '#/components/parameters/StatoRiconciliazioneFilter'
+        - $ref: '#/components/parameters/SctFilter'
+        - $ref: '#/components/parameters/IdFlusso'
+        - $ref: '#/components/parameters/IuvFilter'
+      responses:
+        '200':
+          description: Lista paginata di riconciliazioni.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RiconciliazioneSummary'
+        '400':
+          description: Filtro non supportato, parametro malformato o `limit > 200`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
+
+  /riconciliazioni/{idDominio}/{id}:
+    get:
+      tags:
+        - Riconciliazioni
+      operationId: getRiconciliazione
+      summary: Dettaglio di una riconciliazione, con le riscossioni collegate.
+      description: |
+        La coppia `(idDominio, id)` identifica univocamente la
+        riconciliazione (vincolo già presente a DB, `unique_incassi_1`).
+
+        `riscossioni[]` è sempre embedded: i pagamenti del flusso
+        riconciliato (una sola voce sui record legacy singoli); nessuna
+        sub-resource dedicata.
+
+        ACL: richiede il diritto di lettura sul servizio "Rendicontazioni e
+        Incassi" (altrimenti 403). A parita' di diritto, 404 problem+json se
+        la riconciliazione non esiste o non è visibile per dominio
+        (indistinguibile, anti-leak).
+
+        Nessun `Cache-Control` pubblico: a differenza dei flussi di
+        rendicontazione la riconciliazione è mutabile (`IN_ELABORAZIONE` →
+        `ACQUISITA`/`ERRORE`).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/RiconciliazioneIdPath'
+        - $ref: '#/components/parameters/TipoRiscossioneFilter'
+      responses:
+        '200':
+          description: Riconciliazione trovata.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Riconciliazione'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          description: Riconciliazione non trovata o non visibile.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    put:
+      tags:
+        - Riconciliazioni
+      operationId: registraRiconciliazione
+      summary: Registra una riconciliazione (elaborazione asincrona via batch dedicato).
+      description: |
+        Persiste la richiesta in stato `IN_ELABORAZIONE` e delega
+        l'elaborazione (matching col flusso di rendicontazione, transizioni
+        di stato su pagamenti/pendenze) a un batch dedicato, attivato dopo il
+        commit se censito nel catalogo operazioni; se non censito
+        l'elaborazione avviene comunque tramite la procedura periodica
+        esistente lato core, con la latenza del suo ciclo di cron.
+
+        **Un 202 non garantisce l'esito**: tra il pre-flight sincrono e
+        l'elaborazione la situazione può cambiare — la riconciliazione può
+        comunque finire in stato `ERRORE` con `descrizioneStato`
+        valorizzato, verificabile con una successiva `GET`.
+
+        **Idempotenza** sulla coppia `(idDominio, id)`:
+        - riga assente → INSERT in `IN_ELABORAZIONE` → **202** + `Location` + body;
+        - riga presente in stato `ERRORE` → UPDATE (torna a `IN_ELABORAZIONE`,
+          ri-accodata) → **202** + `Location` + body;
+        - riga presente in stato diverso da `ERRORE` → nessuna scrittura →
+          **200** + body corrente (con `riscossioni[]`).
+
+        Il corpo richiede almeno uno tra `causale` (da cui `idFlusso` viene
+        estratto secondo le specifiche AgID SACIV 1.2.1) e `idFlusso`
+        diretto — non sono mutuamente esclusivi: se entrambi presenti,
+        `idFlusso` ha precedenza e `causale` viene solo archiviata. Una
+        causale che risolve a un riferimento **singolo** (`RFS`/`RFB`) è
+        rifiutata: la modalità singola non è più supportata in scrittura in
+        V2 (i record legacy restano consultabili in lettura). Il campo
+        `iuv` non è mai ammesso in scrittura: se presente, 400.
+
+        ACL: richiede il diritto di **scrittura** sul servizio
+        "Rendicontazioni e Incassi" (altrimenti 403). A differenza della
+        lettura, qui il dominio è nel path di una scrittura: dominio
+        inesistente o non visibile all'operatore → **403**, non 404
+        (l'anti-leak non si applica in scrittura).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/RiconciliazioneIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuovaRiconciliazione'
+      responses:
+        '200':
+          description: Riconciliazione già presente in uno stato diverso da `ERRORE` (idempotenza, nessuna scrittura).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Riconciliazione'
+        '202':
+          description: Riconciliazione accodata per l'elaborazione (nuova, o ri-accodata da `ERRORE`).
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Riconciliazione'
+        '400':
+          description: |
+            Corpo malformato o pre-flight su anagrafica non superato
+            (dominio/iban inesistenti, causale non conforme SACIV,
+            riferimento singolo non supportato).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          description: Il flusso di rendicontazione indicato non esiste.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: |
+            Conflitto: riconciliazione già presente con dati accessori
+            divergenti, flusso già riconciliato da un'altra riconciliazione,
+            flusso in stato anomalo, o importo non corrispondente al totale
+            pagamenti del flusso.
           content:
             application/problem+json:
               schema:
@@ -7637,6 +7886,260 @@ components:
             _links:
               $ref: '#/components/schemas/FlussoRendicontazioneLinks'
 
+    StatoRiconciliazione:
+      type: string
+      description: |
+        Stato della riconciliazione.
+        Mapping rispetto alla colonna DB `incassi.stato`:
+        - DB `NUOVO` -> `IN_ELABORAZIONE`
+        - DB `ACQUISITO` -> `ACQUISITA` (rinominato rispetto a V1, che usava
+          `ACQUISITO`: allineato al vocabolario della API ragioneria v3)
+        - DB `ERRORE` -> `ERRORE`
+      enum:
+        - IN_ELABORAZIONE
+        - ACQUISITA
+        - ERRORE
+
+    TipoRiscossione:
+      type: string
+      description: Tipologia del pagamento riscosso (invariato da V1).
+      enum:
+        - ENTRATA
+        - MBT
+        - ALTRO_INTERMEDIARIO
+        - ENTRATA_PA_NON_INTERMEDIATA
+
+    StatoRiscossione:
+      type: string
+      description: |
+        Stato del pagamento riscosso a DB (colonna `pagamenti.stato`,
+        nullable: i record piu' datati possono non averlo valorizzato).
+      enum:
+        - PAGATO
+        - INCASSATO
+        - PAGATO_SENZA_RPT
+
+    TipoRiferimentoRiconciliazione:
+      type: object
+      description: |
+        Vincolo di esclusione reciproca fra `idFlusso` (riversamento
+        cumulativo, registrazioni correnti) e `iuv` (riversamento singolo,
+        solo record legacy): esattamente uno dei due è presente. Le due
+        proprietà sono dichiarate una sola volta in `RiconciliazioneSummary`
+        (entrambe opzionali li'); questo schema aggiunge solo il vincolo
+        "required", senza ridichiararle, cosi' OpenAPI Generator non le marca
+        entrambe obbligatorie nel bean risultante.
+      oneOf:
+        - required:
+            - idFlusso
+        - required:
+            - iuv
+
+    RiconciliazioneSummary:
+      description: |
+        Proiezione leggera di una riconciliazione, usata nelle liste. Nessun
+        dato personale del debitore, quindi la lista non genera audit GDPR.
+        La coppia `(idDominio, id)` identifica univocamente la riconciliazione.
+      allOf:
+        - type: object
+          required:
+            - id
+            - dominio
+            - importo
+            - data
+            - stato
+          properties:
+            id:
+              type: string
+              description: Identificativo della riconciliazione, scelto dal client in scrittura.
+              pattern: '^[0-9A-Za-z]{1,35}$'
+            dominio:
+              $ref: '#/components/schemas/DominioRef'
+            importo:
+              type: number
+              format: double
+            data:
+              type: string
+              format: date-time
+              description: Data/ora di registrazione della riconciliazione.
+            dataValuta:
+              type: string
+              format: date
+              description: Data valuta del bonifico SCT di regolamento.
+            dataContabile:
+              type: string
+              format: date
+            ibanAccredito:
+              type: string
+              description: Conto di tesoreria accreditato dal bonifico.
+            sct:
+              type: string
+              description: Identificativo del bonifico SEPA Credit Transfer.
+            trn:
+              type: string
+              description: |
+                Transaction reference number, derivato server-side (in
+                scrittura coincide sempre con `idFlusso`; sui record legacy
+                può contenere lo `iuv`). Non esposto in V1.
+            causale:
+              type: string
+              description: Causale del bonifico SCT, come ricevuta dalla banca tesoriera.
+            stato:
+              $ref: '#/components/schemas/StatoRiconciliazione'
+            descrizioneStato:
+              type: string
+              description: Dettaglio human-readable dello stato (valorizzato tipicamente su `ERRORE`).
+            idFlusso:
+              type: string
+              description: |
+                Identificativo del flusso di rendicontazione riconciliato
+                (riversamento cumulativo, registrazioni correnti). Mutuamente
+                esclusivo con `iuv` — vedi `TipoRiferimentoRiconciliazione`.
+            iuv:
+              type: string
+              description: |
+                IUV del pagamento riconciliato. Presente solo sui record
+                legacy (riversamento singolo, non più supportato in
+                scrittura in V2). Mutuamente esclusivo con `idFlusso`.
+        - $ref: '#/components/schemas/TipoRiferimentoRiconciliazione'
+
+    NuovaRiconciliazione:
+      description: |
+        Corpo del `PUT` di registrazione. Almeno uno tra `causale` e
+        `idFlusso` è richiesto (`anyOf`: entrambi sono ammessi
+        contemporaneamente, non sono mutuamente esclusivi). Se è presente
+        `causale`, `idFlusso` viene estratto server-side secondo le
+        specifiche AgID SACIV 1.2.1. Se sono presenti entrambi, `idFlusso`
+        ha precedenza e `causale` viene solo archiviata (non
+        validata/estratta) — stesso comportamento di V1. `iuv` è dichiarato
+        solo per essere esplicitamente rifiutato con 400: la modalità
+        singola non è più supportata in scrittura in V2 (vedi
+        `TipoRiferimentoRiconciliazione` per la sola lettura).
+      allOf:
+        - type: object
+          required:
+            - importo
+          properties:
+            importo:
+              type: number
+              format: double
+            dataValuta:
+              type: string
+              format: date
+              description: Data valuta del bonifico SCT di regolamento.
+            dataContabile:
+              type: string
+              format: date
+            ibanAccredito:
+              type: string
+              description: Conto di tesoreria accreditato dal bonifico.
+            sct:
+              type: string
+              description: Identificativo del bonifico SEPA Credit Transfer.
+            causale:
+              type: string
+              maxLength: 512
+              description: Causale del bonifico SCT, conforme alle specifiche AgID SACIV 1.2.1.
+            idFlusso:
+              type: string
+              description: Identificativo del flusso di rendicontazione, se già noto (alternativo a `causale`).
+            iuv:
+              type: string
+              description: |
+                Non supportato in scrittura in V2: se presente, il PUT
+                risponde sempre 400. Dichiarato solo per essere validato e
+                rifiutato esplicitamente, non per essere usato.
+        - anyOf:
+            - required:
+                - causale
+            - required:
+                - idFlusso
+
+    RiconciliazioneLinks:
+      type: object
+      description: Hyperlink relativi alla riconciliazione.
+      required:
+        - self
+        - dominio
+      properties:
+        self:
+          $ref: '#/components/schemas/Link'
+        dominio:
+          $ref: '#/components/schemas/Link'
+        contoAccredito:
+          $ref: '#/components/schemas/Link'
+        flussoRendicontazione:
+          $ref: '#/components/schemas/Link'
+
+    Riconciliazione:
+      description: |
+        Dettaglio canonico di una riconciliazione: `RiconciliazioneSummary` +
+        `riscossioni[]` (i pagamenti del flusso riconciliato; una sola voce
+        sui record legacy singoli) + `_links`.
+      allOf:
+        - $ref: '#/components/schemas/RiconciliazioneSummary'
+        - type: object
+          required:
+            - riscossioni
+            - _links
+          properties:
+            riscossioni:
+              type: array
+              items:
+                $ref: '#/components/schemas/Riscossione'
+            _links:
+              $ref: '#/components/schemas/RiconciliazioneLinks'
+
+    RiscossioneLinks:
+      type: object
+      description: Hyperlink relativi alla riscossione, entrambi condizionali.
+      properties:
+        pendenza:
+          $ref: '#/components/schemas/Link'
+        ricevuta:
+          $ref: '#/components/schemas/Link'
+
+    Riscossione:
+      type: object
+      description: Un pagamento riscosso, embedded nel dettaglio della riconciliazione.
+      required:
+        - idDominio
+        - iuv
+        - iur
+        - indice
+        - tipo
+        - importo
+        - data
+      properties:
+        idDominio:
+          type: string
+          description: Codice fiscale dell'ente creditore (11 cifre).
+        iuv:
+          type: string
+        iur:
+          type: string
+        indice:
+          type: integer
+          format: int32
+          minimum: 1
+        tipo:
+          $ref: '#/components/schemas/TipoRiscossione'
+        importo:
+          type: number
+          format: double
+        data:
+          type: string
+          format: date-time
+          description: Data del pagamento.
+        commissioni:
+          type: number
+          format: double
+          description: Commissioni PSP, se applicate.
+        stato:
+          $ref: '#/components/schemas/StatoRiscossione'
+        _links:
+          $ref: '#/components/schemas/RiscossioneLinks'
+
     Soggetto:
       type: object
       description: |
@@ -12037,6 +12540,62 @@ components:
         type: integer
         format: int64
         minimum: 1
+
+    RiconciliazioneIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificativo della riconciliazione, scelto dal client in scrittura.
+      schema:
+        type: string
+        pattern: '^[0-9A-Za-z]{1,35}$'
+
+    RiconciliazioneDataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla data di registrazione della riconciliazione (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    RiconciliazioneDataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data di registrazione della riconciliazione (ISO 8601 date-time).
+      schema:
+        type: string
+        format: date-time
+
+    SctFilter:
+      name: sct
+      in: query
+      required: false
+      description: Identificativo del bonifico SEPA Credit Transfer, match parziale (come V1).
+      schema:
+        type: string
+
+    StatoRiconciliazioneFilter:
+      name: stato
+      in: query
+      required: false
+      description: Filtra per stato della riconciliazione.
+      schema:
+        $ref: '#/components/schemas/StatoRiconciliazione'
+
+    TipoRiscossioneFilter:
+      name: tipoRiscossione
+      in: query
+      required: false
+      description: |
+        Elenco (CSV) di tipi di riscossione da includere nel dettaglio.
+        Default `ENTRATA,MBT` (replica il comportamento V1).
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/TipoRiscossione'
+      explode: false
 
     EventoLimit:
       name: limit

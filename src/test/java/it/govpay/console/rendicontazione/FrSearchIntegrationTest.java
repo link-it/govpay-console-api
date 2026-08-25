@@ -21,12 +21,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Rendicontazione;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
+import it.govpay.console.model.AclServizio;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -58,6 +61,7 @@ class FrSearchIntegrationTest {
     @Autowired private DominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
     @Autowired private RendicontazioneRepository rendicontazioneRepository;
+    @Autowired private AclRepository aclRepository;
 
     private Dominio domA;
     private Dominio domB;
@@ -281,6 +285,13 @@ class FrSearchIntegrationTest {
                 .andExpect(jsonPath("$.results[*].idDominio", contains(DOM_B, DOM_B)));
     }
 
+    @Test
+    void listaSenzaDirittoServizioRitorna403() throws Exception {
+        String p = utenteSenzaDirittoServizio("u-noacl-list");
+        mvc.perform(get("/flussi-rendicontazione").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
     // ----- fixture helpers -----------------------------------------------------------
 
     private Dominio newDominio(String cod, String ragione) {
@@ -322,6 +333,7 @@ class FrSearchIntegrationTest {
         Utenza u = baseUtenza(principal, true, true);
         utenzaRepository.save(u);
         attachOperatore(principal, u);
+        grantLettura(u);
         return principal;
     }
 
@@ -329,11 +341,28 @@ class FrSearchIntegrationTest {
         Utenza u = baseUtenza(principal, false, true);
         utenzaRepository.save(u);
         attachOperatore(principal, u);
+        grantLettura(u);
         UtenzaDominio link = new UtenzaDominio();
         link.setIdUtenza(u.getId());
         link.setIdDominio(dominio.getId());
         utenzaDominioRepository.save(link);
         return principal;
+    }
+
+    /** Come {@link #utenteDominiStar} ma senza il diritto di lettura sul servizio: per i test 403. */
+    private String utenteSenzaDirittoServizio(String principal) {
+        Utenza u = baseUtenza(principal, true, true);
+        utenzaRepository.save(u);
+        attachOperatore(principal, u);
+        return principal;
+    }
+
+    private void grantLettura(Utenza utenza) {
+        Acl acl = new Acl();
+        acl.setIdUtenza(utenza.getId());
+        acl.setServizio(AclServizio.RENDICONTAZIONI_E_INCASSI.getValue());
+        acl.setDiritti("R");
+        aclRepository.save(acl);
     }
 
     private Utenza baseUtenza(String principal, boolean tuttiDomini, boolean tuttiTipi) {
