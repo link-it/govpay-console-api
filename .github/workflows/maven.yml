@@ -69,6 +69,16 @@ jobs:
       env:
         OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
 
+    # La chiave deve combaciare con quella di refresh-owasp-db.yml, altrimenti
+    # l'hit esatto non avviene mai e NOUPDATE_FLAG resta vuoto: la build
+    # rifarebbe l'update NVD anche subito dopo la passata notturna.
+    - name: Read OWASP plugin version from pom.xml
+      id: owasp
+      run: |
+        VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=owasp.plugin.version)"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "OWASP Dependency-Check version: $VERSION"
+
     - name: Get date for cache key
       id: date
       run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
@@ -79,9 +89,9 @@ jobs:
       uses: actions/cache@v5
       with:
         path: .dependency-check/data
-        key: ${{ runner.os }}-owasp-${{ steps.date.outputs.date }}
+        key: ${{ runner.os }}-owasp-v${{ steps.owasp.outputs.version }}-${{ steps.date.outputs.date }}
         restore-keys: |
-          ${{ runner.os }}-owasp-
+          ${{ runner.os }}-owasp-v${{ steps.owasp.outputs.version }}-
 
     - name: Build War with Maven
       run: mvn clean install -P war -DskipTests -Ddependency-check.skip=true
@@ -316,10 +326,10 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: docker/buildcontext
-        file: docker/govpay-console/Dockerfile.github
+        file: docker/govpay-console-api/Dockerfile.github
         push: true
         build-args: |
-          govpay_console_fullversion=${{ steps.version.outputs.VERSION }}
+          govpay_console_api_fullversion=${{ steps.version.outputs.VERSION }}
         tags: |
           linkitaly/govpay-console-api:${{ steps.version.outputs.VERSION }}
           linkitaly/govpay-console-api:latest
