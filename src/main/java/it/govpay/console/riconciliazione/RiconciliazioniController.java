@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import it.govpay.console.api.RiconciliazioniApi;
 import it.govpay.console.model.ListRiconciliazioni200Response;
+import it.govpay.console.model.NuovaRiconciliazione;
 import it.govpay.console.model.Riconciliazione;
 import it.govpay.console.model.StatoRiconciliazione;
 import it.govpay.console.model.TipoRiscossione;
@@ -30,6 +31,7 @@ public class RiconciliazioniController implements RiconciliazioniApi {
 
     private final RiconciliazioneSearchService searchService;
     private final RiconciliazioneDetailService detailService;
+    private final RiconciliazioneWriteService writeService;
 
     @Autowired(required = false)
     private HttpServletRequest currentRequest;
@@ -38,9 +40,11 @@ public class RiconciliazioniController implements RiconciliazioniApi {
     private HttpServletResponse currentResponse;
 
     public RiconciliazioniController(RiconciliazioneSearchService searchService,
-                                     RiconciliazioneDetailService detailService) {
+                                     RiconciliazioneDetailService detailService,
+                                     RiconciliazioneWriteService writeService) {
         this.searchService = searchService;
         this.detailService = detailService;
+        this.writeService = writeService;
     }
 
     @Override
@@ -74,5 +78,11 @@ public class RiconciliazioniController implements RiconciliazioniApi {
             String idDominio, String id, List<TipoRiscossione> tipoRiscossione) {
         ListQueryValidator.rejectUnsupported(currentRequest, GET_QUERY_PARAMS);
         return detailService.get(idDominio, id, tipoRiscossione);
+    }
+
+    @Override
+    public ResponseEntity<Riconciliazione> registraRiconciliazione(
+            String idDominio, String id, NuovaRiconciliazione nuovaRiconciliazione) {
+        return writeService.put(idDominio, id, nuovaRiconciliazione, currentRequest);
     }
 }

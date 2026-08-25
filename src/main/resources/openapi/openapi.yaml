@@ -832,6 +832,106 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+    put:
+      tags:
+        - Riconciliazioni
+      operationId: registraRiconciliazione
+      summary: Registra una riconciliazione (elaborazione asincrona via batch dedicato).
+      description: |
+        Persiste la richiesta in stato `IN_ELABORAZIONE` e delega
+        l'elaborazione (matching col flusso di rendicontazione, transizioni
+        di stato su pagamenti/pendenze) a un batch dedicato, attivato dopo il
+        commit se censito nel catalogo operazioni; se non censito
+        l'elaborazione avviene comunque tramite la procedura periodica
+        esistente lato core, con la latenza del suo ciclo di cron.
+
+        **Un 202 non garantisce l'esito**: tra il pre-flight sincrono e
+        l'elaborazione la situazione può cambiare — la riconciliazione può
+        comunque finire in stato `ERRORE` con `descrizioneStato`
+        valorizzato, verificabile con una successiva `GET`.
+
+        **Idempotenza** sulla coppia `(idDominio, id)`:
+        - riga assente → INSERT in `IN_ELABORAZIONE` → **202** + `Location` + body;
+        - riga presente in stato `ERRORE` → UPDATE (torna a `IN_ELABORAZIONE`,
+          ri-accodata) → **202** + `Location` + body;
+        - riga presente in stato diverso da `ERRORE` → nessuna scrittura →
+          **200** + body corrente (con `riscossioni[]`).
+
+        Il corpo richiede almeno uno tra `causale` (da cui `idFlusso` viene
+        estratto secondo le specifiche AgID SACIV 1.2.1) e `idFlusso`
+        diretto — non sono mutuamente esclusivi: se entrambi presenti,
+        `idFlusso` ha precedenza e `causale` viene solo archiviata. Una
+        causale che risolve a un riferimento **singolo** (`RFS`/`RFB`) è
+        rifiutata: la modalità singola non è più supportata in scrittura in
+        V2 (i record legacy restano consultabili in lettura). Il campo
+        `iuv` non è mai ammesso in scrittura: se presente, 400.
+
+        ACL: richiede il diritto di **scrittura** sul servizio
+        "Rendicontazioni e Incassi" (altrimenti 403). A differenza della
+        lettura, qui il dominio è nel path di una scrittura: dominio
+        inesistente o non visibile all'operatore → **403**, non 404
+        (l'anti-leak non si applica in scrittura).
+      parameters:
+        - $ref: '#/components/parameters/IdDominioPath'
+        - $ref: '#/components/parameters/RiconciliazioneIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuovaRiconciliazione'
+      responses:
+        '200':
+          description: Riconciliazione già presente in uno stato diverso da `ERRORE` (idempotenza, nessuna scrittura).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Riconciliazione'
+        '202':
+          description: Riconciliazione accodata per l'elaborazione (nuova, o ri-accodata da `ERRORE`).
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Riconciliazione'
+        '400':
+          description: |
+            Corpo malformato o pre-flight su anagrafica non superato
+            (dominio/iban inesistenti, causale non conforme SACIV,
+            riferimento singolo non supportato).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          description: Il flusso di rendicontazione indicato non esiste.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: |
+            Conflitto: riconciliazione già presente con dati accessori
+            divergenti, flusso già riconciliato da un'altra riconciliazione,
+            flusso in stato anomalo, o importo non corrispondente al totale
+            pagamenti del flusso.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /eventi:
     get:
       tags:
@@ -7902,6 +8002,58 @@ components:
                 legacy (riversamento singolo, non più supportato in
                 scrittura in V2). Mutuamente esclusivo con `idFlusso`.
         - $ref: '#/components/schemas/TipoRiferimentoRiconciliazione'
+
+    NuovaRiconciliazione:
+      description: |
+        Corpo del `PUT` di registrazione. Almeno uno tra `causale` e
+        `idFlusso` è richiesto (`anyOf`: entrambi sono ammessi
+        contemporaneamente, non sono mutuamente esclusivi). Se è presente
+        `causale`, `idFlusso` viene estratto server-side secondo le
+        specifiche AgID SACIV 1.2.1. Se sono presenti entrambi, `idFlusso`
+        ha precedenza e `causale` viene solo archiviata (non
+        validata/estratta) — stesso comportamento di V1. `iuv` è dichiarato
+        solo per essere esplicitamente rifiutato con 400: la modalità
+        singola non è più supportata in scrittura in V2 (vedi
+        `TipoRiferimentoRiconciliazione` per la sola lettura).
+      allOf:
+        - type: object
+          required:
+            - importo
+          properties:
+            importo:
+              type: number
+              format: double
+            dataValuta:
+              type: string
+              format: date
+              description: Data valuta del bonifico SCT di regolamento.
+            dataContabile:
+              type: string
+              format: date
+            ibanAccredito:
+              type: string
+              description: Conto di tesoreria accreditato dal bonifico.
+            sct:
+              type: string
+              description: Identificativo del bonifico SEPA Credit Transfer.
+            causale:
+              type: string
+              maxLength: 512
+              description: Causale del bonifico SCT, conforme alle specifiche AgID SACIV 1.2.1.
+            idFlusso:
+              type: string
+              description: Identificativo del flusso di rendicontazione, se già noto (alternativo a `causale`).
+            iuv:
+              type: string
+              description: |
+                Non supportato in scrittura in V2: se presente, il PUT
+                risponde sempre 400. Dichiarato solo per essere validato e
+                rifiutato esplicitamente, non per essere usato.
+        - anyOf:
+            - required:
+                - causale
+            - required:
+                - idFlusso
 
     RiconciliazioneLinks:
       type: object

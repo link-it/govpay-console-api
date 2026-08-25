@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 /**
  * Riconciliazione (V1: incasso) pagoPA. Mappa la tabella {@code incassi} con i
@@ -23,9 +24,16 @@ import jakarta.persistence.Table;
  * {@code Long}): vedi {@code IncassoSpecifications.visibiliPerOperatore}, che
  * riusa {@link it.govpay.console.eventi.EventoAcl} per risolvere i codici
  * dominio visibili come lista di stringhe.
+ *
+ * <p>{@code uniqueConstraints} replica {@code unique_incassi_1}, gia'
+ * presente sullo schema V1 condiviso: senza dichiararla qui, lo schema H2
+ * generato da {@code ddl-auto=create-drop} nei test non la applicherebbe, e
+ * la gestione della concorrenza in scrittura (due PUT paralleli sulla stessa
+ * coppia, vedi {@code RiconciliazioneWriteService}) non sarebbe verificabile.
  */
 @Entity
-@Table(name = "incassi")
+@Table(name = "incassi", uniqueConstraints = @UniqueConstraint(
+        name = "unique_incassi_1", columnNames = {"cod_dominio", "identificativo"}))
 @SequenceGenerator(name = "seq_incassi", sequenceName = "seq_incassi", allocationSize = 1)
 public class Incasso {
 

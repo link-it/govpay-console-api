@@ -3,7 +3,6 @@ package it.govpay.console.riconciliazione;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +21,6 @@ import it.govpay.console.model.TipoRiscossione;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.PagamentoRepository;
-import it.govpay.console.repository.RptRepository;
-import it.govpay.console.repository.SingoloVersamentoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -44,8 +41,7 @@ public class RiconciliazioneDetailService {
     private final IncassoRepository incassoRepository;
     private final PagamentoRepository pagamentoRepository;
     private final DominioRepository dominioRepository;
-    private final RptRepository rptRepository;
-    private final SingoloVersamentoRepository singoloVersamentoRepository;
+    private final RiscossioniResolver riscossioniResolver;
     private final RiconciliazioneMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final EventoAcl eventoAcl;
@@ -54,8 +50,7 @@ public class RiconciliazioneDetailService {
     public RiconciliazioneDetailService(IncassoRepository incassoRepository,
                                         PagamentoRepository pagamentoRepository,
                                         DominioRepository dominioRepository,
-                                        RptRepository rptRepository,
-                                        SingoloVersamentoRepository singoloVersamentoRepository,
+                                        RiscossioniResolver riscossioniResolver,
                                         RiconciliazioneMapper mapper,
                                         CurrentOperatorService currentOperatorService,
                                         EventoAcl eventoAcl,
@@ -63,8 +58,7 @@ public class RiconciliazioneDetailService {
         this.incassoRepository = incassoRepository;
         this.pagamentoRepository = pagamentoRepository;
         this.dominioRepository = dominioRepository;
-        this.rptRepository = rptRepository;
-        this.singoloVersamentoRepository = singoloVersamentoRepository;
+        this.riscossioniResolver = riscossioniResolver;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.eventoAcl = eventoAcl;
@@ -87,32 +81,13 @@ public class RiconciliazioneDetailService {
                 .filter(p -> p.getTipo() != null && tipiAmmessi.contains(TipoRiscossione.valueOf(p.getTipo())))
                 .toList();
 
-        Map<Long, Rpt> rptById = loadRpt(riscossioni);
-        Map<Long, SingoloVersamento> singoliVersamentiById = loadSingoliVersamenti(riscossioni);
+        Map<Long, Rpt> rptById = riscossioniResolver.loadRpt(riscossioni);
+        Map<Long, SingoloVersamento> singoliVersamentiById = riscossioniResolver.loadSingoliVersamenti(riscossioni);
 
         Riconciliazione dto = mapper.toDetail(incasso, domini, riscossioni, rptById, singoliVersamentiById);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(dto);
-    }
-
-    private Map<Long, Rpt> loadRpt(List<Pagamento> riscossioni) {
-        Set<Long> ids = riscossioni.stream().map(Pagamento::getIdRpt).filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return rptRepository.findAllById(ids).stream().collect(Collectors.toMap(Rpt::getId, r -> r));
-    }
-
-    private Map<Long, SingoloVersamento> loadSingoliVersamenti(List<Pagamento> riscossioni) {
-        Set<Long> ids = riscossioni.stream().map(Pagamento::getIdSingoloVersamento).filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return singoloVersamentoRepository.findByIdIn(ids).stream()
-                .collect(Collectors.toMap(SingoloVersamento::getId, sv -> sv));
     }
 
     /** Carica la riconciliazione per coppia applicando l'ACL (404 anti-leak, nessun audit sul 404). */

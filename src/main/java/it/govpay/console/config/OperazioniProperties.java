@@ -2,6 +2,7 @@ package it.govpay.console.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +26,17 @@ public class OperazioniProperties {
 
     public void setCatalogo(List<OperazioneConfig> catalogo) {
         this.catalogo = catalogo;
+    }
+
+    /**
+     * Lookup non-throwing per id, a differenza del pattern
+     * {@code .stream().filter(...).findFirst().orElseThrow(...)} usato per
+     * l'avvio manuale ({@code POST /operazioni/{id}/esecuzioni}, che vuole un
+     * 404 se non censita): qui serve poter trattare "non censita" come un
+     * caso normale (noop), non un errore.
+     */
+    public Optional<OperazioneConfig> find(String id) {
+        return catalogo.stream().filter(c -> id.equals(c.getId())).findFirst();
     }
 
     public static class OperazioneConfig {
