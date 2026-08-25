@@ -5028,12 +5028,15 @@ paths:
       tags:
         - Iban
       operationId: listIbanPagopa
-      summary: Elenca gli IBAN abilitati su pagoPA per un dominio (censimento assistito).
+      summary: Elenca gli IBAN noti a pagoPA per un dominio, con relativo stato (censimento assistito).
       description: |
         Ricerca nella cache locale degli IBAN sincronizzata dal batch pagoPA per
         il dominio indicato, per popolare il combobox filtrabile del form di
-        creazione/modifica ContoAccredito. Risposta non paginata (elenco
-        atteso di dimensione contenuta, scoperto per un singolo dominio).
+        creazione/modifica ContoAccredito. Include sia gli IBAN attivi che
+        quelli disabilitati su pagoPA (vedi campo `attivo`), cosi' il client
+        puo' anche verificare se un IBAN gia' configurato risulta ancora
+        valido. Risposta non paginata (elenco atteso di dimensione contenuta,
+        scoperto per un singolo dominio).
       parameters:
         - $ref: '#/components/parameters/IdDominioQueryRequired'
       responses:
@@ -10731,9 +10734,10 @@ components:
     IbanPagoPa:
       type: object
       description: |
-        IBAN abilitato su pagoPA per un dominio, dalla cache locale di
+        IBAN noto a pagoPA per un dominio, dalla cache locale di
         sincronizzazione, usato per il censimento assistito del conto di
-        accredito.
+        accredito. Puo' essere attivo o disabilitato su pagoPA, vedi campo
+        `attivo`.
       required:
         - iban
         - attivo
