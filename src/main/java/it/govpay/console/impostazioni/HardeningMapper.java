@@ -41,19 +41,24 @@ public class HardeningMapper {
 
     /** Applica il DTO su un {@link Hardening} esistente, preservando {@code secretKey}. */
     public void applyConfig(Hardening target, it.govpay.console.model.ImpostazioniHardening dto) {
+        // `captcha` e' `required` nello schema e la Bean Validation e' applicata su
+        // entrambi i percorsi di scrittura (`@Valid` sulla replace, RepresentationValidator
+        // sul PATCH ricomposto): le guardie null qui erano irraggiungibili. Il controllo
+        // su `target.getGoogleCatpcha()` sotto resta, perche' target e' l'oggetto comune
+        // esistente e puo' non avere ancora il blocco captcha.
         target.setAbilitato(Boolean.TRUE.equals(dto.getAbilitato()));
         String secretKeyEsistente = target.getGoogleCatpcha() != null ? target.getGoogleCatpcha().getSecretKey() : null;
 
         ConfigurazioneReCaptcha captcha = dto.getCaptcha();
         GoogleCaptcha googleCaptcha = new GoogleCaptcha();
-        googleCaptcha.setServerURL(captcha != null ? captcha.getServerURL() : null);
-        googleCaptcha.setSiteKey(captcha != null ? captcha.getSiteKey() : null);
-        googleCaptcha.setSoglia(captcha != null && captcha.getSoglia() != null ? captcha.getSoglia() : 0d);
-        googleCaptcha.setResponseParameter(captcha != null ? captcha.getParametro() : null);
-        googleCaptcha.setDenyOnFail(captcha != null && Boolean.TRUE.equals(captcha.getDenyOnFail()));
-        googleCaptcha.setConnectionTimeout(captcha != null && captcha.getConnectionTimeoutMs() != null
+        googleCaptcha.setServerURL(captcha.getServerURL());
+        googleCaptcha.setSiteKey(captcha.getSiteKey());
+        googleCaptcha.setSoglia(captcha.getSoglia() != null ? captcha.getSoglia() : 0d);
+        googleCaptcha.setResponseParameter(captcha.getParametro());
+        googleCaptcha.setDenyOnFail(Boolean.TRUE.equals(captcha.getDenyOnFail()));
+        googleCaptcha.setConnectionTimeout(captcha.getConnectionTimeoutMs() != null
                 ? captcha.getConnectionTimeoutMs() : 0);
-        googleCaptcha.setReadTimeout(captcha != null && captcha.getReadTimeoutMs() != null
+        googleCaptcha.setReadTimeout(captcha.getReadTimeoutMs() != null
                 ? captcha.getReadTimeoutMs() : 0);
         googleCaptcha.setSecretKey(secretKeyEsistente);
         target.setGoogleCatpcha(googleCaptcha);

@@ -29,28 +29,32 @@ public class MailPromemoriaMapper {
     }
 
     public AvvisaturaViaMail toCommon(ImpostazioniMailTemplatePromemoria dto) {
+        // I tre blocchi sono dichiarati `required` nello schema e la Bean Validation
+        // e' applicata su entrambi i percorsi di scrittura: `@Valid` sulla replace e
+        // RepresentationValidator sul documento ricomposto dal PATCH. Le guardie null
+        // che c'erano qui erano quindi irraggiungibili.
         AvvisaturaViaMail target = new AvvisaturaViaMail();
 
         TemplatePromemoriaAvviso avviso = dto.getPromemoriaAvviso();
         PromemoriaAvviso avvisoCommon = new PromemoriaAvviso();
-        avvisoCommon.setOggetto(avviso != null ? avviso.getOggetto() : null);
-        avvisoCommon.setMessaggio(avviso != null ? avviso.getMessaggio() : null);
-        avvisoCommon.setAllegaPdf(avviso != null && Boolean.TRUE.equals(avviso.getAllegaPdf()));
+        avvisoCommon.setOggetto(avviso.getOggetto());
+        avvisoCommon.setMessaggio(avviso.getMessaggio());
+        avvisoCommon.setAllegaPdf(Boolean.TRUE.equals(avviso.getAllegaPdf()));
         target.setPromemoriaAvviso(avvisoCommon);
 
         TemplatePromemoriaRicevuta ricevuta = dto.getPromemoriaRicevuta();
         PromemoriaRicevuta ricevutaCommon = new PromemoriaRicevuta();
-        ricevutaCommon.setOggetto(ricevuta != null ? ricevuta.getOggetto() : null);
-        ricevutaCommon.setMessaggio(ricevuta != null ? ricevuta.getMessaggio() : null);
-        ricevutaCommon.setAllegaPdf(ricevuta != null && Boolean.TRUE.equals(ricevuta.getAllegaPdf()));
-        ricevutaCommon.setSoloEseguiti(ricevuta != null && Boolean.TRUE.equals(ricevuta.getSoloEseguiti()));
+        ricevutaCommon.setOggetto(ricevuta.getOggetto());
+        ricevutaCommon.setMessaggio(ricevuta.getMessaggio());
+        ricevutaCommon.setAllegaPdf(Boolean.TRUE.equals(ricevuta.getAllegaPdf()));
+        ricevutaCommon.setSoloEseguiti(Boolean.TRUE.equals(ricevuta.getSoloEseguiti()));
         target.setPromemoriaRicevuta(ricevutaCommon);
 
         TemplatePromemoriaScadenza scadenza = dto.getPromemoriaScadenza();
         PromemoriaScadenza scadenzaCommon = new PromemoriaScadenza();
-        scadenzaCommon.setOggetto(scadenza != null ? scadenza.getOggetto() : null);
-        scadenzaCommon.setMessaggio(scadenza != null ? scadenza.getMessaggio() : null);
-        scadenzaCommon.setPreavviso(scadenza != null ? scadenza.getPreavviso() : null);
+        scadenzaCommon.setOggetto(scadenza.getOggetto());
+        scadenzaCommon.setMessaggio(scadenza.getMessaggio());
+        scadenzaCommon.setPreavviso(scadenza.getPreavviso());
         target.setPromemoriaScadenza(scadenzaCommon);
 
         return target;
