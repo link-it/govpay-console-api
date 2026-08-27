@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,16 +22,16 @@ public class DominioController implements DominiApi {
 
     private final DominioService service;
     private final DominioLogoService logoService;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
-
-    public DominioController(DominioService service, DominioLogoService logoService) {
+    public DominioController(DominioService service, DominioLogoService logoService,
+                             HttpServletRequest currentRequest,
+                             HttpServletResponse currentResponse) {
         this.service = service;
         this.logoService = logoService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override

@@ -2,7 +2,6 @@ package it.govpay.console.ruolo;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,12 +17,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class RuoloController implements RuoliApi {
 
     private final RuoloService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public RuoloController(RuoloService service) {
+    public RuoloController(RuoloService service,
+                           HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

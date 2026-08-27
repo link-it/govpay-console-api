@@ -2,7 +2,6 @@ package it.govpay.console.tipopendenzadominio;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,12 +17,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class TipoPendenzaDominioController implements TipiPendenzaDominioApi {
 
     private final TipoPendenzaDominioService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public TipoPendenzaDominioController(TipoPendenzaDominioService service) {
+    public TipoPendenzaDominioController(TipoPendenzaDominioService service,
+                                         HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

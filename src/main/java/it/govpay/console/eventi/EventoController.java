@@ -3,7 +3,6 @@ package it.govpay.console.eventi;
 import java.time.OffsetDateTime;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,15 +36,15 @@ public class EventoController implements GiornaleEventiApi {
     private final EventoSearchService searchService;
     private final EventoDetailService detailService;
     private final EventoSubResourceService subResourceService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
+    private final HttpServletRequest currentRequest;
 
     public EventoController(EventoSearchService searchService, EventoDetailService detailService,
-            EventoSubResourceService subResourceService) {
+            EventoSubResourceService subResourceService,
+            HttpServletRequest currentRequest) {
         this.searchService = searchService;
         this.detailService = detailService;
         this.subResourceService = subResourceService;
+        this.currentRequest = currentRequest;
     }
 
     @Override

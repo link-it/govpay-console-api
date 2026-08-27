@@ -2,7 +2,6 @@ package it.govpay.console.impostazioni;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -15,12 +14,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class GiornaleEventiController implements ImpostazioniGiornaleEventiApi {
 
     private final GiornaleEventiService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public GiornaleEventiController(GiornaleEventiService service) {
+    public GiornaleEventiController(GiornaleEventiService service,
+                                    HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

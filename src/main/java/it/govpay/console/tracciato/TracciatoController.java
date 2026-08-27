@@ -3,7 +3,6 @@ package it.govpay.console.tracciato;
 import java.time.OffsetDateTime;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,23 +40,23 @@ public class TracciatoController implements PendenzeTracciatiApi {
     private final TracciatoContentService contentService;
     private final TracciatoStampeService stampeService;
     private final OperazioneSearchService operazioneSearchService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
     public TracciatoController(TracciatoUploadService uploadService,
                                TracciatoSearchService searchService,
                                TracciatoContentService contentService,
                                TracciatoStampeService stampeService,
-                               OperazioneSearchService operazioneSearchService) {
+                               OperazioneSearchService operazioneSearchService,
+                               HttpServletRequest currentRequest,
+                               HttpServletResponse currentResponse) {
         this.uploadService = uploadService;
         this.searchService = searchService;
         this.contentService = contentService;
         this.stampeService = stampeService;
         this.operazioneSearchService = operazioneSearchService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override

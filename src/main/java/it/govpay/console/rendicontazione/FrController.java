@@ -3,7 +3,6 @@ package it.govpay.console.rendicontazione;
 import java.time.OffsetDateTime;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,16 +27,16 @@ public class FrController implements RendicontazioniApi {
 
     private final FrSearchService searchService;
     private final FrDetailService detailService;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
-
-    public FrController(FrSearchService searchService, FrDetailService detailService) {
+    public FrController(FrSearchService searchService, FrDetailService detailService,
+                        HttpServletRequest currentRequest,
+                        HttpServletResponse currentResponse) {
         this.searchService = searchService;
         this.detailService = detailService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override

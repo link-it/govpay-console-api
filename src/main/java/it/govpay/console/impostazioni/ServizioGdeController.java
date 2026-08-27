@@ -1,6 +1,5 @@
 package it.govpay.console.impostazioni;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,12 +12,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class ServizioGdeController implements ImpostazioniServizioGdeApi {
 
     private final ServizioGdeService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public ServizioGdeController(ServizioGdeService service) {
+    public ServizioGdeController(ServizioGdeService service,
+                                 HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

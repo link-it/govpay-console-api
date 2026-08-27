@@ -2,7 +2,6 @@ package it.govpay.console.applicazione;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,12 +18,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class ApplicazioneController implements ApplicazioniApi {
 
     private final ApplicazioneService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public ApplicazioneController(ApplicazioneService service) {
+    public ApplicazioneController(ApplicazioneService service,
+                                  HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

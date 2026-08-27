@@ -3,7 +3,6 @@ package it.govpay.console.pendenza;
 import java.util.List;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,21 +40,21 @@ public class PendenzaController implements PendenzeApi {
     private final AvvisoService avvisoService;
     private final RicevutaService ricevutaService;
     private final InformazioniDebitoreService informazioniDebitoreService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
     public PendenzaController(PendenzaService service,
                               AvvisoService avvisoService,
                               RicevutaService ricevutaService,
-                              InformazioniDebitoreService informazioniDebitoreService) {
+                              InformazioniDebitoreService informazioniDebitoreService,
+                              HttpServletRequest currentRequest,
+                              HttpServletResponse currentResponse) {
         this.service = service;
         this.avvisoService = avvisoService;
         this.ricevutaService = ricevutaService;
         this.informazioniDebitoreService = informazioniDebitoreService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override

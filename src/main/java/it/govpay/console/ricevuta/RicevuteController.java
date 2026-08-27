@@ -3,7 +3,6 @@ package it.govpay.console.ricevuta;
 import java.time.LocalDate;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,17 +31,17 @@ public class RicevuteController implements RicevuteApi {
 
     private final RicevutaSearchService searchService;
     private final RicevutaService ricevutaService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
     public RicevuteController(RicevutaSearchService searchService,
-                              RicevutaService ricevutaService) {
+                              RicevutaService ricevutaService,
+                              HttpServletRequest currentRequest,
+                              HttpServletResponse currentResponse) {
         this.searchService = searchService;
         this.ricevutaService = ricevutaService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override
