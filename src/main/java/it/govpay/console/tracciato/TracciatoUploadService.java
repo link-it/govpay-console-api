@@ -2,6 +2,7 @@ package it.govpay.console.tracciato;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -13,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Tracciato;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.FormatoTracciato;
@@ -67,6 +67,7 @@ public class TracciatoUploadService {
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final long maxFileSizeBytes;
+    private final Clock clock;
 
     public TracciatoUploadService(TracciatoRepository tracciatoRepository,
                                   DominioRepository dominioRepository,
@@ -80,7 +81,8 @@ public class TracciatoUploadService {
                                   Validator validator,
                                   @org.springframework.beans.factory.annotation.Value(
                                           "${govpay.tracciati.max-file-size-mb:" + DEFAULT_MAX_FILE_SIZE_MB + "}")
-                                  long maxFileSizeMb) {
+                                  long maxFileSizeMb,
+                                  Clock clock) {
         this.tracciatoRepository = tracciatoRepository;
         this.dominioRepository = dominioRepository;
         this.tipoVersamentoDominioRepository = tipoVersamentoDominioRepository;
@@ -92,6 +94,7 @@ public class TracciatoUploadService {
         this.objectMapper = objectMapper;
         this.validator = validator;
         this.maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+        this.clock = clock;
     }
 
     @Transactional
@@ -140,7 +143,7 @@ public class TracciatoUploadService {
         tracciato.setFormato(contenuto.formato().getValue());
         tracciato.setTipo("PENDENZA");
         tracciato.setStato(TracciatoStatoMapper.STATO_ELABORAZIONE);
-        tracciato.setDataCaricamento(OffsetDateTime.now());
+        tracciato.setDataCaricamento(OffsetDateTime.now(clock));
         tracciato.setFileNameRichiesta(contenuto.nomeFile());
         tracciato.setBeanDati(serializeBeanDatiIniziale(stampaAvvisi));
         tracciato.setRawRichiesta(contenuto.bytes());

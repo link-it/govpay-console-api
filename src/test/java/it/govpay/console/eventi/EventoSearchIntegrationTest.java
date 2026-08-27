@@ -68,12 +68,11 @@ class EventoSearchIntegrationTest {
     @MockitoBean
     private EventoGdeClient eventoGdeClient;
 
-    private Dominio domA;
     private Dominio domB;
 
     @BeforeEach
     void setup() {
-        domA = newDominio(DOM_A, "Dominio A");
+        newDominio(DOM_A, "Dominio A");
         domB = newDominio(DOM_B, "Dominio B");
 
         when(eventoGdeClient.findEventi(any())).thenReturn(emptyResult());

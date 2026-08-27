@@ -260,7 +260,7 @@ public class PendenzaMapper {
         if (isBollo) {
             return new VocePendenzaBolloTelematico(
                     TIPO_VOCE_BOLLO_TELEMATICO,
-                    mapTipoBollo(sv.getTipoBollo()),
+                    mapTipoBollo(),
                     sv.getHashDocumento(),
                     sv.getProvinciaResidenza());
         }
@@ -283,8 +283,12 @@ public class PendenzaMapper {
         return null;
     }
 
-    private static VocePendenzaBolloTelematico.TipoBolloEnum mapTipoBollo(String tipoBolloV1) {
-        // il modello espone l'unica tipologia supportata "Imposta di bollo".
+    /**
+     * Il modello espone l'unica tipologia supportata, "Imposta di bollo", quindi
+     * la codifica V1 di partenza ({@code singoli_versamenti.tipo_bollo}) non
+     * discrimina: il metodo non ha un parametro perche' non ne userebbe il valore.
+     */
+    private static VocePendenzaBolloTelematico.TipoBolloEnum mapTipoBollo() {
         return VocePendenzaBolloTelematico.TipoBolloEnum.IMPOSTA_DI_BOLLO;
     }
 

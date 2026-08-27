@@ -1,5 +1,6 @@
 package it.govpay.console.dominio;
 
+import java.time.Clock;
 import java.time.Year;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -17,8 +18,14 @@ import it.govpay.console.web.UnprocessableEntityException;
 @Component
 public class DominioSemanticValidator {
 
+    private final Clock clock;
+
+    public DominioSemanticValidator(Clock clock) {
+        this.clock = clock;
+    }
+
     /** Il prefisso IUV generato deve risultare numerico e al massimo 13 cifre. */
-    private static final Pattern PREFIX_RISULTANTE = Pattern.compile("^[0-9]{1,13}$");
+    private static final Pattern PREFIX_RISULTANTE = Pattern.compile("^\\d{1,13}$");
 
     /**
      * Valori massimi (in cifre) con cui V1 espande i placeholder del prefisso per
@@ -75,7 +82,7 @@ public class DominioSemanticValidator {
     }
 
     private String espandiPrefix(String template) {
-        int anno = Year.now().getValue();
+        int anno = Year.now(clock).getValue();
         String result = template;
         for (Map.Entry<String, String> e : PLACEHOLDER_MASSIMI.entrySet()) {
             result = result.replace("%(" + e.getKey() + ")", e.getValue());

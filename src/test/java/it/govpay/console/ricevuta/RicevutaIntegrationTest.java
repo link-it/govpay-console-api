@@ -22,7 +22,6 @@ import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,7 +38,6 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Rpt;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
@@ -173,26 +171,6 @@ class RicevutaIntegrationTest {
         r.setCodPsp("BNCITEST01");
         r.setCodTransazioneRt("TX-001");
         return rptRepository.save(r);
-    }
-
-    private SingoloVersamento newSv(Versamento v, int indice, String descrizione, double importo) {
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte("SV-" + indice);
-        sv.setStatoSingoloVersamento("ESEGUITO");
-        sv.setImportoSingoloVersamento(importo);
-        sv.setDescrizione(descrizione);
-        sv.setIndiceDati(indice);
-        sv.setVersamento(v);
-        v.getSingoliVersamenti().add(sv);
-        return sv;
-    }
-
-    private static Answer<Void> writePdf(byte[] bytes) {
-        return invocation -> {
-            OutputStream out = invocation.getArgument(1);
-            out.write(bytes);
-            return null;
-        };
     }
 
     @Test

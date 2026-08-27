@@ -13,9 +13,9 @@ public final class CausaleIncassoParser {
 
     private static final Pattern PATTERN_SINGOLO = Pattern.compile("RF[SB].([0-9A-Za-z\\-_]+)");
     private static final Pattern PATTERN_CUMULATIVO =
-            Pattern.compile("PUR.LGPE-RIVERSAMENTO.(TXT.[0-9]{1}.)?URI.([0-9A-Za-z\\-_]+)");
-    private static final Pattern PATTERN_IDF = Pattern.compile("\\d\\d\\d\\d-\\d\\d-\\d\\d[0-9A-Za-z_]*-\\S*");
-    private static final Pattern PATTERN_IUV = Pattern.compile("[0-9]{15,17}|^RF.*");
+            Pattern.compile("PUR.LGPE-RIVERSAMENTO.(TXT.\\d{1}.)?URI.([0-9A-Za-z\\-_]+)");
+    private static final Pattern PATTERN_IDF = Pattern.compile("\\d\\d\\d\\d-\\d\\d-\\d\\d\\w*-\\S*");
+    private static final Pattern PATTERN_IUV = Pattern.compile("\\d{15,17}|^RF.*");
 
     private CausaleIncassoParser() {
     }

@@ -65,10 +65,7 @@ class FrSearchIntegrationTest {
 
     private Dominio domA;
     private Dominio domB;
-    private Fr a1Rev1Obsoleto;
-    private Fr a1Rev2;
     private Fr a2Anomalo;
-    private Fr a3Incassato;
 
     @BeforeEach
     void setup() {
@@ -76,13 +73,13 @@ class FrSearchIntegrationTest {
         domB = newDominio(DOM_B, "Dominio B");
 
         // dominio A: 4 righe. FLUSSO-A1 riemesso (rev1 obsoleta, rev2 valida).
-        a1Rev1Obsoleto = newFr(domA, "FLUSSO-A1", "PSP-1", 1L, "ACCETTATA", true,
+        newFr(domA, "FLUSSO-A1", "PSP-1", 1L, "ACCETTATA", true,
                 date(2026, 6, 18), date(2026, 6, 18), null, 5L, 100.0);
-        a1Rev2 = newFr(domA, "FLUSSO-A1", "PSP-1", 2L, "ACCETTATA", false,
+        newFr(domA, "FLUSSO-A1", "PSP-1", 2L, "ACCETTATA", false,
                 date(2026, 6, 22), date(2026, 6, 22), null, 5L, 100.0);
         a2Anomalo = newFr(domA, "FLUSSO-A2", "PSP-1", 1L, "ANOMALA", false,
                 date(2026, 6, 19), date(2026, 6, 19), null, 2L, 20.0);
-        a3Incassato = newFr(domA, "FLUSSO-A3", "PSP-2", 1L, "ACCETTATA", false,
+        newFr(domA, "FLUSSO-A3", "PSP-2", 1L, "ACCETTATA", false,
                 date(2026, 6, 20), date(2026, 6, 20), 999L, 3L, 50.0);
 
         // dominio B: 2 righe.

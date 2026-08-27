@@ -82,8 +82,6 @@ class PendenzaControllerIntegrationTest {
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
-    private Long idDominioA;
-    private Long idDominioB;
 
     @BeforeEach
     void setup() {
@@ -105,8 +103,6 @@ class PendenzaControllerIntegrationTest {
         Dominio domA = newDominio("11111111111", "Dominio A");
         Dominio domB = newDominio("22222222222", "Dominio B");
         Dominio domC = newDominio("33333333333", "Dominio Non Visibile");
-        idDominioA = domA.getId();
-        idDominioB = domB.getId();
 
         link(utenza.getId(), domA.getId());
         link(utenza.getId(), domB.getId());

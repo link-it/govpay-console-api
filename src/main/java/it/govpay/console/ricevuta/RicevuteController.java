@@ -65,7 +65,7 @@ public class RicevuteController implements RicevuteApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 iuv,
                 idDominio,
                 idRicevuta,

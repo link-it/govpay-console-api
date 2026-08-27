@@ -103,10 +103,7 @@ public class InformazioniDebitoreService {
         if (operatore.idDominiInteri().contains(v.getDominio().getId())) {
             return true;
         }
-        if (v.getUnitaOperativa() != null
-                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId())) {
-            return true;
-        }
-        return false;
+        return v.getUnitaOperativa() != null
+                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId());
     }
 }

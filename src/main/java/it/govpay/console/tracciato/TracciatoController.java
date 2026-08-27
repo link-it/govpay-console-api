@@ -94,7 +94,7 @@ public class TracciatoController implements PendenzeTracciatiApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 idDominio,
                 stato,
                 dataDa,

@@ -35,11 +35,9 @@ public class AsyncGdeConfig {
         exec.setMaxPoolSize(maxSize);
         exec.setQueueCapacity(queueCapacity);
         exec.setThreadNamePrefix("gde-");
-        exec.setRejectedExecutionHandler((r, e) -> {
-            // l'invio GDE non deve mai bloccare la response: log e drop
-            org.slf4j.LoggerFactory.getLogger(AsyncGdeConfig.class)
-                    .warn("Evento GDE rifiutato dall'executor (pool saturo): evento droppato.");
-        });
+        // l'invio GDE non deve mai bloccare la response: log e drop
+        exec.setRejectedExecutionHandler((r, e) -> org.slf4j.LoggerFactory.getLogger(AsyncGdeConfig.class)
+                .warn("Evento GDE rifiutato dall'executor (pool saturo): evento droppato."));
         exec.initialize();
         return exec;
     }

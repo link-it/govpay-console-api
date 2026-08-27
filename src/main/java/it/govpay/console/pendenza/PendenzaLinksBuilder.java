@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 
 import it.govpay.console.model.Link;
 import it.govpay.console.model.PendenzaLinks;
-import it.govpay.console.model.StatoPendenza;
 
 /**
  * Costruisce {@link PendenzaLinks}:
@@ -18,7 +17,7 @@ import it.govpay.console.model.StatoPendenza;
 @Component
 public class PendenzaLinksBuilder {
 
-    public PendenzaLinks build(String idA2A, String idPendenza, String numeroAvviso, StatoPendenza stato) {
+    public PendenzaLinks build(String idA2A, String idPendenza, String numeroAvviso) {
         String base = "/pendenze/" + idA2A + "/" + idPendenza;
         PendenzaLinks links = new PendenzaLinks(
                 href(base + "/informazioniDebitore"),

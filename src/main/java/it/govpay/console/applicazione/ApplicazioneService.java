@@ -78,7 +78,7 @@ public class ApplicazioneService {
     /** Firma ricevuta "nessuna" (V1 {@code FirmaRichiesta.NESSUNA}). */
     private static final String FIRMA_RICEVUTA_NESSUNA = "0";
     private static final int MAX_PRINCIPAL = 4000;
-    private static final Pattern CODIFICA_IUV_PATTERN = Pattern.compile("[0-9]{1,3}");
+    private static final Pattern CODIFICA_IUV_PATTERN = Pattern.compile("\\d{1,3}");
 
     private final ApplicazioneRepository applicazioneRepository;
     private final UtenzaRepository utenzaRepository;

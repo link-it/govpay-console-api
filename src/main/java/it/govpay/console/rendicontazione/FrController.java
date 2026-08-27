@@ -55,7 +55,7 @@ public class FrController implements RendicontazioniApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 idDominio,
                 idFlusso,
                 idPsp,

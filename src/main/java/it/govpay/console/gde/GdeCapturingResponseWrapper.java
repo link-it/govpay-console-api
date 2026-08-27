@@ -61,7 +61,7 @@ public class GdeCapturingResponseWrapper extends HttpServletResponseWrapper {
         TeeServletOutputStream(ServletOutputStream target, int maxCaptureBytes) {
             this.target = target;
             this.maxCaptureBytes = maxCaptureBytes;
-            this.capture = new ByteArrayOutputStream(Math.min(Math.max(maxCaptureBytes, 0), 8192));
+            this.capture = new ByteArrayOutputStream(Math.clamp(maxCaptureBytes, 0, 8192));
         }
 
         @Override

@@ -64,7 +64,7 @@ public class EventoController implements GiornaleEventiApi {
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 dataDa, dataA,
                 idDominio, iuv, ccp, idA2A, idPendenza,
                 componente, categoria, esito, ruolo,

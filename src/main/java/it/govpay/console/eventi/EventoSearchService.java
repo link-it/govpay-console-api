@@ -1,5 +1,6 @@
 package it.govpay.console.eventi;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,13 +36,16 @@ public class EventoSearchService {
     private final EventoMapper mapper;
     private final EventoAcl eventoAcl;
     private final CurrentOperatorService currentOperatorService;
+    private final Clock clock;
 
     public EventoSearchService(EventoGdeClient client, EventoMapper mapper,
-            EventoAcl eventoAcl, CurrentOperatorService currentOperatorService) {
+            EventoAcl eventoAcl, CurrentOperatorService currentOperatorService,
+            Clock clock) {
         this.client = client;
         this.mapper = mapper;
         this.eventoAcl = eventoAcl;
         this.currentOperatorService = currentOperatorService;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -66,11 +70,11 @@ public class EventoSearchService {
         OffsetDateTime dataDa = query.dataDa();
         OffsetDateTime dataA = query.dataA();
         if (dataDa == null && dataA == null) {
-            dataDa = OffsetDateTime.now().minusHours(24);
+            dataDa = OffsetDateTime.now(clock).minusHours(24);
         }
 
         if (query.messaggi() != null && !query.messaggi().isBlank()) {
-            requireRangeEntroOre(dataDa, dataA, 24 * 7,
+            requireRangeEntroOre(dataDa, dataA, 24L * 7, clock,
                     "Il filtro 'messaggi' richiede un intervallo temporale (dataDa/dataA) di al massimo 7 giorni.");
         }
 
@@ -83,7 +87,7 @@ public class EventoSearchService {
             OffsetDateTime dataDa, OffsetDateTime dataA, ListEventi200Response response) {
         boolean wantTotal = Boolean.TRUE.equals(query.total());
         if (wantTotal) {
-            requireRangeEntroOre(dataDa, dataA, 24,
+            requireRangeEntroOre(dataDa, dataA, 24, clock,
                     "Il conteggio (?total=true) richiede un intervallo temporale (dataDa/dataA) di al massimo 24 ore.");
         }
 
@@ -178,11 +182,12 @@ public class EventoSearchService {
         return new ResolvedDomini(false, visibili);
     }
 
-    private static void requireRangeEntroOre(OffsetDateTime dataDa, OffsetDateTime dataA, long oreMax, String message) {
+    private static void requireRangeEntroOre(OffsetDateTime dataDa, OffsetDateTime dataA, long oreMax, Clock clock,
+            String message) {
         if (dataDa == null) {
             throw new BadRequestException(message);
         }
-        OffsetDateTime a = dataA != null ? dataA : OffsetDateTime.now();
+        OffsetDateTime a = dataA != null ? dataA : OffsetDateTime.now(clock);
         Duration d = Duration.between(dataDa, a);
         if (d.isNegative() || d.toHours() > oreMax) {
             throw new BadRequestException(message);

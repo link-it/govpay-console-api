@@ -80,7 +80,7 @@ public class PendenzaController implements PendenzeApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 idPendenza,
                 numeroAvviso,
                 idDominio,

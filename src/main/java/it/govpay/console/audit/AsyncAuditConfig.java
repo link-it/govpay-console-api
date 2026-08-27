@@ -37,11 +37,9 @@ public class AsyncAuditConfig {
         exec.setMaxPoolSize(maxSize);
         exec.setQueueCapacity(queueCapacity);
         exec.setThreadNamePrefix("audit-");
-        exec.setRejectedExecutionHandler((r, e) -> {
-            // l'audit non deve mai bloccare la response: log e drop
-            org.slf4j.LoggerFactory.getLogger(AsyncAuditConfig.class)
-                    .warn("Audit task rifiutato dall'executor (pool saturo): row droppata.");
-        });
+        // l'audit non deve mai bloccare la response: log e drop
+        exec.setRejectedExecutionHandler((r, e) -> org.slf4j.LoggerFactory.getLogger(AsyncAuditConfig.class)
+                .warn("Audit task rifiutato dall'executor (pool saturo): row droppata."));
         exec.initialize();
         return exec;
     }

@@ -133,8 +133,15 @@ public class EventoMapper {
             return null;
         }
         int len = base64.length();
-        int padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+        int padding = paddingBase64(base64);
         return (len / 4L) * 3 - padding;
+    }
+
+    private static int paddingBase64(String base64) {
+        if (base64.endsWith("==")) {
+            return 2;
+        }
+        return base64.endsWith("=") ? 1 : 0;
     }
 
     private static EventoLinks links(Long id, String idDominio, String idA2A, String idPendenza,
