@@ -220,15 +220,23 @@ class RuoloControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Stessa violazione di {@link #createWithEmptyAutorizzazioniReturns400()}
+     * ({@code minItems: 1} sullo schema), quindi stesso status: la
+     * rappresentazione risultante dal PATCH viene rivalidata come una replace.
+     * Prima che {@code RepresentationValidator} fosse applicato anche a questo
+     * percorso, il caso arrivava al controllo semantico e tornava 422 — cioe' lo
+     * stesso vincolo dava 400 via POST e 422 via PATCH.
+     */
     @Test
-    void patchToEmptyAutorizzazioniReturns422() throws Exception {
+    void patchToEmptyAutorizzazioniReturns400() throws Exception {
         String etag = currentEtag("OPERATORE");
         String patch = """
                 [{"op":"replace","path":"/acl","value":[{"servizio":"Pendenze","autorizzazioni":[]}]}]""";
         mvc.perform(patch("/ruoli/OPERATORE").with(httpBasic(PRINCIPAL, PASSWORD))
                         .header("If-Match", etag)
                         .contentType(JSON_PATCH).content(patch))
-                .andExpect(status().isUnprocessableEntity());
+                .andExpect(status().isBadRequest());
     }
 
     @Test

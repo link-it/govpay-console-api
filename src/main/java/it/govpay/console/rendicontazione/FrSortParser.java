@@ -18,18 +18,21 @@ import org.springframework.data.domain.Sort;
  */
 public final class FrSortParser {
 
+    private static final String DATA_ORA_FLUSSO = "dataOraFlusso";
+    private static final String REVISIONE = "revisione";
+
     private static final Map<String, String> WHITELIST = Map.of(
-            "dataOraFlusso", "dataOraFlusso",
+            DATA_ORA_FLUSSO, DATA_ORA_FLUSSO,
             "dataAcquisizione", "dataAcquisizione",
             "dataRegolamento", "dataRegolamento",
             "importoTotale", "importoTotalePagamenti",
             "numeroPagamenti", "numeroPagamenti",
-            "revisione", "revisione");
+            REVISIONE, REVISIONE);
 
     public static final Sort DEFAULT_SORT = Sort.by(
-            Sort.Order.desc("dataOraFlusso"),
+            Sort.Order.desc(DATA_ORA_FLUSSO),
             Sort.Order.asc("codFlusso"),
-            Sort.Order.desc("revisione"));
+            Sort.Order.desc(REVISIONE));
 
     private FrSortParser() {
     }

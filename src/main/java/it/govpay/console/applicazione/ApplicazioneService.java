@@ -48,6 +48,7 @@ import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.web.RepresentationValidator;
 import it.govpay.console.web.UnprocessableEntityException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -65,6 +66,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class ApplicazioneService {
+
+    private static final String FIELD_ID_A2A = "idA2A";
 
     private static final Logger log = LoggerFactory.getLogger(ApplicazioneService.class);
 
@@ -86,6 +89,7 @@ public class ApplicazioneService {
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final PasswordEncoder passwordEncoder;
+    private final RepresentationValidator representationValidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -98,7 +102,8 @@ public class ApplicazioneService {
                                AuditService auditService,
                                ObjectMapper objectMapper,
                                AclAuthorizer aclAuthorizer,
-                               PasswordEncoder passwordEncoder) {
+                               PasswordEncoder passwordEncoder,
+                               RepresentationValidator representationValidator) {
         this.applicazioneRepository = applicazioneRepository;
         this.utenzaRepository = utenzaRepository;
         this.writer = writer;
@@ -108,6 +113,7 @@ public class ApplicazioneService {
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
         this.passwordEncoder = passwordEncoder;
+        this.representationValidator = representationValidator;
     }
 
     @Transactional(readOnly = true)
@@ -233,11 +239,11 @@ public class ApplicazioneService {
         ObjectNode current = objectMapper.valueToTree(mapper.toDetail(app));
         ObjectNode patched = JsonPatchApplier.apply(current, operations, objectMapper);
 
-        String patchedId = text(patched, "idA2A");
+        String patchedId = text(patched, FIELD_ID_A2A);
         if (!idA2A.equals(patchedId)) {
             throw new BadRequestException("Il campo 'idA2A' non puo' essere modificato tramite PATCH.");
         }
-        patched.remove("idA2A");
+        patched.remove(FIELD_ID_A2A);
         patched.remove("_links");
 
         ApplicazioneReplace body;
@@ -246,6 +252,7 @@ public class ApplicazioneService {
         } catch (RuntimeException e) {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
+        representationValidator.validate(body);
         return doReplace(app, body, request);
     }
 
@@ -391,7 +398,7 @@ public class ApplicazioneService {
     private void audit(String azione, Applicazione entity, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        dettaglio.put("idA2A", entity.getCodApplicazione());
+        dettaglio.put(FIELD_ID_A2A, entity.getCodApplicazione());
         auditService.registra(azione, entity.getId(), dettaglio, operatore, request);
     }
 

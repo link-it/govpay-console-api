@@ -14,11 +14,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class UnitaOperativaSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "idUnitaOperativa", "codUo",
-            "ragioneSociale", "uoDenominazione");
-
     public static final String DEFAULT_SORT_RAW = "idUnitaOperativa";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "codUo",
+            "ragioneSociale", "uoDenominazione");
 
     private UnitaOperativaSortParser() {
     }

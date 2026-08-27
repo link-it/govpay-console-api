@@ -13,10 +13,10 @@ import org.springframework.data.domain.Sort;
  */
 public final class StazioneSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "codStazione", "codStazione");
-
     public static final String DEFAULT_SORT_RAW = "codStazione";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "codStazione");
 
     private StazioneSortParser() {
     }

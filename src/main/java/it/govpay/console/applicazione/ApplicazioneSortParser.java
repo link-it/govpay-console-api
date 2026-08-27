@@ -14,15 +14,15 @@ import org.springframework.data.domain.Sort;
  */
 public final class ApplicazioneSortParser {
 
+    public static final String DEFAULT_SORT_RAW = "idA2A";
+
     /**
      * Chiavi = nomi pubblici (query param), valori = path del campo entity JPA
      * (eventualmente annidato attraverso la relazione {@code utenza}).
      */
     private static final Map<String, String> WHITELIST = Map.of(
-            "idA2A", "codApplicazione",
+            DEFAULT_SORT_RAW, "codApplicazione",
             "principal", "utenza.principalOriginale");
-
-    public static final String DEFAULT_SORT_RAW = "idA2A";
 
     private ApplicazioneSortParser() {
     }

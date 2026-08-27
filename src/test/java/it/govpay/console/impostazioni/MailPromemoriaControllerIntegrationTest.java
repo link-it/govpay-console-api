@@ -135,6 +135,24 @@ class MailPromemoriaControllerIntegrationTest {
                 .andExpect(jsonPath("$.promemoriaAvviso.oggetto").doesNotExist());
     }
 
+    /**
+     * Il documento risultante da un PATCH non passa dal {@code @Valid} del
+     * controller, perche' viene deserializzato a mano: va rivalidato come una
+     * replace. Rimuovere una proprieta' dichiarata {@code required} dallo schema
+     * deve quindi produrre 400, non essere persistita come null.
+     */
+    @Test
+    void patchRemovingRequiredPropertyReturns400() throws Exception {
+        grantScrittura();
+        String etag = currentEtag();
+        String patchBody = """
+                [{"op":"remove","path":"/promemoriaAvviso"}]""";
+        mvc.perform(patch(BASE).with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(patchBody))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void patchWithoutDirittoReturns403() throws Exception {
         grantLettura();

@@ -62,6 +62,9 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class EntrataDominioService {
 
+    private static final String FIELD_IBAN_ACCREDITO = "ibanAccredito";
+    private static final String FIELD_IBAN_APPOGGIO = "ibanAppoggio";
+
     private static final Logger log = LoggerFactory.getLogger(EntrataDominioService.class);
 
     public static final String AZIONE_AUDIT_CREATE = "ENTRATA_DOMINIO_CREATE";
@@ -176,8 +179,8 @@ public class EntrataDominioService {
         entity.setAbilitato(body.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(body.getTipoContabilita()));
         entity.setCodiceContabilita(body.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(parent, body.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(parent, body.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(parent, body.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(parent, body.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -204,8 +207,8 @@ public class EntrataDominioService {
         entity.setAbilitato(body.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(body.getTipoContabilita()));
         entity.setCodiceContabilita(body.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(entity.getDominio(), body.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(entity.getDominio(), body.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(entity.getDominio(), body.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(entity.getDominio(), body.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -247,8 +250,8 @@ public class EntrataDominioService {
         entity.setAbilitato(result.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(result.getTipoContabilita()));
         entity.setCodiceContabilita(result.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(entity.getDominio(), result.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(entity.getDominio(), result.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(entity.getDominio(), result.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(entity.getDominio(), result.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);

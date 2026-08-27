@@ -109,15 +109,25 @@ public class ConnettoreDominioMapper {
 
     // --- field descriptors per canale ---
 
+    // Descrittori ricorrenti su piu' canali: definiti una volta perche' le tre
+    // liste che li usavano erano copie identiche, e una copia che divergeva
+    // avrebbe cambiato il nome JSON di un solo canale senza segnalarlo.
+    private static final FieldSpec F_ABILITATO = new FieldSpec("abilitato", ABILITATO, Kind.BOOL);
+    private static final FieldSpec F_EMAIL_INDIRIZZI = new FieldSpec("emailIndirizzi", EMAIL_INDIRIZZO, Kind.CSV);
+    private static final FieldSpec F_EMAIL_SUBJECT = new FieldSpec("emailSubject", EMAIL_SUBJECT, Kind.STRING);
+    private static final FieldSpec F_EMAIL_ALLEGATO = new FieldSpec("emailAllegato", EMAIL_ALLEGATO, Kind.BOOL);
+    private static final FieldSpec F_DOWNLOAD_BASE_URL = new FieldSpec("downloadBaseUrl", DOWNLOAD_BASE_URL, Kind.STRING);
+    private static final FieldSpec F_FILE_SYSTEM_PATH = new FieldSpec("fileSystemPath", FILE_SYSTEM_PATH, Kind.STRING);
+
     private static final List<FieldSpec> BASE_CSV = List.of(
-            new FieldSpec("abilitato", ABILITATO, Kind.BOOL),
+            F_ABILITATO,
             new FieldSpec("tipoConnettore", TIPO_CONNETTORE, Kind.TIPO_CONNETTORE_ENUM),
             new FieldSpec("versioneCsv", VERSIONE_CSV, Kind.STRING),
-            new FieldSpec("emailIndirizzi", EMAIL_INDIRIZZO, Kind.CSV),
-            new FieldSpec("emailSubject", EMAIL_SUBJECT, Kind.STRING),
-            new FieldSpec("emailAllegato", EMAIL_ALLEGATO, Kind.BOOL),
-            new FieldSpec("downloadBaseUrl", DOWNLOAD_BASE_URL, Kind.STRING),
-            new FieldSpec("fileSystemPath", FILE_SYSTEM_PATH, Kind.STRING),
+            F_EMAIL_INDIRIZZI,
+            F_EMAIL_SUBJECT,
+            F_EMAIL_ALLEGATO,
+            F_DOWNLOAD_BASE_URL,
+            F_FILE_SYSTEM_PATH,
             new FieldSpec("tipiPendenza", ConnettoreDominioProprietaKeys.TIPI_PENDENZA, Kind.CSV),
             new FieldSpec("intervalloCreazioneTracciato", INTERVALLO_CREAZIONE_TRACCIATO, Kind.INT));
 
@@ -129,27 +139,27 @@ public class ConnettoreDominioMapper {
                     new FieldSpec("codiceIstituto", CODICE_ISTITUTO, Kind.STRING)), BASE_CSV);
             case HYPER_SIC_APKAPPA -> BASE_CSV;
             case GOVPAY -> List.of(
-                    new FieldSpec("abilitato", ABILITATO, Kind.BOOL),
+                    F_ABILITATO,
                     new FieldSpec("tipoConnettore", TIPO_CONNETTORE, Kind.TIPO_CONNETTORE_ENUM),
                     new FieldSpec("versioneZip", VERSIONE_CSV, Kind.STRING),
-                    new FieldSpec("emailIndirizzi", EMAIL_INDIRIZZO, Kind.CSV),
-                    new FieldSpec("emailSubject", EMAIL_SUBJECT, Kind.STRING),
-                    new FieldSpec("emailAllegato", EMAIL_ALLEGATO, Kind.BOOL),
-                    new FieldSpec("downloadBaseUrl", DOWNLOAD_BASE_URL, Kind.STRING),
-                    new FieldSpec("fileSystemPath", FILE_SYSTEM_PATH, Kind.STRING),
+                    F_EMAIL_INDIRIZZI,
+                    F_EMAIL_SUBJECT,
+                    F_EMAIL_ALLEGATO,
+                    F_DOWNLOAD_BASE_URL,
+                    F_FILE_SYSTEM_PATH,
                     new FieldSpec("tipiPendenza", ConnettoreDominioProprietaKeys.TIPI_PENDENZA, Kind.CSV),
                     new FieldSpec("url", URL, Kind.STRING),
                     new FieldSpec("versioneApi", VERSIONE, Kind.VERSIONE_API),
                     new FieldSpec("contenuti", CONTENUTI, Kind.CSV),
                     new FieldSpec("intervalloCreazioneTracciato", INTERVALLO_CREAZIONE_TRACCIATO, Kind.INT));
             case MAGGIOLI_JPPA -> List.of(
-                    new FieldSpec("abilitato", ABILITATO, Kind.BOOL),
+                    F_ABILITATO,
                     new FieldSpec("inviaTracciatoEsito", INVIA_TRACCIATO_ESITO, Kind.BOOL),
-                    new FieldSpec("fileSystemPath", FILE_SYSTEM_PATH, Kind.STRING),
-                    new FieldSpec("emailIndirizzi", EMAIL_INDIRIZZO, Kind.CSV),
-                    new FieldSpec("emailSubject", EMAIL_SUBJECT, Kind.STRING),
-                    new FieldSpec("emailAllegato", EMAIL_ALLEGATO, Kind.BOOL),
-                    new FieldSpec("downloadBaseUrl", DOWNLOAD_BASE_URL, Kind.STRING),
+                    F_FILE_SYSTEM_PATH,
+                    F_EMAIL_INDIRIZZI,
+                    F_EMAIL_SUBJECT,
+                    F_EMAIL_ALLEGATO,
+                    F_DOWNLOAD_BASE_URL,
                     new FieldSpec("url", URL, Kind.STRING));
             // SEND (issue #22 + govpay-core #721): solo url+abilitaGDE+auth, niente
             // 'abilitato' (V1 ConnettoreSendConverter lo forza sempre a true — non

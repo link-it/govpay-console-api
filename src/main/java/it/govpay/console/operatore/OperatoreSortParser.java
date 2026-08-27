@@ -12,11 +12,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class OperatoreSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "principal", "utenza.principalOriginale",
-            "nome", "nome");
-
     public static final String DEFAULT_SORT_RAW = "principal";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "utenza.principalOriginale",
+            "nome", "nome");
 
     private OperatoreSortParser() {
     }

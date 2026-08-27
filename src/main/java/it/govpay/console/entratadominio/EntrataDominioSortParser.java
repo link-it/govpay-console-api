@@ -14,11 +14,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class EntrataDominioSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "idEntrata", "tipoTributo.codTributo",
-            "descrizione", "tipoTributo.descrizione");
-
     public static final String DEFAULT_SORT_RAW = "idEntrata";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "tipoTributo.codTributo",
+            "descrizione", "tipoTributo.descrizione");
 
     private EntrataDominioSortParser() {
     }

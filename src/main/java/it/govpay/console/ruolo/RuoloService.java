@@ -32,6 +32,7 @@ import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.web.RepresentationValidator;
 import it.govpay.console.web.UnprocessableEntityException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -48,6 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class RuoloService {
 
+    private static final String FIELD_ID_RUOLO = "idRuolo";
+
     private static final Logger log = LoggerFactory.getLogger(RuoloService.class);
 
     public static final String AZIONE_AUDIT_CREATE = "RUOLO_CREATE";
@@ -58,6 +61,7 @@ public class RuoloService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final RepresentationValidator representationValidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -66,12 +70,14 @@ public class RuoloService {
                         RuoloMapper mapper,
                         CurrentOperatorService currentOperatorService,
                         AuditService auditService,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        RepresentationValidator representationValidator) {
         this.aclRepository = aclRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.representationValidator = representationValidator;
     }
 
     @Transactional(readOnly = true)
@@ -160,11 +166,11 @@ public class RuoloService {
         ObjectNode node = objectMapper.valueToTree(mapper.toDetail(idRuolo, current));
         ObjectNode patched = JsonPatchApplier.apply(node, operations, objectMapper);
 
-        String patchedId = text(patched, "idRuolo");
+        String patchedId = text(patched, FIELD_ID_RUOLO);
         if (!idRuolo.equals(patchedId)) {
             throw new BadRequestException("Il campo 'idRuolo' non puo' essere modificato tramite PATCH.");
         }
-        patched.remove("idRuolo");
+        patched.remove(FIELD_ID_RUOLO);
 
         RuoloReplace body;
         try {
@@ -172,6 +178,7 @@ public class RuoloService {
         } catch (RuntimeException e) {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
+        representationValidator.validate(body);
         return doReplace(idRuolo, body.getAcl(), request);
     }
 
@@ -239,7 +246,7 @@ public class RuoloService {
     private void audit(String azione, String idRuolo, List<Acl> rows, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        dettaglio.put("idRuolo", idRuolo);
+        dettaglio.put(FIELD_ID_RUOLO, idRuolo);
         long idOggetto = rows.stream().map(Acl::getId).filter(java.util.Objects::nonNull)
                 .mapToLong(Long::longValue).min().orElse(0L);
         auditService.registra(azione, idOggetto, dettaglio, operatore, request);

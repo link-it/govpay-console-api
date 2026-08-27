@@ -14,14 +14,14 @@ import org.springframework.data.domain.Sort;
  */
 public final class EnteCreditoreSortParser {
 
+    public static final String DEFAULT_SORT_RAW = "companyName";
+
     /**
      * Chiavi = nomi pubblici (query param), valori = nomi dei campi entity JPA.
      */
     private static final Map<String, String> WHITELIST = Map.of(
             "taxCode", "codFiscale",
-            "companyName", "denominazione");
-
-    public static final String DEFAULT_SORT_RAW = "companyName";
+            DEFAULT_SORT_RAW, "denominazione");
 
     private EnteCreditoreSortParser() {
     }
