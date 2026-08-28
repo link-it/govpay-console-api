@@ -93,7 +93,8 @@ public class PendenzaMapper {
         // V1 usa varianti femminili/maschili; normalizziamo prima di mappare.
         String normalized = statoV1.trim().toUpperCase();
         return switch (normalized) {
-            case "ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO" -> StatoPendenza.PAGATA;
+            case "ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO", "ESEGUITO_ALTRO_CANALE", "ESEGUITO_SENZA_RPT" ->
+                    StatoPendenza.PAGATA;
             case "NON_ESEGUITA", "NON_ESEGUITO", "NON_PAGATA", "NON_PAGATO" -> StatoPendenza.NON_PAGATA;
             case "ESEGUITA_PARZIALE", "ESEGUITO_PARZIALE", "PAGATA_PARZIALE", "PAGATO_PARZIALE" ->
                     StatoPendenza.PAGATA_PARZIALE;

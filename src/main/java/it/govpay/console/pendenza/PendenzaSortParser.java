@@ -15,20 +15,22 @@ import org.springframework.data.domain.Sort;
 public final class PendenzaSortParser {
 
     /**
-     * Campi sortable allineati a V1 ({@code ListaPendenzeDTO}: {@code dataCaricamento},
+     * Campi sortable allineati a V1 ({@code ListaPendenzeDTO}: {@code dataCreazione},
      * {@code dataValidita}, {@code dataScadenza}, {@code stato}) piu'
      * {@code dataUltimoAggiornamento} aggiunto come default dall'issue #9.
+     * {@code dataCreazione} (rinominata da {@code dataCaricamento}, issue #66)
+     * e' anche il default e la chiave dell'ordinamento cursor.
      * Le chiavi della map sono i nomi pubblici (query param), i valori i nomi
      * dei campi entity JPA per la query.
      */
     private static final Map<String, String> WHITELIST = Map.of(
             "dataUltimoAggiornamento", "dataOraUltimoAggiornamento",
-            "dataCaricamento", "dataCreazione",
+            "dataCreazione", "dataCreazione",
             "dataValidita", "dataValidita",
             "dataScadenza", "dataScadenza",
             "stato", "statoVersamento");
 
-    public static final String DEFAULT_SORT_RAW = "-dataUltimoAggiornamento";
+    public static final String DEFAULT_SORT_RAW = "-dataCreazione";
 
     private PendenzaSortParser() {
     }
