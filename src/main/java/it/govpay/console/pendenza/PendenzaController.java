@@ -1,5 +1,6 @@
 package it.govpay.console.pendenza;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -15,6 +16,7 @@ import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.model.Soggetto;
+import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.ricevuta.RicevutaService;
 import it.govpay.console.soggetto.InformazioniDebitoreService;
 import it.govpay.console.web.ListQueryValidator;
@@ -26,7 +28,9 @@ public class PendenzaController implements PendenzeApi {
 
     private static final Set<String> LIST_PENDENZE_QUERY_PARAMS = Set.of(
             "page", "limit", "sort", "total", "cursor",
-            "idPendenza", "numeroAvviso", "idDominio", "identificativoDebitore");
+            "idPendenza", "numeroAvviso", "idDominio", "identificativoDebitore",
+            "stato", "dataDa", "dataA", "iuv", "direzione", "divisione",
+            "idA2A", "idTipoPendenza");
 
     private static final Set<String> GET_PENDENZA_QUERY_PARAMS = Set.of("expand");
 
@@ -66,14 +70,22 @@ public class PendenzaController implements PendenzeApi {
                                                                 String idPendenza,
                                                                 String numeroAvviso,
                                                                 String idDominio,
-                                                                String identificativoDebitore) {
+                                                                String identificativoDebitore,
+                                                                StatoPendenza stato,
+                                                                LocalDate dataDa,
+                                                                LocalDate dataA,
+                                                                String iuv,
+                                                                String direzione,
+                                                                String divisione,
+                                                                String idA2A,
+                                                                List<String> idTipoPendenza) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_PENDENZE_QUERY_PARAMS);
         // cursor mode attivo se ?cursor=... e' presente nella query string,
         // anche con valore vuoto ("prima pagina cursor-mode", scope G issue #9).
         boolean cursorMode = ListQueryValidator.isCursorMode(currentRequest);
         if (cursorMode) {
             ListQueryValidator.rejectCursorIncompatible(currentRequest,
-                    "dataOraUltimoAggiornamento DESC, id DESC");
+                    "dataCreazione DESC, id DESC");
         }
         PendenzaListQuery query = new PendenzaListQuery(
                 page == null ? 1 : page,
@@ -84,7 +96,15 @@ public class PendenzaController implements PendenzeApi {
                 idPendenza,
                 numeroAvviso,
                 idDominio,
-                identificativoDebitore);
+                identificativoDebitore,
+                stato,
+                dataDa,
+                dataA,
+                iuv,
+                direzione,
+                divisione,
+                idA2A,
+                idTipoPendenza);
         return ResponseEntity.ok(service.list(query, currentRequest));
     }
 

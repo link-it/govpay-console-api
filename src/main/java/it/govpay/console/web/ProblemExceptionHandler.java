@@ -2,7 +2,9 @@ package it.govpay.console.web;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +87,12 @@ public class ProblemExceptionHandler {
                                                       HttpServletRequest request) {
         String detail = "Valore non valido per il parametro '" + ex.getName() + "': "
                 + (ex.getValue() != null ? ex.getValue() : "<null>");
+        Class<?> requiredType = ex.getRequiredType();
+        if (requiredType != null && requiredType.isEnum()) {
+            detail += ". Valori ammessi: " + Arrays.stream(requiredType.getEnumConstants())
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+        }
         return build(HttpStatus.BAD_REQUEST, detail, request, null, ex);
     }
 

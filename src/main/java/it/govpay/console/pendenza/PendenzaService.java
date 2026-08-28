@@ -1,5 +1,6 @@
 package it.govpay.console.pendenza;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,11 +51,14 @@ public class PendenzaService {
 
     public static final String AZIONE_AUDIT_RICERCA = "PENDENZE_RICERCA_PER_DEBITORE";
 
+    private static final int MAX_ID_TIPO_PENDENZA = 50;
+
     private final VersamentoRepository repository;
     private final PendenzaMapper mapper;
     private final PendenzaLinksBuilder linksBuilder;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
+    private final Clock clock;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -63,12 +67,14 @@ public class PendenzaService {
                            PendenzaMapper mapper,
                            PendenzaLinksBuilder linksBuilder,
                            CurrentOperatorService currentOperatorService,
-                           AuditService auditService) {
+                           AuditService auditService,
+                           Clock clock) {
         this.repository = repository;
         this.mapper = mapper;
         this.linksBuilder = linksBuilder;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -99,11 +105,19 @@ public class PendenzaService {
     @Transactional(readOnly = true)
     public ListPendenze200Response list(PendenzaListQuery query, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        log.debug("listPendenze filtri[idPendenza={}, numeroAvviso={}, idDominio={}, identificativoDebitore={}], "
-                        + "page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
+        log.debug("listPendenze filtri[idPendenza={}, numeroAvviso={}, idDominio={}, identificativoDebitore={}, "
+                        + "stato={}, dataDa={}, dataA={}, iuv={}, direzione={}, divisione={}, idA2A={}, "
+                        + "idTipoPendenza={}], page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
                 query.idPendenza(), query.numeroAvviso(), query.idDominio(), query.identificativoDebitore(),
+                query.stato(), query.dataDa(), query.dataA(), query.iuv(), query.direzione(), query.divisione(),
+                query.idA2A(), query.idTipoPendenza(),
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
+
+        if (query.dataDa() != null && query.dataA() != null && query.dataDa().isAfter(query.dataA())) {
+            throw new BadRequestException("'dataDa' non puo' essere successiva a 'dataA'.");
+        }
+        List<String> idTipoPendenza = normalizeIdTipoPendenza(query.idTipoPendenza());
 
         // Spring Data JPA 4.x: Specification.allOf rifiuta null. Filtriamo i predicati assenti.
         Specification<Versamento> spec = Specification.allOf(
@@ -112,6 +126,14 @@ public class PendenzaService {
                         PendenzaSpecifications.numeroAvvisoExact(query.numeroAvviso()),
                         PendenzaSpecifications.idDominioExact(query.idDominio()),
                         PendenzaSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
+                        PendenzaSpecifications.statoExact(query.stato(), OffsetDateTime.now(clock)),
+                        PendenzaSpecifications.dataCreazioneDa(query.dataDa()),
+                        PendenzaSpecifications.dataCreazioneA(query.dataA()),
+                        PendenzaSpecifications.iuvExact(query.iuv()),
+                        PendenzaSpecifications.direzioneExact(query.direzione()),
+                        PendenzaSpecifications.divisioneExact(query.divisione()),
+                        PendenzaSpecifications.idA2AExact(query.idA2A()),
+                        PendenzaSpecifications.idTipoPendenzaIn(idTipoPendenza),
                         PendenzaSpecifications.visibiliPerOperatore(operatore))
                 .filter(java.util.Objects::nonNull)
                 .toList());
@@ -144,6 +166,28 @@ public class PendenzaService {
         }
 
         return response;
+    }
+
+    /**
+     * {@code null} se il parametro non e' presente; altrimenti rimuove i valori
+     * vuoti (elementi CSV consecutivi, es. {@code idTipoPendenza=,,}) e valida
+     * i vincoli dell'OpenAPI: lista risultante non vuota, al massimo
+     * {@value #MAX_ID_TIPO_PENDENZA} elementi.
+     */
+    private List<String> normalizeIdTipoPendenza(List<String> raw) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> normalized = raw.stream().filter(v -> v != null && !v.isBlank()).toList();
+        if (normalized.isEmpty()) {
+            throw new BadRequestException(
+                    "'idTipoPendenza' non puo' essere vuoto o composto solo da separatori.");
+        }
+        if (normalized.size() > MAX_ID_TIPO_PENDENZA) {
+            throw new BadRequestException(
+                    "'idTipoPendenza' supporta al massimo " + MAX_ID_TIPO_PENDENZA + " elementi.");
+        }
+        return normalized;
     }
 
     private List<Versamento> listOffsetMode(Specification<Versamento> spec,
@@ -180,13 +224,20 @@ public class PendenzaService {
 
     /**
      * Modalita' cursor (keyset): ordina per
-     * {@code (dataOraUltimoAggiornamento DESC, id DESC)} e filtra con
+     * {@code (dataCreazione DESC, id DESC)} e filtra con
      * {@code WHERE data < :ts OR (data = :ts AND id < :id)}. Carica {@code limit+1}
      * righe per determinare {@code hasNext}.
      *
      * <p>Se il cursor e' vuoto (caso "prima pagina cursor mode", attivato da
      * {@code ?cursor=} senza valore), il filtro keyset viene omesso e si
      * usano solo l'ordinamento e il limit.
+     *
+     * <p>Verifica indici (issue #66, non applicata: lo schema di {@code versamenti}
+     * e' condiviso col core, la migrazione va concordata a parte). Sul DDL V1
+     * reale esiste solo {@code idx_vrs_data_creaz(data_creazione DESC)}, a singola
+     * colonna: non copre il tiebreak su {@code id} di questa query. Proposta:
+     * {@code CREATE INDEX idx_vrs_data_creaz_id ON versamenti (data_creazione DESC, id DESC);}
+     * (sostituirebbe {@code idx_vrs_data_creaz}, che ne e' un prefisso).
      */
     private List<Versamento> listCursorMode(Specification<Versamento> spec,
                                             PendenzaListQuery query,
@@ -200,7 +251,7 @@ public class PendenzaService {
 
         if (hasNext && !rows.isEmpty()) {
             Versamento last = rows.get(rows.size() - 1);
-            response.setNextCursor(CursorCodec.encode(last.getDataOraUltimoAggiornamento(), last.getId()));
+            response.setNextCursor(CursorCodec.encode(last.getDataCreazione(), last.getId()));
         }
         return rows;
     }
@@ -213,7 +264,7 @@ public class PendenzaService {
         Root<Versamento> root = q.from(Versamento.class);
 
         Predicate specPredicate = spec.toPredicate(root, q, cb);
-        Path<OffsetDateTime> dataPath = root.get("dataOraUltimoAggiornamento");
+        Path<OffsetDateTime> dataPath = root.get("dataCreazione");
         Path<Long> idPath = root.get("id");
 
         Predicate where;

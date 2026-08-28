@@ -90,22 +90,11 @@ public class PendenzaMapper {
     }
 
     private static StatoPendenza baseMapStato(String statoV1) {
-        // V1 usa varianti femminili/maschili; normalizziamo prima di mappare.
-        String normalized = statoV1.trim().toUpperCase();
-        return switch (normalized) {
-            case "ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO" -> StatoPendenza.PAGATA;
-            case "NON_ESEGUITA", "NON_ESEGUITO", "NON_PAGATA", "NON_PAGATO" -> StatoPendenza.NON_PAGATA;
-            case "ESEGUITA_PARZIALE", "ESEGUITO_PARZIALE", "PAGATA_PARZIALE", "PAGATO_PARZIALE" ->
-                    StatoPendenza.PAGATA_PARZIALE;
-            case "INCASSATA", "INCASSATO", "RICONCILIATA", "RICONCILIATO" -> StatoPendenza.RICONCILIATA;
-            case "ANNULLATA", "ANNULLATO" -> StatoPendenza.ANNULLATA;
-            case "SCADUTA", "SCADUTO" -> StatoPendenza.SCADUTA;
-            case "ANOMALA", "ANOMALO" -> StatoPendenza.ANOMALA;
-            default -> {
-                log.warn("Stato versamento V1 sconosciuto, mappato a ANOMALA: {}", statoV1);
-                yield StatoPendenza.ANOMALA;
-            }
-        };
+        StatoPendenza mapped = StatoVersamentoMapping.baseMap(statoV1);
+        if (mapped == StatoPendenza.ANOMALA && !StatoVersamentoMapping.isRiconosciuto(statoV1)) {
+            log.warn("Stato versamento V1 sconosciuto, mappato a ANOMALA: {}", statoV1);
+        }
+        return mapped;
     }
 
     static DominioRef mapDominio(Dominio dominio) {

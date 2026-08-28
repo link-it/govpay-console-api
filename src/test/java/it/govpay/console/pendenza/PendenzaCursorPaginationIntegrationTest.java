@@ -99,9 +99,12 @@ class PendenzaCursorPaginationIntegrationTest {
         tvd.setTipoVersamento(tv);
         tipoVersamentoDominioRepository.save(tvd);
 
-        // 7 pendenze con dataOraUltimoAggiornamento decrescente: PEND-1 piu' recente
-        // (offset 0 ore), PEND-7 piu' vecchia (offset 6 ore). Cursor mode → DESC,
-        // quindi i risultati arriveranno PEND-1, PEND-2, ..., PEND-7.
+        // 7 pendenze con dataCreazione decrescente: PEND-1 piu' recente (offset 0
+        // ore), PEND-7 piu' vecchia (offset 6 ore). Cursor mode → DESC, quindi i
+        // risultati arriveranno PEND-1, PEND-2, ..., PEND-7. dataOraUltimoAggiornamento
+        // e' tenuta deliberatamente uguale per tutte (non decrescente): se il cursor
+        // ordinasse ancora su quel campo (bug di regressione della issue #66), le
+        // pendenze risulterebbero tutte in parita' e l'ordine atteso non reggerebbe.
         for (int i = 1; i <= 7; i++) {
             newPendenza("PEND-" + i, dom, app, tv, tvd, i - 1);
         }
@@ -118,9 +121,10 @@ class PendenzaCursorPaginationIntegrationTest {
         // sessione con la precisione di now() (nanos su Linux) mentre il DB tronca,
         // sfasando il keyset del cursor (off-by-one al confine pagina). Senza sub-
         // precisione il valore in-memory coincide con quello persistito.
-        OffsetDateTime ts = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusHours(hoursAgo);
-        v.setDataCreazione(ts);
-        v.setDataOraUltimoAggiornamento(ts);
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        v.setDataCreazione(now.minusHours(hoursAgo));
+        // Deliberatamente uguale per tutte le righe: vedi il commento nel setup().
+        v.setDataOraUltimoAggiornamento(now);
         v.setDebitoreIdentificativo("RSSMRA80A01H501U");
         v.setDebitoreAnagrafica("Mario Rossi");
         v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
@@ -180,6 +184,212 @@ class PendenzaCursorPaginationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-7")))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    /**
+     * Le 7 pendenze di {@link #setup()} hanno tutte dataCreazione distinte:
+     * nessun test di questa classe esercita il ramo del keyset che confronta
+     * l'id quando data_creazione e' in parita' ({@code dataCreazione = :ts AND id < :id}).
+     * Tre righe con lo STESSO timestamp (piu' vecchio di ogni pendenza del
+     * setup, per non intersecarsi) forzano quel ramo: verifica sia l'ordine
+     * (id DESC come tiebreak) sia l'assenza di duplicati/perdite fra le pagine.
+     */
+    @Test
+    void paginazioneConDataCreazioneUgualeUsaIdComeTiebreak() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("77777777777").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+
+        OffsetDateTime stessaData = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusDays(1);
+        for (int i = 1; i <= 3; i++) {
+            Versamento v = new Versamento();
+            v.setCodVersamentoEnte("PEND-TIE-" + i);
+            v.setImportoTotale(10.0);
+            v.setImportoPagato(0.0);
+            v.setStatoVersamento("NON_ESEGUITO");
+            v.setDataCreazione(stessaData);
+            v.setDataOraUltimoAggiornamento(stessaData);
+            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setDebitoreAnagrafica("Mario Rossi");
+            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setAnomalo(false);
+            v.setAck(false);
+            v.setTipo("DOVUTO");
+            v.setDominio(dom);
+            v.setApplicazione(app);
+            v.setTipoVersamento(tv);
+            v.setTipoVersamentoDominio(tvd);
+            versamentoRepository.save(v);
+        }
+
+        // Pagina 1: a parita' di dataCreazione, id piu' alto (ultimo inserito) per primo.
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&idPendenza=PEND-TIE")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-TIE-3")))
+                .andExpect(jsonPath("$.results[1].idPendenza", is("PEND-TIE-2")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
+
+        // Pagina 2: solo la riga rimanente, nessun duplicato ne' perdita, ultima pagina.
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&idPendenza=PEND-TIE")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-TIE-1")))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    // ---- Issue #66: i nuovi filtri funzionano anche in modalita' cursor ----
+
+    /** Filtro diretto su colonna (§A), rappresentativo: stato + cursor su piu' pagine. */
+    @Test
+    void cursorModeConFiltroStato() throws Exception {
+        // PEND-2/4/6 -> PAGATA, PEND-1/3/5/7 restano NON_PAGATA (NON_ESEGUITO, nessuna dataScadenza).
+        for (String id : new String[] { "PEND-2", "PEND-4", "PEND-6" }) {
+            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
+            v.setStatoVersamento("ESEGUITO");
+            versamentoRepository.save(v);
+        }
+
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&stato=NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-1")))
+                .andExpect(jsonPath("$.results[1].idPendenza", is("PEND-3")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
+
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&stato=NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-5")))
+                .andExpect(jsonPath("$.results[1].idPendenza", is("PEND-7")))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    /**
+     * Filtro diretto sulla STESSA colonna dell'ordinamento cursor (§A): l'interazione
+     * piu' delicata, dataDa/dataA e keyset condividono data_creazione.
+     */
+    @Test
+    void cursorModeConFiltroDataRange() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("77777777777").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        int[] giorniFa = { 1, 2, 3, 10 };
+        for (int i = 0; i < giorniFa.length; i++) {
+            Versamento v = new Versamento();
+            v.setCodVersamentoEnte("PEND-RANGE-" + (i + 1));
+            v.setImportoTotale(10.0);
+            v.setImportoPagato(0.0);
+            v.setStatoVersamento("NON_ESEGUITO");
+            v.setDataCreazione(now.minusDays(giorniFa[i]));
+            v.setDataOraUltimoAggiornamento(now);
+            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setDebitoreAnagrafica("Mario Rossi");
+            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setAnomalo(false);
+            v.setAck(false);
+            v.setTipo("DOVUTO");
+            v.setDominio(dom);
+            v.setApplicazione(app);
+            v.setTipoVersamento(tv);
+            v.setTipoVersamentoDominio(tvd);
+            versamentoRepository.save(v);
+        }
+
+        java.time.LocalDate oggi = java.time.LocalDate.now();
+        String query = "/pendenze?cursor=&limit=2&idPendenza=PEND-RANGE"
+                + "&dataDa=" + oggi.minusDays(5) + "&dataA=" + oggi;
+
+        // PEND-RANGE-4 (10gg fa) e' fuori range: solo 3 righe rientrano.
+        MvcResult r1 = mvc.perform(get(query).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-RANGE-1")))
+                .andExpect(jsonPath("$.results[1].idPendenza", is("PEND-RANGE-2")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
+
+        mvc.perform(get(query.replace("cursor=", "cursor=" + cursor)).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-RANGE-3")))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    /** Filtro con join (§B), rappresentativo: idA2A + cursor su piu' pagine. */
+    @Test
+    void cursorModeConFiltroIdA2A() throws Exception {
+        Applicazione appH = new Applicazione();
+        appH.setCodApplicazione("APP-H");
+        applicazioneRepository.save(appH);
+
+        for (String id : new String[] { "PEND-2", "PEND-5" }) {
+            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
+            v.setApplicazione(appH);
+            versamentoRepository.save(v);
+        }
+
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=1&idA2A=APP-H")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-2")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
+
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=1&idA2A=APP-H")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-5")))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    /** Filtro con join e semantica OR (§B): idTipoPendenza + cursor su piu' pagine. */
+    @Test
+    void cursorModeConFiltroIdTipoPendenza() throws Exception {
+        TipoVersamento imu = new TipoVersamento();
+        imu.setCodTipoVersamento("IMU");
+        imu.setDescrizione("IMU");
+        tipoVersamentoRepository.save(imu);
+
+        for (String id : new String[] { "PEND-3", "PEND-6" }) {
+            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
+            v.setTipoVersamento(imu);
+            versamentoRepository.save(v);
+        }
+
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=1&idTipoPendenza=IMU")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-3")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
+
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=1&idTipoPendenza=IMU")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idPendenza", is("PEND-6")))
                 .andExpect(jsonPath("$.nextCursor").doesNotExist());
     }
 

@@ -320,13 +320,299 @@ class PendenzaControllerIntegrationTest {
     }
 
     @Test
-    void defaultSortByDataUltimoAggiornamentoDesc() throws Exception {
+    void defaultSortByDataCreazioneDesc() throws Exception {
         mvc.perform(get("/pendenze").param("idDominio", "11111111111")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza",
                         contains("PEND-A-001", "PEND-A-002", "PEND-A-003",
                                 "PEND-SCADUTA", "PEND-FUTURA")));
+    }
+
+    /**
+     * Issue #66 scope E: il default deve ordinare per {@code dataCreazione}, non
+     * piu' per {@code dataUltimoAggiornamento}. Fixture dedicata con i due campi
+     * deliberatamente in disaccordo (dataCreazione decrescente, dataUltimoAggiornamento
+     * costante): se il default tornasse a ordinare sul campo vecchio, l'ordine atteso
+     * non reggerebbe.
+     */
+    @Test
+    void defaultSortUsesDataCreazioneNotDataUltimoAggiornamento() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+        OffsetDateTime stessoAggiornamento = OffsetDateTime.now();
+
+        for (int i = 1; i <= 3; i++) {
+            Versamento v = new Versamento();
+            v.setCodVersamentoEnte("PEND-ORDINE-" + i);
+            v.setImportoTotale(10.0);
+            v.setStatoVersamento("NON_ESEGUITO");
+            v.setDataCreazione(OffsetDateTime.now().minusDays(i));
+            v.setDataOraUltimoAggiornamento(stessoAggiornamento);
+            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setDebitoreAnagrafica("Mario Rossi");
+            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+            v.setImportoPagato(0.0);
+            v.setAnomalo(false);
+            v.setAck(false);
+            v.setTipo("DOVUTO");
+            v.setDominio(dom);
+            v.setApplicazione(app);
+            v.setTipoVersamento(tv);
+            v.setTipoVersamentoDominio(tvd);
+            versamentoRepository.save(v);
+        }
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-ORDINE").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        contains("PEND-ORDINE-1", "PEND-ORDINE-2", "PEND-ORDINE-3")));
+    }
+
+    @Test
+    void filterByStatoNonPagataEsludeScaduta() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-003", "PEND-FUTURA")));
+    }
+
+    @Test
+    void filterByStatoScadutaSoloNonEseguiteScadute() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-SCADUTA")));
+    }
+
+    @Test
+    void filterByStatoPagata() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "PAGATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
+    }
+
+    /**
+     * Stati interni equivalenti a ESEGUITO (bug scoperto lavorando su #66,
+     * corretto anche in {@link PendenzaMapper#mapStato}): il filtro deve
+     * trovarli, non solo il mapper di output.
+     */
+    @Test
+    void filterByStatoPagataIncludeStatiInterniEquivalenti() throws Exception {
+        Versamento altroCanale = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        altroCanale.setStatoVersamento("ESEGUITO_ALTRO_CANALE");
+        versamentoRepository.save(altroCanale);
+
+        Versamento senzaRpt = versamentoRepository.findDetail(APP_COD, "PEND-A-003").orElseThrow();
+        senzaRpt.setStatoVersamento("ESEGUITO_SENZA_RPT");
+        versamentoRepository.save(senzaRpt);
+
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-002", "PEND-A-003")));
+    }
+
+    /** Acceptance criteria issue #66: valore V1 non valido per 'stato' elenca i valori ammessi. */
+    @Test
+    void statoValoreInvalidoElencaValoriAmmessi() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "BOGUS").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Valori ammessi")))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("NON_PAGATA")))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("PAGATA")));
+    }
+
+    @Test
+    void filterByStatoAnnullata() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "ANNULLATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-B-002")));
+    }
+
+    /**
+     * Il mapper mappa lo stato grezzo letterale SCADUTA/SCADUTO direttamente a
+     * SCADUTA, indipendentemente da data_scadenza: il filtro deve trovarla,
+     * non solo la variante derivata da NON_ESEGUITO + scadenza passata.
+     */
+    @Test
+    void filterByStatoScadutaTrovaAncheIlValoreGrezzoLetterale() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("SCADUTA");
+        v.setDataScadenza(null);
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-SCADUTA")));
+    }
+
+    /**
+     * PARZIALMENTE_ESEGUITO e' il nome V1 canonico dello stato (oltre alle
+     * varianti ESEGUITA_PARZIALE/ESEGUITO_PARZIALE): il mapper lo mostra come
+     * PAGATA_PARZIALE, quindi il filtro deve trovarlo con lo stesso nome.
+     */
+    @Test
+    void filterByStatoPagataParzialeTrovaAncheParzialmenteEseguito() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("PARZIALMENTE_ESEGUITO");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "PAGATA_PARZIALE").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    /**
+     * ANOMALA nel mapper e' il catch-all per qualunque valore grezzo non
+     * riconosciuto: il filtro deve trovare anche quelle righe, non solo i
+     * letterali ANOMALA/ANOMALO.
+     */
+    @Test
+    void filterByStatoAnomalaTrovaAncheValoriGrezziSconosciuti() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("QUALCOSA_DI_INESISTENTE");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "ANOMALA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    @Test
+    void filterByDataRangeSuDataCreazione() throws Exception {
+        // Fixture dedicata con offset in giorni: gli offset in ore del setup
+        // condiviso (1..11h) sono troppo vicini al confine di mezzanotte per
+        // dare un test deterministico indipendente dall'orario di esecuzione.
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+
+        salvaVersamentoCombinazione("PEND-RANGE-DENTRO", dom, app, tv, tvd, "NON_ESEGUITO", 1, null);
+        salvaVersamentoCombinazione("PEND-RANGE-FUORI", dom, app, tv, tvd, "NON_ESEGUITO", 10, null);
+
+        java.time.LocalDate oggi = java.time.LocalDate.now();
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-RANGE")
+                        .param("dataDa", oggi.minusDays(2).toString()).param("dataA", oggi.toString())
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-RANGE-DENTRO")));
+    }
+
+    @Test
+    void dataDaSuccessivaADataAReturns400() throws Exception {
+        mvc.perform(get("/pendenze")
+                        .param("dataDa", "2026-06-15").param("dataA", "2026-06-01")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("dataDa")));
+    }
+
+    @Test
+    void filterByIuv() throws Exception {
+        Versamento withIuv = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        withIuv.setIuvVersamento("IUV-TEST-001");
+        versamentoRepository.save(withIuv);
+
+        mvc.perform(get("/pendenze").param("iuv", "IUV-TEST-001").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    @Test
+    void filterByDirezione() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setDirezione("DIR-1");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("direzione", "DIR-1").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    @Test
+    void filterByDivisione() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setDivisione("DIV-1");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("divisione", "DIV-1").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    /**
+     * Combinazione richiesta dagli acceptance criteria: stato + range data.
+     * Fixture dedicata con offset in giorni (non ore, a differenza del resto
+     * del setup): un confine a livello di giorno su offset dell'ordine
+     * dell'ora e' intrinsecamente ambiguo rispetto al momento in cui gira il
+     * test (dipende da quanto manca a mezzanotte), quindi qui serve una
+     * separazione netta.
+     */
+    @Test
+    void combinazioneStatoEDataRange() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+
+        // Dentro il range richiesto, NON_PAGATA: deve comparire.
+        salvaVersamentoCombinazione("PEND-COMBO-DENTRO", dom, app, tv, tvd, "NON_ESEGUITO", 1, null);
+        // Dentro il range richiesto, ma PAGATA: non deve comparire (stato non combacia).
+        salvaVersamentoCombinazione("PEND-COMBO-PAGATA", dom, app, tv, tvd, "ESEGUITO", 1, null);
+        // Fuori dal range richiesto (10 giorni fa), NON_PAGATA: non deve comparire (data non combacia).
+        salvaVersamentoCombinazione("PEND-COMBO-FUORI-RANGE", dom, app, tv, tvd, "NON_ESEGUITO", 10, null);
+
+        java.time.LocalDate oggi = java.time.LocalDate.now();
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-COMBO")
+                        .param("stato", "NON_PAGATA")
+                        .param("dataDa", oggi.minusDays(2).toString()).param("dataA", oggi.toString())
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-COMBO-DENTRO")));
+    }
+
+    private void salvaVersamentoCombinazione(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
+                                             TipoVersamentoDominio tvd, String statoV1, int giorniFa,
+                                             OffsetDateTime dataScadenza) {
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte(idPendenza);
+        v.setImportoTotale(10.0);
+        v.setStatoVersamento(statoV1);
+        v.setDataCreazione(OffsetDateTime.now().minusDays(giorniFa));
+        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
+        v.setDataScadenza(dataScadenza);
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setImportoPagato(0.0);
+        v.setAnomalo(false);
+        v.setAck(false);
+        v.setTipo("DOVUTO");
+        v.setDominio(dom);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tv);
+        v.setTipoVersamentoDominio(tvd);
+        versamentoRepository.save(v);
+    }
+
+    /** ACL prevale anche sui nuovi filtri: dominio non visibile -> lista vuota, non 403. */
+    @Test
+    void aclPrevaleSuNuoviFiltri() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "33333333333").param("stato", "NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", empty()));
     }
 
     @Test
@@ -364,9 +650,32 @@ class PendenzaControllerIntegrationTest {
                         org.hamcrest.Matchers.containsString("bogusField")));
     }
 
+    /** Issue #66 scope E: la chiave rinominata da dataCaricamento non e' piu' riconosciuta. */
+    @Test
+    void oldSortKeyDataCaricamentoReturns400() throws Exception {
+        mvc.perform(get("/pendenze").param("sort", "dataCaricamento")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail",
+                        org.hamcrest.Matchers.containsString("dataCaricamento")));
+    }
+
+    @Test
+    void newSortKeyDataCreazioneIsAccepted() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("sort", "-dataCreazione")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        contains("PEND-A-001", "PEND-A-002", "PEND-A-003",
+                                "PEND-SCADUTA", "PEND-FUTURA")));
+    }
+
     @Test
     void unsupportedQueryParamReturns400() throws Exception {
-        mvc.perform(get("/pendenze").param("stato", "PAGATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+        // Issue #66 scope C: esclusione esplicita, non deve mai comparire nell'OpenAPI.
+        mvc.perform(get("/pendenze").param("mostraSpontaneiNonPagati", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType("application/problem+json"))
                 .andExpect(jsonPath("$.detail",
@@ -515,5 +824,145 @@ class PendenzaControllerIntegrationTest {
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].stato", is("NON_PAGATA")));
+    }
+
+    // ---- Issue #66 scope B: idA2A, idTipoPendenza ----
+
+    @Test
+    void filterByIdA2AExact() throws Exception {
+        Applicazione appB = new Applicazione();
+        appB.setCodApplicazione("APP-B");
+        applicazioneRepository.save(appB);
+
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
+        v.setApplicazione(appB);
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("idA2A", "APP-B").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
+    }
+
+    /** Acceptance criteria issue #66: combinazione idDominio+idA2A+stato. */
+    @Test
+    void combinazioneIdDominioIdA2AEStato() throws Exception {
+        Applicazione appB = new Applicazione();
+        appB.setCodApplicazione("APP-B");
+        applicazioneRepository.save(appB);
+
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setApplicazione(appB);
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111")
+                        .param("idA2A", "APP-B").param("stato", "NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    @Test
+    void filterByIdTipoPendenzaMultiploUnisceIRisultati() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento imu = creaTipoVersamento("IMU");
+        TipoVersamentoDominio tvdImu = newTvd(dom, imu);
+        salvaVersamentoTipo("PEND-IMU-001", dom, app, imu, tvdImu, "NON_ESEGUITO");
+
+        // Solo IMU: deve isolare la pendenza IMU, escludendo le 5 pendenze TARI del dominio A.
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("idTipoPendenza", "IMU")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-IMU-001")));
+
+        // TARI,IMU: unione, tutte e 6 le pendenze del dominio A.
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("idTipoPendenza", "TARI,IMU")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-002", "PEND-A-003",
+                                "PEND-SCADUTA", "PEND-FUTURA", "PEND-IMU-001")));
+    }
+
+    @Test
+    void filterByIdTipoPendenzaConValoreInesistenteRestringeSenzaErrore() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("idTipoPendenza", "TARI,BOGUS")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-002", "PEND-A-003",
+                                "PEND-SCADUTA", "PEND-FUTURA")));
+    }
+
+    @Test
+    void idTipoPendenzaVuotoOSoloSeparatoriReturns400() throws Exception {
+        mvc.perform(get("/pendenze").param("idTipoPendenza", "").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("idTipoPendenza")));
+
+        mvc.perform(get("/pendenze").param("idTipoPendenza", ",,").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("idTipoPendenza")));
+    }
+
+    @Test
+    void idTipoPendenzaOltreLimiteMassimoReturns400() throws Exception {
+        String troppi = java.util.stream.IntStream.rangeClosed(1, 51)
+                .mapToObj(i -> "T" + i)
+                .collect(java.util.stream.Collectors.joining(","));
+
+        mvc.perform(get("/pendenze").param("idTipoPendenza", troppi).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("idTipoPendenza")));
+    }
+
+    /** Acceptance criteria issue #66: idTipoPendenza multiplo (OR) in AND con stato. */
+    @Test
+    void combinazioneIdTipoPendenzaMultiploEStato() throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento imu = creaTipoVersamento("IMU");
+        TipoVersamentoDominio tvdImu = newTvd(dom, imu);
+        salvaVersamentoTipo("PEND-IMU-NON-PAGATA", dom, app, imu, tvdImu, "NON_ESEGUITO");
+        salvaVersamentoTipo("PEND-IMU-PAGATA", dom, app, imu, tvdImu, "ESEGUITO");
+
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111")
+                        .param("idTipoPendenza", "TARI,IMU").param("stato", "NON_PAGATA")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-003", "PEND-FUTURA", "PEND-IMU-NON-PAGATA")));
+    }
+
+    private TipoVersamento creaTipoVersamento(String cod) {
+        TipoVersamento tv = new TipoVersamento();
+        tv.setCodTipoVersamento(cod);
+        tv.setDescrizione(cod);
+        return tipoVersamentoRepository.save(tv);
+    }
+
+    private Versamento salvaVersamentoTipo(String idPendenza, Dominio dom, Applicazione app,
+                                           TipoVersamento tv, TipoVersamentoDominio tvd, String statoV1) {
+        Versamento v = new Versamento();
+        v.setCodVersamentoEnte(idPendenza);
+        v.setImportoTotale(10.0);
+        v.setStatoVersamento(statoV1);
+        v.setDataCreazione(OffsetDateTime.now());
+        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
+        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setDebitoreAnagrafica("Mario Rossi");
+        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
+        v.setImportoPagato(0.0);
+        v.setAnomalo(false);
+        v.setAck(false);
+        v.setTipo("DOVUTO");
+        v.setDominio(dom);
+        v.setApplicazione(app);
+        v.setTipoVersamento(tv);
+        v.setTipoVersamentoDominio(tvd);
+        return versamentoRepository.save(v);
     }
 }

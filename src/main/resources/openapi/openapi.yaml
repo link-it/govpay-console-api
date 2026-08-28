@@ -1159,16 +1159,23 @@ paths:
       operationId: listPendenze
       summary: Elenca le pendenze visibili all'operatore autenticato (paginate).
       description: |
-        Filtri supportati in Fase 1 (Issue #9):
+        Filtri supportati:
         - `idPendenza` — partial match;
         - `numeroAvviso` — match esatto, 18 cifre;
         - `idDominio` — match esatto, 11 caratteri;
-        - `identificativoDebitore` — match esatto.
+        - `identificativoDebitore` — match esatto;
+        - `stato` — match esatto sull'enum `StatoPendenza`;
+        - `dataDa`/`dataA` — intervallo incluso sulla data di creazione della pendenza;
+        - `iuv` — match esatto;
+        - `direzione`, `divisione` — match esatto;
+        - `idA2A` — match esatto sul gestionale proprietario;
+        - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi.
 
-        Tutti i filtri sono opzionali e ortogonali (AND). I filtri V1 non
-        ancora supportati (`idA2A`, `iuv`, `stato`, `tipoPendenza`, `dataDa`,
-        `dataA`, `direzione`, `divisione`, `idDebitore`, `mostraSpontaneiNonPagati`)
-        ritornano 400 problem+json.
+        Tutti i filtri sono opzionali e ortogonali (AND).
+
+        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`
+        vuoto, con soli separatori o oltre il limite di 50 elementi → 400
+        problem+json; un codice inesistente nella lista restringe senza errore.
 
         ACL: il filtro per dominio dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' su alcun dominio riceve
@@ -1180,7 +1187,7 @@ paths:
         **Paginazione**: due modalita' mutuamente esclusive.
         - **offset** (default): `?page=N&limit=L`; risposta con `pagination` valorizzato.
         - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
-          ordinamento fisso `(dataOraUltimoAggiornamento DESC, id DESC)`.
+          ordinamento fisso `(dataCreazione DESC, id DESC)`.
         In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
         generano 400 problem+json con motivazione parlante. Cursor malformato
         → 400.
@@ -1194,6 +1201,14 @@ paths:
         - $ref: '#/components/parameters/NumeroAvviso'
         - $ref: '#/components/parameters/IdDominio'
         - $ref: '#/components/parameters/IdentificativoDebitore'
+        - $ref: '#/components/parameters/StatoPendenzaFilter'
+        - $ref: '#/components/parameters/PendenzaDataDa'
+        - $ref: '#/components/parameters/PendenzaDataA'
+        - $ref: '#/components/parameters/IuvFilter'
+        - $ref: '#/components/parameters/DirezioneFilter'
+        - $ref: '#/components/parameters/DivisioneFilter'
+        - $ref: '#/components/parameters/IdA2A'
+        - $ref: '#/components/parameters/PendenzaIdTipoPendenzaFilter'
       responses:
         '200':
           description: Lista paginata di pendenze.
@@ -12418,6 +12433,48 @@ components:
       schema:
         type: string
 
+    StatoPendenzaFilter:
+      name: stato
+      in: query
+      required: false
+      description: Filtra per stato della pendenza.
+      schema:
+        $ref: '#/components/schemas/StatoPendenza'
+
+    PendenzaDataDa:
+      name: dataDa
+      in: query
+      required: false
+      description: Limite inferiore (incluso) sulla data di creazione della pendenza (ISO 8601 date).
+      schema:
+        type: string
+        format: date
+
+    PendenzaDataA:
+      name: dataA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data di creazione della pendenza (ISO 8601 date).
+      schema:
+        type: string
+        format: date
+
+    DirezioneFilter:
+      name: direzione
+      in: query
+      required: false
+      description: Identificativo interno all'ente, match esatto.
+      schema:
+        type: string
+
+    DivisioneFilter:
+      name: divisione
+      in: query
+      required: false
+      description: Identificativo interno all'ente, match esatto.
+      schema:
+        type: string
+
     IuvFilter:
       name: iuv
       in: query
@@ -12847,6 +12904,24 @@ components:
       description: Match parziale sul codice della tipologia di pendenza.
       schema:
         type: string
+
+    PendenzaIdTipoPendenzaFilter:
+      name: idTipoPendenza
+      in: query
+      required: false
+      description: |
+        Elenco (CSV) di codici tipologia pendenza, semantica OR fra i valori
+        (in AND con gli altri filtri): `?idTipoPendenza=a,b` restituisce le
+        pendenze di tipo `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Un codice non esistente non e' un errore: la
+        lista si restringe e basta. Massimo 50 elementi. Lista vuota o
+        composta solo da separatori (`?idTipoPendenza=`, `?idTipoPendenza=,,`)
+        → 400 problem+json.
+      schema:
+        type: array
+        items:
+          type: string
+      explode: false
 
     IdDominioFilter:
       name: idDominio
