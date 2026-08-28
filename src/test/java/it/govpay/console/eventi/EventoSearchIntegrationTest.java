@@ -207,6 +207,35 @@ class EventoSearchIntegrationTest {
                 .andExpect(jsonPath("$.pagination.totalResults", org.hamcrest.Matchers.is(3)));
     }
 
+    /**
+     * `page` e `items` sono dichiarati obbligatori nello schema di GDE, ma arrivano da
+     * una risposta HTTP e sulle risposte non gira alcuna Bean Validation: se GDE ne
+     * omette uno, la lista deve degradare, non rispondere 500. E' la tolleranza che
+     * giustifica il default dichiarato in `EventoSearchService`, e finora nessun test
+     * la verificava.
+     */
+    @Test
+    void rispostaGdeSenzaPageNeItemsDegradaSenzaErrore() throws Exception {
+        String p = utenteDominiStar("u-gde-parziale");
+        when(eventoGdeClient.findEventi(any())).thenReturn(new ListaEventi());
+
+        mvc.perform(get("/eventi?limit=10").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", org.hamcrest.Matchers.hasSize(0)))
+                .andExpect(jsonPath("$.pagination.hasNextPage", org.hamcrest.Matchers.is(false)));
+    }
+
+    @Test
+    void rispostaGdeSenzaPageConTotalRichiestoNonRompe() throws Exception {
+        String p = utenteDominiStar("u-gde-nototal");
+        when(eventoGdeClient.findEventi(any())).thenReturn(new ListaEventi().items(java.util.List.of()));
+
+        mvc.perform(get("/eventi?total=true&dataDa=2026-06-25T00:00:00Z&dataA=2026-06-25T23:00:00Z")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagination.totalResults").doesNotExist());
+    }
+
     // ----- paginazione --------------------------------------------------------------------
 
     @Test

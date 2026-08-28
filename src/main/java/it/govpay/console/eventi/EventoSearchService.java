@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.gde.client.beans.Evento;
 import it.govpay.gde.client.beans.ListaEventi;
+import it.govpay.gde.client.beans.PageInfo;
 
 /**
  * Ricerca paginata della collection {@code GET /eventi}. Delega il fetch dei
@@ -106,7 +108,7 @@ public class EventoSearchService {
 
         Pagination pagination = new Pagination(query.page(), query.limit(), hasNext(gdeResult));
         if (wantTotal) {
-            Long total = gdeResult.getPage() != null ? gdeResult.getPage().getTotal() : null;
+            Long total = pagina(gdeResult).getTotal();
             pagination.setTotalResults(total);
             if (total != null) {
                 pagination.setTotalPages((int) Math.ceil(total / (double) query.limit()));
@@ -143,12 +145,24 @@ public class EventoSearchService {
     }
 
     private List<EventoSummary> toSummaries(ListaEventi result) {
-        List<Evento> items = result.getItems();
-        return items == null ? List.of() : items.stream().map(mapper::toSummary).toList();
+        List<Evento> items = Objects.requireNonNullElseGet(result.getItems(), List::<Evento>of);
+        return items.stream().map(mapper::toSummary).toList();
+    }
+
+    /**
+     * {@code page} e {@code items} sono dichiarati obbligatori nello schema di GDE, ma
+     * questa e' una risposta HTTP: nessuna Bean Validation gira sulle risposte, quindi
+     * il contratto dice cosa GDE dovrebbe mandare, non cosa arriva. La tolleranza va
+     * conservata — senza, una risposta incompleta diventerebbe un NPE, cioe' un 500 —
+     * ma il default si dichiara qui una volta invece di ripetere un controllo null a
+     * ogni accesso.
+     */
+    private static PageInfo pagina(ListaEventi result) {
+        return Objects.requireNonNullElseGet(result.getPage(), PageInfo::new);
     }
 
     private static boolean hasNext(ListaEventi result) {
-        return result.getPage() != null && Boolean.TRUE.equals(result.getPage().isHasNext());
+        return Boolean.TRUE.equals(pagina(result).isHasNext());
     }
 
     /**
