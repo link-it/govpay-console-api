@@ -3,12 +3,25 @@ package it.govpay.console.ricevuta.pagopa.adapter;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.util.Calendar;
-import java.util.Date;
-
-import jakarta.xml.bind.DatatypeConverter;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.time.format.SignStyle;
+import java.time.temporal.ChronoField;
 
 public class DataTypeAdapter {
+
+	/**
+	 * {@code xs:gYear}: quattro o piu' cifre, segno opzionale, fuso opzionale
+	 * ({@code Z} oppure {@code ±HH:mm}). E' la forma su cui e' legato
+	 * {@link YearAdapter} in {@code global.xjb}.
+	 */
+	private static final DateTimeFormatter G_YEAR = new DateTimeFormatterBuilder()
+			.appendValue(ChronoField.YEAR, 4, 9, SignStyle.NORMAL)
+			.optionalStart()
+			.appendOffsetId()
+			.optionalEnd()
+			.toFormatter();
 
 	private DataTypeAdapter() {}
 
@@ -32,7 +45,14 @@ public class DataTypeAdapter {
 		if (year == null) {
 			return null;
 		}
-		return DatatypeConverter.parseDate(year).get(Calendar.YEAR);
+		try {
+			return G_YEAR.parse(year).get(ChronoField.YEAR);
+		} catch (DateTimeParseException e) {
+			// L'implementazione precedente passava il valore a un parser di xs:date,
+			// quindi accettava anche una data completa: tolleranza conservata perche'
+			// i documenti reali la sfruttano.
+			return DataTypeAdapterCXF.parseLocalDate(year).getYear();
+		}
 	}
 
 	public static String printYear(Integer year) {
@@ -40,67 +60,5 @@ public class DataTypeAdapter {
 			return null;
 		}
 		return year.toString();
-	}
-
-	public static Date parseDateTime(String s) {
-		if (s == null || s.isEmpty()) {
-			return null;
-		}
-		return DatatypeConverter.parseDateTime(s).getTime();
-	}
-
-	public static String printDateTime(Date dt) {
-		if (dt == null) {
-			return null;
-		}
-		Calendar c = Calendar.getInstance();
-		c.setTime(dt);
-		String date = DatatypeConverter.printDateTime(c);
-		if(date != null && date.contains("+"))
-			date = date.substring(0, date.indexOf("+"));
-
-		if(date != null && date.length() > 19) {
-			date = date.substring(0, 19);
-		}
-		return date;
-	}
-
-	public static Date parseDate(String s) {
-		if (s == null || s.isEmpty()) {
-			return null;
-		}
-		return DatatypeConverter.parseDate(s).getTime();
-	}
-
-	public static String printDate(Date dt) {
-		if (dt == null) {
-			return null;
-		}
-		Calendar c = Calendar.getInstance();
-		c.setTime(dt);
-		String date = DatatypeConverter.printDateTime(c);
-		if(date != null && date.contains("+"))
-			date = date.substring(0, date.indexOf("+"));
-
-		if(date != null && date.length() > 10) {
-			date = date.substring(0, 10);
-		}
-		return date;
-	}
-
-	public static Date parseTime(String s) {
-		if (s == null) {
-			return null;
-		}
-		return DatatypeConverter.parseTime(s).getTime();
-	}
-
-	public static String printTime(Date dt) {
-		if (dt == null) {
-			return null;
-		}
-		Calendar c = Calendar.getInstance();
-		c.setTime(dt);
-		return DatatypeConverter.printTime(c);
 	}
 }
