@@ -210,6 +210,59 @@ class TipoPendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.tracciatoCsv.richiesta.r", is(1)));
     }
 
+    /**
+     * Round-trip completo dei tre blocchi promemoria di `avvisaturaAppIo` e
+     * `avvisaturaMail`, con valori distinti campo per campo. I ~30 campi entity
+     * corrispondenti sono scritti da un unico metodo per canale: senza questo test
+     * uno scambio fra il blocco avviso e quello ricevuta, o fra mail e App IO,
+     * non farebbe fallire nulla.
+     */
+    @Test
+    void createPersistsEveryPromemoriaFieldOfBothChannels() throws Exception {
+        String body = """
+                {
+                  "idTipoPendenza":"AVVIS","descrizione":"Avvisature","codificaIUV":"07",
+                  "avvisaturaMail":{
+                    "promemoriaAvviso":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"mail-avv-ogg"},"messaggio":{"k":"mail-avv-msg"},"allegaPdf":true},
+                    "promemoriaRicevuta":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"mail-ric-ogg"},"messaggio":{"k":"mail-ric-msg"},"allegaPdf":false,"soloEseguiti":true},
+                    "promemoriaScadenza":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"mail-scad-ogg"},"messaggio":{"k":"mail-scad-msg"},"preavviso":7}
+                  },
+                  "avvisaturaAppIO":{
+                    "promemoriaAvviso":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"io-avv-ogg"},"messaggio":{"k":"io-avv-msg"}},
+                    "promemoriaRicevuta":{"abilitato":false,"tipo":"freemarker","oggetto":{"k":"io-ric-ogg"},"messaggio":{"k":"io-ric-msg"},"soloEseguiti":false},
+                    "promemoriaScadenza":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"io-scad-ogg"},"messaggio":{"k":"io-scad-msg"},"preavviso":3}
+                  }
+                }""";
+        mvc.perform(post("/tipiPendenza").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/tipiPendenza/AVVIS").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaAvviso.abilitato", is(true)))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaAvviso.oggetto.k", is("mail-avv-ogg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaAvviso.messaggio.k", is("mail-avv-msg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaAvviso.allegaPdf", is(true)))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaRicevuta.oggetto.k", is("mail-ric-ogg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaRicevuta.messaggio.k", is("mail-ric-msg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaRicevuta.allegaPdf", is(false)))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaRicevuta.soloEseguiti", is(true)))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaScadenza.oggetto.k", is("mail-scad-ogg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaScadenza.messaggio.k", is("mail-scad-msg")))
+                .andExpect(jsonPath("$.avvisaturaMail.promemoriaScadenza.preavviso", is(7)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.abilitato", is(true)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.oggetto.k", is("io-avv-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.messaggio.k", is("io-avv-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.abilitato", is(false)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.oggetto.k", is("io-ric-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.messaggio.k", is("io-ric-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.soloEseguiti", is(false)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.abilitato", is(true)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.oggetto.k", is("io-scad-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.messaggio.k", is("io-scad-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.preavviso", is(3)));
+    }
+
     @Test
     void createMinimalReturns201() throws Exception {
         String body = """
