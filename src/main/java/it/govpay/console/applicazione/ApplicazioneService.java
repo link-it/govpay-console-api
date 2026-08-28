@@ -48,6 +48,7 @@ import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.web.RepresentationValidator;
 import it.govpay.console.web.UnprocessableEntityException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -66,6 +67,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class ApplicazioneService {
 
+    private static final String FIELD_ID_A2A = "idA2A";
+
     private static final Logger log = LoggerFactory.getLogger(ApplicazioneService.class);
 
     public static final String AZIONE_AUDIT_CREATE = "APPLICAZIONE_CREATE";
@@ -75,7 +78,7 @@ public class ApplicazioneService {
     /** Firma ricevuta "nessuna" (V1 {@code FirmaRichiesta.NESSUNA}). */
     private static final String FIRMA_RICEVUTA_NESSUNA = "0";
     private static final int MAX_PRINCIPAL = 4000;
-    private static final Pattern CODIFICA_IUV_PATTERN = Pattern.compile("[0-9]{1,3}");
+    private static final Pattern CODIFICA_IUV_PATTERN = Pattern.compile("\\d{1,3}");
 
     private final ApplicazioneRepository applicazioneRepository;
     private final UtenzaRepository utenzaRepository;
@@ -86,6 +89,7 @@ public class ApplicazioneService {
     private final ObjectMapper objectMapper;
     private final AclAuthorizer aclAuthorizer;
     private final PasswordEncoder passwordEncoder;
+    private final RepresentationValidator representationValidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -98,7 +102,8 @@ public class ApplicazioneService {
                                AuditService auditService,
                                ObjectMapper objectMapper,
                                AclAuthorizer aclAuthorizer,
-                               PasswordEncoder passwordEncoder) {
+                               PasswordEncoder passwordEncoder,
+                               RepresentationValidator representationValidator) {
         this.applicazioneRepository = applicazioneRepository;
         this.utenzaRepository = utenzaRepository;
         this.writer = writer;
@@ -108,6 +113,7 @@ public class ApplicazioneService {
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
         this.passwordEncoder = passwordEncoder;
+        this.representationValidator = representationValidator;
     }
 
     @Transactional(readOnly = true)
@@ -177,7 +183,7 @@ public class ApplicazioneService {
         UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());
         UtenzaAssociazioniWriter.TipiResolution tipi = writer.resolveTipiPendenza(split.tipi());
         String ruoliCsv = writer.validateRuoliToCsv(body.getRuoli());
-        boolean abilitato = body.getAbilitato() == null || Boolean.TRUE.equals(body.getAbilitato());
+        boolean abilitato = Boolean.TRUE.equals(body.getAbilitato());
 
         Utenza utenza = new Utenza();
         utenza.setPrincipal(principal);
@@ -233,11 +239,11 @@ public class ApplicazioneService {
         ObjectNode current = objectMapper.valueToTree(mapper.toDetail(app));
         ObjectNode patched = JsonPatchApplier.apply(current, operations, objectMapper);
 
-        String patchedId = text(patched, "idA2A");
+        String patchedId = text(patched, FIELD_ID_A2A);
         if (!idA2A.equals(patchedId)) {
             throw new BadRequestException("Il campo 'idA2A' non puo' essere modificato tramite PATCH.");
         }
-        patched.remove("idA2A");
+        patched.remove(FIELD_ID_A2A);
         patched.remove("_links");
 
         ApplicazioneReplace body;
@@ -246,6 +252,7 @@ public class ApplicazioneService {
         } catch (RuntimeException e) {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
+        representationValidator.validate(body);
         return doReplace(app, body, request);
     }
 
@@ -253,10 +260,10 @@ public class ApplicazioneService {
                                                                            ApplicazioneReplace body,
                                                                            HttpServletRequest request) {
         String principal = validatePrincipal(body.getPrincipal());
+        // `abilitato` e' `required` nello schema: validato dal `@Valid` del controller
+        // sulla replace e da RepresentationValidator sul documento ricomposto dal PATCH,
+        // che sono i due soli ingressi di questo metodo.
         Boolean abilitato = body.getAbilitato();
-        if (abilitato == null) {
-            throw new BadRequestException("Il campo 'abilitato' e' obbligatorio.");
-        }
 
         Utenza utenza = app.getUtenza();
         if (!principal.equals(utenza.getPrincipalOriginale()) && utenzaRepository.existsByPrincipalOriginale(principal)) {
@@ -391,7 +398,7 @@ public class ApplicazioneService {
     private void audit(String azione, Applicazione entity, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        dettaglio.put("idA2A", entity.getCodApplicazione());
+        dettaglio.put(FIELD_ID_A2A, entity.getCodApplicazione());
         auditService.registra(azione, entity.getId(), dettaglio, operatore, request);
     }
 

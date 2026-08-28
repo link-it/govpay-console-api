@@ -33,9 +33,9 @@ public final class JsonPatchApplier {
     }
 
     private static void applyOne(ObjectNode node, JsonPatchOperation op, ObjectMapper objectMapper) {
-        if (op.getOp() == null) {
-            throw new BadRequestException("Operazione JSON Patch priva di 'op'.");
-        }
+        // `op` e' `required` sullo schema JsonPatchOperation e ogni endpoint PATCH riceve
+        // la lista come `@Valid @RequestBody List<@Valid JsonPatchOperation>`: il vincolo
+        // e' applicato al boundary, prima di arrivare qui.
         String field = field(op.getPath());
         switch (op.getOp()) {
             case ADD, REPLACE -> {

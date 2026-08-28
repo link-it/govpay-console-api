@@ -136,13 +136,10 @@ public class UtenzaAssociazioniWriter {
             return out;
         }
         for (it.govpay.console.model.Acl a : aclList) {
-            if (a.getServizio() == null) {
-                throw new UnprocessableEntityException("Ogni elemento di 'acl' deve avere 'servizio' valorizzato.");
-            }
-            if (a.getAutorizzazioni() == null || a.getAutorizzazioni().isEmpty()) {
-                throw new UnprocessableEntityException(
-                        "Ogni elemento di 'acl' deve avere almeno un'autorizzazione (R e/o W).");
-            }
+            // `servizio` e `autorizzazioni` sono `required` sullo schema di `Acl`, con
+            // `minItems: 1` sulle autorizzazioni, e la proprieta' `acl` porta `@Valid`:
+            // i vincoli sugli elementi sono quindi applicati in cascata su tutti gli
+            // ingressi (replace via `@Valid`, PATCH via RepresentationValidator).
             Acl entity = new Acl();
             entity.setServizio(a.getServizio().getValue());
             entity.setDiritti(DirittiCodec.serialize(a.getAutorizzazioni()));

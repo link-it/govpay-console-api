@@ -1,8 +1,10 @@
 package it.govpay.console.eventi;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +20,7 @@ import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.gde.client.beans.Evento;
 import it.govpay.gde.client.beans.ListaEventi;
+import it.govpay.gde.client.beans.PageInfo;
 
 /**
  * Ricerca paginata della collection {@code GET /eventi}. Delega il fetch dei
@@ -35,13 +38,16 @@ public class EventoSearchService {
     private final EventoMapper mapper;
     private final EventoAcl eventoAcl;
     private final CurrentOperatorService currentOperatorService;
+    private final Clock clock;
 
     public EventoSearchService(EventoGdeClient client, EventoMapper mapper,
-            EventoAcl eventoAcl, CurrentOperatorService currentOperatorService) {
+            EventoAcl eventoAcl, CurrentOperatorService currentOperatorService,
+            Clock clock) {
         this.client = client;
         this.mapper = mapper;
         this.eventoAcl = eventoAcl;
         this.currentOperatorService = currentOperatorService;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -66,11 +72,11 @@ public class EventoSearchService {
         OffsetDateTime dataDa = query.dataDa();
         OffsetDateTime dataA = query.dataA();
         if (dataDa == null && dataA == null) {
-            dataDa = OffsetDateTime.now().minusHours(24);
+            dataDa = OffsetDateTime.now(clock).minusHours(24);
         }
 
         if (query.messaggi() != null && !query.messaggi().isBlank()) {
-            requireRangeEntroOre(dataDa, dataA, 24 * 7,
+            requireRangeEntroOre(dataDa, dataA, 24L * 7, clock,
                     "Il filtro 'messaggi' richiede un intervallo temporale (dataDa/dataA) di al massimo 7 giorni.");
         }
 
@@ -83,7 +89,7 @@ public class EventoSearchService {
             OffsetDateTime dataDa, OffsetDateTime dataA, ListEventi200Response response) {
         boolean wantTotal = Boolean.TRUE.equals(query.total());
         if (wantTotal) {
-            requireRangeEntroOre(dataDa, dataA, 24,
+            requireRangeEntroOre(dataDa, dataA, 24, clock,
                     "Il conteggio (?total=true) richiede un intervallo temporale (dataDa/dataA) di al massimo 24 ore.");
         }
 
@@ -102,7 +108,7 @@ public class EventoSearchService {
 
         Pagination pagination = new Pagination(query.page(), query.limit(), hasNext(gdeResult));
         if (wantTotal) {
-            Long total = gdeResult.getPage() != null ? gdeResult.getPage().getTotal() : null;
+            Long total = pagina(gdeResult).getTotal();
             pagination.setTotalResults(total);
             if (total != null) {
                 pagination.setTotalPages((int) Math.ceil(total / (double) query.limit()));
@@ -139,12 +145,24 @@ public class EventoSearchService {
     }
 
     private List<EventoSummary> toSummaries(ListaEventi result) {
-        List<Evento> items = result.getItems();
-        return items == null ? List.of() : items.stream().map(mapper::toSummary).toList();
+        List<Evento> items = Objects.requireNonNullElseGet(result.getItems(), List::<Evento>of);
+        return items.stream().map(mapper::toSummary).toList();
+    }
+
+    /**
+     * {@code page} e {@code items} sono dichiarati obbligatori nello schema di GDE, ma
+     * questa e' una risposta HTTP: nessuna Bean Validation gira sulle risposte, quindi
+     * il contratto dice cosa GDE dovrebbe mandare, non cosa arriva. La tolleranza va
+     * conservata — senza, una risposta incompleta diventerebbe un NPE, cioe' un 500 —
+     * ma il default si dichiara qui una volta invece di ripetere un controllo null a
+     * ogni accesso.
+     */
+    private static PageInfo pagina(ListaEventi result) {
+        return Objects.requireNonNullElseGet(result.getPage(), PageInfo::new);
     }
 
     private static boolean hasNext(ListaEventi result) {
-        return result.getPage() != null && Boolean.TRUE.equals(result.getPage().isHasNext());
+        return Boolean.TRUE.equals(pagina(result).isHasNext());
     }
 
     /**
@@ -178,11 +196,12 @@ public class EventoSearchService {
         return new ResolvedDomini(false, visibili);
     }
 
-    private static void requireRangeEntroOre(OffsetDateTime dataDa, OffsetDateTime dataA, long oreMax, String message) {
+    private static void requireRangeEntroOre(OffsetDateTime dataDa, OffsetDateTime dataA, long oreMax, Clock clock,
+            String message) {
         if (dataDa == null) {
             throw new BadRequestException(message);
         }
-        OffsetDateTime a = dataA != null ? dataA : OffsetDateTime.now();
+        OffsetDateTime a = dataA != null ? dataA : OffsetDateTime.now(clock);
         Duration d = Duration.between(dataDa, a);
         if (d.isNegative() || d.toHours() > oreMax) {
             throw new BadRequestException(message);

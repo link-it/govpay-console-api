@@ -2,6 +2,7 @@ package it.govpay.console.connettoredominio;
 
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 import it.govpay.console.entity.Dominio;
 
@@ -35,7 +36,7 @@ public enum ConnettoreDominioCanale {
     private final boolean credenziali;
     private final Function<Dominio, String> codGetter;
     private final BiConsumer<Dominio, String> codSetter;
-    private final Function<String, String> codConnettoreFormat;
+    private final UnaryOperator<String> codConnettoreFormat;
 
     ConnettoreDominioCanale(String tipo, boolean credenziali,
                             Function<Dominio, String> codGetter,
@@ -46,7 +47,7 @@ public enum ConnettoreDominioCanale {
     ConnettoreDominioCanale(String tipo, boolean credenziali,
                             Function<Dominio, String> codGetter,
                             BiConsumer<Dominio, String> codSetter,
-                            Function<String, String> codConnettoreFormat) {
+                            UnaryOperator<String> codConnettoreFormat) {
         this.tipo = tipo;
         this.credenziali = credenziali;
         this.codGetter = codGetter;

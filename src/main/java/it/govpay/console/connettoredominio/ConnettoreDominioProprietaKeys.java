@@ -64,10 +64,10 @@ public final class ConnettoreDominioProprietaKeys {
             SSLKSLOCATION, SSLKSTYPE, SSLTSLOCATION, SSLTSTYPE, SSLTYPE, HTTP_HEADER_NAME,
             API_ID, OAUTH2_CLIENT_ID, OAUTH2_SCOPE, OAUTH2_URL_TOKEN_ENDPOINT, ABILITA_GDE);
 
-    public static final Set<String> CONFIG_KEYS = NOTIFICA_CONFIG_KEYS;
+    static final Set<String> CONFIG_KEYS = NOTIFICA_CONFIG_KEYS;
 
     /** Le credenziali coincidono con quelle dei connettori intermediario. */
-    public static final Set<String> CREDENTIAL_KEYS = ConnettoreProprietaKeys.CREDENTIAL_KEYS;
+    static final Set<String> CREDENTIAL_KEYS = ConnettoreProprietaKeys.CREDENTIAL_KEYS;
 
     static {
         // Difesa contro sovrapposizioni accidentali tra config e credenziali.

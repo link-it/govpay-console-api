@@ -1,6 +1,7 @@
 package it.govpay.console.gde;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -51,9 +52,11 @@ public class GdeEventFilter extends OncePerRequestFilter {
     private static final int MAX_CAPTURE_BYTES = 65536;
 
     private final ConsoleGdeService consoleGdeService;
+    private final Clock clock;
 
-    public GdeEventFilter(ConsoleGdeService consoleGdeService) {
+    public GdeEventFilter(ConsoleGdeService consoleGdeService, Clock clock) {
         this.consoleGdeService = consoleGdeService;
+        this.clock = clock;
     }
 
     @Override
@@ -73,18 +76,21 @@ public class GdeEventFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime start = OffsetDateTime.now(clock);
+        // La durata si misura sul clock monotono: OffsetDateTime.now() e' un orologio
+        // di parete, soggetto a correzioni NTP, e puo' produrre durate negative.
+        long startNanos = System.nanoTime();
         ContentCachingRequestWrapper wrappedRequest = new ContentCachingRequestWrapper(request, MAX_CAPTURE_BYTES);
         GdeCapturingResponseWrapper wrappedResponse = new GdeCapturingResponseWrapper(response, MAX_CAPTURE_BYTES);
         Throwable error = null;
 
         try {
             filterChain.doFilter(wrappedRequest, wrappedResponse);
-        } catch (IOException | ServletException | RuntimeException | Error e) {
+        } catch (IOException | ServletException | RuntimeException e) {
             error = e;
             throw e;
         } finally {
-            long durataMs = Duration.between(start, OffsetDateTime.now()).toMillis();
+            long durataMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
             buildAndSendEvent(wrappedRequest, wrappedResponse, start, durataMs, error);
         }
     }
@@ -92,7 +98,7 @@ public class GdeEventFilter extends OncePerRequestFilter {
     private void buildAndSendEvent(ContentCachingRequestWrapper request, GdeCapturingResponseWrapper response,
                                    OffsetDateTime start, long durataMs, Throwable error) {
         int status = status(response, error);
-        EsitoEvento esito = status < 400 ? EsitoEvento.OK : (status >= 500 ? EsitoEvento.FAIL : EsitoEvento.KO);
+        EsitoEvento esito = esitoDaStatus(status);
 
         GdeEventInfo eventInfo = GdeEventInfo.builder()
                 .componente(ComponenteEvento.API_BACKOFFICE)
@@ -123,6 +129,13 @@ public class GdeEventFilter extends OncePerRequestFilter {
      * l'evento uscirebbe erroneamente come OK. Stesso pattern gia' applicato
      * in {@code ApiTimingMetricsFilter}.
      */
+    private static EsitoEvento esitoDaStatus(int status) {
+        if (status < 400) {
+            return EsitoEvento.OK;
+        }
+        return status >= 500 ? EsitoEvento.FAIL : EsitoEvento.KO;
+    }
+
     private static int status(HttpServletResponse response, Throwable error) {
         int status = response.getStatus();
         if (error != null && status < 400) {

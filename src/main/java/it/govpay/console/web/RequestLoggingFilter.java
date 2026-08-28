@@ -39,12 +39,14 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             long duration = System.currentTimeMillis() - start;
-            log.info("{} {} status={} duration={}ms principal={}",
-                    request.getMethod(),
-                    request.getRequestURI(),
-                    response.getStatus(),
-                    duration,
-                    resolvePrincipal(request));
+            if (log.isInfoEnabled()) {
+                log.info("{} {} status={} duration={}ms principal={}",
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        response.getStatus(),
+                        duration,
+                        resolvePrincipal(request));
+            }
         }
     }
 

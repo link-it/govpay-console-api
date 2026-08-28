@@ -1,6 +1,5 @@
 package it.govpay.console.connettoredominio;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,12 +17,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class ConnettoreDominioController implements ConnettoriDominioApi {
 
     private final ConnettoreDominioService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public ConnettoreDominioController(ConnettoreDominioService service) {
+    public ConnettoreDominioController(ConnettoreDominioService service,
+                                       HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     // --- mypivot ---

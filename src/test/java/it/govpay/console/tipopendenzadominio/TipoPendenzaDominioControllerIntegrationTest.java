@@ -233,6 +233,40 @@ class TipoPendenzaDominioControllerIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(created.getBoCodApplicazione()).isEqualTo("APP-1");
     }
 
+    /**
+     * Come il test omonimo su `/tipiPendenza`, ma sulla variante dominio, che ha in
+     * piu' l'`apiKey`. I due mapper scrivono gli stessi campi entity con metodi
+     * distinti: senza copertura su entrambi, un refactor condiviso potrebbe
+     * regredire su uno solo dei due.
+     */
+    @Test
+    void createPersistsEveryAppIoPromemoriaField() throws Exception {
+        String body = """
+                {"idTipoPendenza":"COSAP","abilitato":true,"codificaIUV":"3",
+                 "avvisaturaAppIO":{"apiKey":"io-key-999",
+                   "promemoriaAvviso":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"d-avv-ogg"},"messaggio":{"k":"d-avv-msg"}},
+                   "promemoriaRicevuta":{"abilitato":false,"tipo":"freemarker","oggetto":{"k":"d-ric-ogg"},"messaggio":{"k":"d-ric-msg"},"soloEseguiti":true},
+                   "promemoriaScadenza":{"abilitato":true,"tipo":"freemarker","oggetto":{"k":"d-scad-ogg"},"messaggio":{"k":"d-scad-msg"},"preavviso":9}}}""";
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza/COSAP").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avvisaturaAppIO.apiKey", is("io-key-999")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.abilitato", is(true)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.oggetto.k", is("d-avv-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaAvviso.messaggio.k", is("d-avv-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.abilitato", is(false)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.oggetto.k", is("d-ric-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.messaggio.k", is("d-ric-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaRicevuta.soloEseguiti", is(true)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.abilitato", is(true)))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.oggetto.k", is("d-scad-ogg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.messaggio.k", is("d-scad-msg")))
+                .andExpect(jsonPath("$.avvisaturaAppIO.promemoriaScadenza.preavviso", is(9)));
+    }
+
     @Test
     void createWithUnknownGlobalReturns422() throws Exception {
         String body = """

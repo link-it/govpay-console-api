@@ -138,7 +138,7 @@ public class AvvisoPdfPayloadMapper {
         if (StringUtils.hasText(v.getDebitoreProvincia())) {
             line2.append(" (").append(v.getDebitoreProvincia()).append(')');
         }
-        if (line2.length() > 0) {
+        if (!line2.isEmpty()) {
             d.setAddressLine2(line2.toString().trim());
         }
         return d;

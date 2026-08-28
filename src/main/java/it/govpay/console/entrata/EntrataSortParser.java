@@ -14,14 +14,14 @@ import org.springframework.data.domain.Sort;
  */
 public final class EntrataSortParser {
 
+    public static final String DEFAULT_SORT_RAW = "idEntrata";
+
     /**
      * Chiavi = nomi pubblici (query param), valori = nomi dei campi entity JPA.
      */
     private static final Map<String, String> WHITELIST = Map.of(
-            "idEntrata", "codTributo",
+            DEFAULT_SORT_RAW, "codTributo",
             "descrizione", "descrizione");
-
-    public static final String DEFAULT_SORT_RAW = "idEntrata";
 
     private EntrataSortParser() {
     }

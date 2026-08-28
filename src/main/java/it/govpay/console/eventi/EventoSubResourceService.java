@@ -1,6 +1,7 @@
 package it.govpay.console.eventi;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -122,8 +123,11 @@ public class EventoSubResourceService {
     }
 
     private EventoHeader mapHeader(Header header, boolean unmask) {
-        boolean sensibile = header.getNome() != null
-                && headerSensibili.contains(header.getNome().toLowerCase(java.util.Locale.ROOT));
+        // Come per `page`/`items` in EventoSearchService: `nome` e' obbligatorio sullo
+        // schema di GDE, ma arriva da una risposta HTTP, non validata. Un header senza
+        // nome non e' sensibile, e non deve far esplodere il dettaglio dell'evento.
+        String nome = Objects.requireNonNullElse(header.getNome(), "");
+        boolean sensibile = headerSensibili.contains(nome.toLowerCase(java.util.Locale.ROOT));
         EventoHeader dto = new EventoHeader();
         dto.setNome(header.getNome());
         if (sensibile && !unmask) {

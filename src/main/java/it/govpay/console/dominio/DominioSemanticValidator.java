@@ -1,5 +1,6 @@
 package it.govpay.console.dominio;
 
+import java.time.Clock;
 import java.time.Year;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -17,8 +18,14 @@ import it.govpay.console.web.UnprocessableEntityException;
 @Component
 public class DominioSemanticValidator {
 
+    private final Clock clock;
+
+    public DominioSemanticValidator(Clock clock) {
+        this.clock = clock;
+    }
+
     /** Il prefisso IUV generato deve risultare numerico e al massimo 13 cifre. */
-    private static final Pattern PREFIX_RISULTANTE = Pattern.compile("^[0-9]{1,13}$");
+    private static final Pattern PREFIX_RISULTANTE = Pattern.compile("^\\d{1,13}$");
 
     /**
      * Valori massimi (in cifre) con cui V1 espande i placeholder del prefisso per
@@ -34,8 +41,15 @@ public class DominioSemanticValidator {
      * @param intermediato valore richiesto ({@code null} equivale a {@code true},
      *                     come in V1).
      */
-    public void validate(Boolean intermediato, String gln, String idStazione, Integer segregationCode,
-            String cbill, String autStampaPoste, String iuvPrefix, Integer auxDigit) {
+    public void validate(DatiDominio d) {
+        Boolean intermediato = d.intermediato();
+        String gln = d.gln();
+        String idStazione = d.idStazione();
+        Integer segregationCode = d.segregationCode();
+        String cbill = d.cbill();
+        String autStampaPoste = d.autStampaPoste();
+        String iuvPrefix = d.iuvPrefix();
+        Integer auxDigit = d.auxDigit();
 
         boolean intermediatoEff = intermediato == null || intermediato;
         if (intermediatoEff) {
@@ -75,7 +89,7 @@ public class DominioSemanticValidator {
     }
 
     private String espandiPrefix(String template) {
-        int anno = Year.now().getValue();
+        int anno = Year.now(clock).getValue();
         String result = template;
         for (Map.Entry<String, String> e : PLACEHOLDER_MASSIMI.entrySet()) {
             result = result.replace("%(" + e.getKey() + ")", e.getValue());

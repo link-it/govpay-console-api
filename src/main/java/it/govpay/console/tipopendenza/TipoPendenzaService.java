@@ -49,7 +49,6 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.servlet.http.HttpServletRequest;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -61,7 +60,6 @@ public class TipoPendenzaService {
     public static final String AZIONE_AUDIT_CREATE = "TIPO_PENDENZA_CREATE";
     public static final String AZIONE_AUDIT_MODIFICA = "TIPO_PENDENZA_MODIFICA";
 
-    private static final int MAX_DESCRIZIONE = 255;
 
     private final TipoVersamentoRepository repository;
     private final TipoPendenzaMapper mapper;
@@ -148,11 +146,11 @@ public class TipoPendenzaService {
         }
         TipoVersamento entity = new TipoVersamento();
         entity.setCodTipoVersamento(body.getIdTipoPendenza());
-        mapper.applyWritable(entity, body.getDescrizione(), body.getCodificaIUV(),
-                body.getPagaTerzi(), body.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(body.getDescrizione(),
+                body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
                 body.getPortaleBackoffice(), body.getPortalePagamento(),
                 body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
-                body.getVisualizzazione(), body.getTracciatoCsv());
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -173,11 +171,11 @@ public class TipoPendenzaService {
         TipoVersamento entity = load(idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 
-        mapper.applyWritable(entity, body.getDescrizione(), body.getCodificaIUV(),
-                body.getPagaTerzi(), body.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(body.getDescrizione(),
+                body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
                 body.getPortaleBackoffice(), body.getPortalePagamento(),
                 body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
-                body.getVisualizzazione(), body.getTracciatoCsv());
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -202,26 +200,27 @@ public class TipoPendenzaService {
                             + e.getOriginalMessage());
         }
 
+        // La rappresentazione ricomposta dal PATCH non passa dal `@Valid` del controller:
+        // si valida qui, prima delle regole di business, cosi' i vincoli dello schema
+        // (`required`, lunghezze, pattern) restano l'unica fonte per quei controlli.
+        representationValidator.validate(result);
+
         if (!idTipoPendenza.equals(result.getIdTipoPendenza())) {
             throw new BadRequestException(
                     "Il campo 'idTipoPendenza' non puo' essere modificato tramite PATCH.");
         }
-        if (result.getDescrizione() == null || result.getDescrizione().isBlank()) {
+        // `@NotNull` e `@Size(max)` su `descrizione` sono ora verificati dallo schema;
+        // resta il caso della stringa vuota, che passa entrambi i vincoli.
+        if (result.getDescrizione().isBlank()) {
             throw new BadRequestException(
-                    "La rappresentazione risultante dal PATCH ha il campo 'descrizione' mancante o vuoto.");
+                    "La rappresentazione risultante dal PATCH ha il campo 'descrizione' vuoto.");
         }
-        if (result.getDescrizione().length() > MAX_DESCRIZIONE) {
-            throw new BadRequestException(
-                    "Il campo 'descrizione' supera la lunghezza massima di " + MAX_DESCRIZIONE + " caratteri.");
-        }
-        // Vincoli OpenAPI residui (pattern codificaIUV, lunghezze, nested) sul risultato.
-        representationValidator.validate(result);
 
-        mapper.applyWritable(entity, result.getDescrizione(), result.getCodificaIUV(),
-                result.getPagaTerzi(), result.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(result.getDescrizione(),
+                result.getCodificaIUV(), result.getPagaTerzi(), result.getAbilitato(),
                 result.getPortaleBackoffice(), result.getPortalePagamento(),
                 result.getAvvisaturaMail(), result.getAvvisaturaAppIO(),
-                result.getVisualizzazione(), result.getTracciatoCsv());
+                result.getVisualizzazione(), result.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);

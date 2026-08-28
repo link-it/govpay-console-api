@@ -2,7 +2,6 @@ package it.govpay.console.operatore;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,12 +18,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class OperatoreController implements OperatoriApi {
 
     private final OperatoreService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public OperatoreController(OperatoreService service) {
+    public OperatoreController(OperatoreService service,
+                               HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

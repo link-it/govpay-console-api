@@ -2,7 +2,6 @@ package it.govpay.console.stazione;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,12 +17,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class StazioneController implements StazioniApi {
 
     private final StazioneService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public StazioneController(StazioneService service) {
+    public StazioneController(StazioneService service,
+                              HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

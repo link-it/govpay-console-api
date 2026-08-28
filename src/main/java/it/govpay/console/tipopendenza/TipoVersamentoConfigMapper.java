@@ -8,7 +8,9 @@ import it.govpay.console.model.TipoPendenzaForm;
 import it.govpay.console.model.TipoPendenzaFormPagamento;
 import it.govpay.console.model.TipoPendenzaPortaleBackoffice;
 import it.govpay.console.model.TipoPendenzaPortalePagamento;
+import it.govpay.console.model.TipoPendenzaPromemoriaAvvisoAppIo;
 import it.govpay.console.model.TipoPendenzaPromemoriaAvvisoMail;
+import it.govpay.console.model.TipoPendenzaPromemoriaRicevutaAppIo;
 import it.govpay.console.model.TipoPendenzaPromemoriaRicevutaMail;
 import it.govpay.console.model.TipoPendenzaPromemoriaScadenza;
 import it.govpay.console.model.TipoPendenzaTracciatoCsv;
@@ -143,7 +145,9 @@ public class TipoVersamentoConfigMapper {
             e.setBoCodApplicazione(null);
             return;
         }
-        e.setBoAbilitato(bo.getAbilitato() != null ? bo.getAbilitato() : Boolean.FALSE);
+        // `abilitato` e' `required` dentro il blocco portale e il getter del blocco porta
+        // `@Valid`: se il blocco c'e', il campo c'e'.
+        e.setBoAbilitato(bo.getAbilitato());
         e.setBoFormTipo(bo.getForm() != null ? bo.getForm().getTipo() : null);
         e.setBoFormDefinizione(bo.getForm() != null ? objToText(bo.getForm().getDefinizione()) : null);
         e.setBoValidazioneDef(objToText(bo.getValidazione()));
@@ -164,7 +168,7 @@ public class TipoVersamentoConfigMapper {
             e.setPagCodApplicazione(null);
             return;
         }
-        e.setPagAbilitato(pag.getAbilitato() != null ? pag.getAbilitato() : Boolean.FALSE);
+        e.setPagAbilitato(pag.getAbilitato());
         e.setPagFormTipo(pag.getForm() != null ? pag.getForm().getTipo() : null);
         e.setPagFormDefinizione(pag.getForm() != null ? objToText(pag.getForm().getDefinizione()) : null);
         e.setPagFormImpaginazione(pag.getForm() != null ? objToText(pag.getForm().getImpaginazione()) : null);
@@ -175,27 +179,77 @@ public class TipoVersamentoConfigMapper {
     }
 
     public void writeAvvisaturaMail(AbstractTipoVersamento e, TipoPendenzaAvvisaturaMail mail) {
-        TipoPendenzaPromemoriaAvvisoMail avv = mail != null ? mail.getPromemoriaAvviso() : null;
-        e.setAvvMailPromAvvAbilitato(avv != null && Boolean.TRUE.equals(avv.getAbilitato()));
-        e.setAvvMailPromAvvPdf(avv != null ? avv.getAllegaPdf() : null);
-        e.setAvvMailPromAvvTipo(avv != null ? enumToText(avv.getTipo()) : null);
-        e.setAvvMailPromAvvOggetto(avv != null ? objToText(avv.getOggetto()) : null);
-        e.setAvvMailPromAvvMessaggio(avv != null ? objToText(avv.getMessaggio()) : null);
+        writeMailPromemoriaAvviso(e, mail != null ? mail.getPromemoriaAvviso() : null);
+        writeMailPromemoriaRicevuta(e, mail != null ? mail.getPromemoriaRicevuta() : null);
+        writeMailPromemoriaScadenza(e, mail != null ? mail.getPromemoriaScadenza() : null);
+    }
 
-        TipoPendenzaPromemoriaRicevutaMail ric = mail != null ? mail.getPromemoriaRicevuta() : null;
-        e.setAvvMailPromRicAbilitato(ric != null && Boolean.TRUE.equals(ric.getAbilitato()));
-        e.setAvvMailPromRicPdf(ric != null ? ric.getAllegaPdf() : null);
-        e.setAvvMailPromRicTipo(ric != null ? enumToText(ric.getTipo()) : null);
-        e.setAvvMailPromRicOggetto(ric != null ? objToText(ric.getOggetto()) : null);
-        e.setAvvMailPromRicMessaggio(ric != null ? objToText(ric.getMessaggio()) : null);
-        e.setAvvMailPromRicEseguiti(ric != null ? ric.getSoloEseguiti() : null);
+    private void writeMailPromemoriaAvviso(AbstractTipoVersamento e, TipoPendenzaPromemoriaAvvisoMail avv) {
+        boolean assente = avv == null;
+        e.setAvvMailPromAvvAbilitato(!assente && Boolean.TRUE.equals(avv.getAbilitato()));
+        e.setAvvMailPromAvvPdf(assente ? null : avv.getAllegaPdf());
+        e.setAvvMailPromAvvTipo(assente ? null : enumToText(avv.getTipo()));
+        e.setAvvMailPromAvvOggetto(assente ? null : objToText(avv.getOggetto()));
+        e.setAvvMailPromAvvMessaggio(assente ? null : objToText(avv.getMessaggio()));
+    }
 
-        TipoPendenzaPromemoriaScadenza scad = mail != null ? mail.getPromemoriaScadenza() : null;
-        e.setAvvMailPromScadAbilitato(scad != null && Boolean.TRUE.equals(scad.getAbilitato()));
-        e.setAvvMailPromScadPreavviso(scad != null ? scad.getPreavviso() : null);
-        e.setAvvMailPromScadTipo(scad != null ? enumToText(scad.getTipo()) : null);
-        e.setAvvMailPromScadOggetto(scad != null ? objToText(scad.getOggetto()) : null);
-        e.setAvvMailPromScadMessaggio(scad != null ? objToText(scad.getMessaggio()) : null);
+    private void writeMailPromemoriaRicevuta(AbstractTipoVersamento e, TipoPendenzaPromemoriaRicevutaMail ric) {
+        boolean assente = ric == null;
+        e.setAvvMailPromRicAbilitato(!assente && Boolean.TRUE.equals(ric.getAbilitato()));
+        e.setAvvMailPromRicPdf(assente ? null : ric.getAllegaPdf());
+        e.setAvvMailPromRicTipo(assente ? null : enumToText(ric.getTipo()));
+        e.setAvvMailPromRicOggetto(assente ? null : objToText(ric.getOggetto()));
+        e.setAvvMailPromRicMessaggio(assente ? null : objToText(ric.getMessaggio()));
+        e.setAvvMailPromRicEseguiti(assente ? null : ric.getSoloEseguiti());
+    }
+
+    private void writeMailPromemoriaScadenza(AbstractTipoVersamento e, TipoPendenzaPromemoriaScadenza scad) {
+        boolean assente = scad == null;
+        e.setAvvMailPromScadAbilitato(!assente && Boolean.TRUE.equals(scad.getAbilitato()));
+        e.setAvvMailPromScadPreavviso(assente ? null : scad.getPreavviso());
+        e.setAvvMailPromScadTipo(assente ? null : enumToText(scad.getTipo()));
+        e.setAvvMailPromScadOggetto(assente ? null : objToText(scad.getOggetto()));
+        e.setAvvMailPromScadMessaggio(assente ? null : objToText(scad.getMessaggio()));
+    }
+
+    /**
+     * I tre blocchi promemoria App IO: gli stessi tipi di sotto-blocco valgono per il
+     * tipo pendenza globale e per quello di dominio, quindi la scrittura vive qui una
+     * volta sola invece di essere duplicata nei due mapper.
+     */
+    public void writeAvvisaturaAppIo(AbstractTipoVersamento e,
+            TipoPendenzaPromemoriaAvvisoAppIo avv,
+            TipoPendenzaPromemoriaRicevutaAppIo ric,
+            TipoPendenzaPromemoriaScadenza scad) {
+        writeAppIoPromemoriaAvviso(e, avv);
+        writeAppIoPromemoriaRicevuta(e, ric);
+        writeAppIoPromemoriaScadenza(e, scad);
+    }
+
+    private void writeAppIoPromemoriaAvviso(AbstractTipoVersamento e, TipoPendenzaPromemoriaAvvisoAppIo avv) {
+        boolean assente = avv == null;
+        e.setAvvAppIoPromAvvAbilitato(!assente && Boolean.TRUE.equals(avv.getAbilitato()));
+        e.setAvvAppIoPromAvvTipo(assente ? null : enumToText(avv.getTipo()));
+        e.setAvvAppIoPromAvvOggetto(assente ? null : objToText(avv.getOggetto()));
+        e.setAvvAppIoPromAvvMessaggio(assente ? null : objToText(avv.getMessaggio()));
+    }
+
+    private void writeAppIoPromemoriaRicevuta(AbstractTipoVersamento e, TipoPendenzaPromemoriaRicevutaAppIo ric) {
+        boolean assente = ric == null;
+        e.setAvvAppIoPromRicAbilitato(!assente && Boolean.TRUE.equals(ric.getAbilitato()));
+        e.setAvvAppIoPromRicTipo(assente ? null : enumToText(ric.getTipo()));
+        e.setAvvAppIoPromRicOggetto(assente ? null : objToText(ric.getOggetto()));
+        e.setAvvAppIoPromRicMessaggio(assente ? null : objToText(ric.getMessaggio()));
+        e.setAvvAppIoPromRicEseguiti(assente ? null : ric.getSoloEseguiti());
+    }
+
+    private void writeAppIoPromemoriaScadenza(AbstractTipoVersamento e, TipoPendenzaPromemoriaScadenza scad) {
+        boolean assente = scad == null;
+        e.setAvvAppIoPromScadAbilitato(!assente && Boolean.TRUE.equals(scad.getAbilitato()));
+        e.setAvvAppIoPromScadPreavviso(assente ? null : scad.getPreavviso());
+        e.setAvvAppIoPromScadTipo(assente ? null : enumToText(scad.getTipo()));
+        e.setAvvAppIoPromScadOggetto(assente ? null : objToText(scad.getOggetto()));
+        e.setAvvAppIoPromScadMessaggio(assente ? null : objToText(scad.getMessaggio()));
     }
 
     public void writeTracciatoCsv(AbstractTipoVersamento e, TipoPendenzaTracciatoCsv csv) {

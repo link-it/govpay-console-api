@@ -1,6 +1,5 @@
 package it.govpay.console.connettore;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,12 +17,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class ConnettoreController implements ConnettoriApi {
 
     private final ConnettoreService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public ConnettoreController(ConnettoreService service) {
+    public ConnettoreController(ConnettoreService service,
+                                HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     // --- pagopa ---

@@ -3,7 +3,6 @@ package it.govpay.console.operazioni;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,15 +21,15 @@ public class OperazioniController implements ManutenzioneOperazioniApi {
     private final OperazioniService service;
     private final OperazioneEsecuzioneService esecuzioneService;
     private final OperazioneEsecuzioniService esecuzioniService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
+    private final HttpServletRequest currentRequest;
 
     public OperazioniController(OperazioniService service, OperazioneEsecuzioneService esecuzioneService,
-            OperazioneEsecuzioniService esecuzioniService) {
+            OperazioneEsecuzioniService esecuzioniService,
+            HttpServletRequest currentRequest) {
         this.service = service;
         this.esecuzioneService = esecuzioneService;
         this.esecuzioniService = esecuzioniService;
+        this.currentRequest = currentRequest;
     }
 
     @Override

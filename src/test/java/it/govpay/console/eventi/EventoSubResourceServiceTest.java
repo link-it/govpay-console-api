@@ -88,6 +88,26 @@ class EventoSubResourceServiceTest {
         assertThat(dto.getHeaders().get(0).getValore()).isEqualTo("***REDACTED***");
     }
 
+    /**
+     * `nome` e' obbligatorio sullo schema di GDE, ma arriva da una risposta HTTP e
+     * sulle risposte non gira alcuna Bean Validation. Un header senza nome non e'
+     * sensibile e non deve far esplodere il dettaglio dell'evento.
+     */
+    @Test
+    void getRichiesta_headerSenzaNomeNonEsplodeENonEMascherato() {
+        when(client.getEventoById(1L)).thenReturn(new Evento()
+                .id(1L)
+                .parametriRichiesta(new DettaglioRichiesta()
+                        .headers(List.of(new Header().valore("valore-senza-nome")))));
+
+        EventoRichiesta dto = service.getRichiesta(1L, false, null);
+
+        assertThat(dto.getHeaders()).hasSize(1);
+        assertThat(dto.getHeaders().get(0).getNome()).isNull();
+        assertThat(dto.getHeaders().get(0).getRedatto()).isFalse();
+        assertThat(dto.getHeaders().get(0).getValore()).isEqualTo("valore-senza-nome");
+    }
+
     @Test
     void getRichiesta_unmask_mostraValoriInChiaro() {
         when(client.getEventoById(1L)).thenReturn(new Evento()

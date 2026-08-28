@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockFilterChain;
@@ -20,7 +22,7 @@ import jakarta.servlet.FilterChain;
 class GdeEventFilterTest {
 
     private final ConsoleGdeService consoleGdeService = mock(ConsoleGdeService.class);
-    private final GdeEventFilter filter = new GdeEventFilter(consoleGdeService);
+    private final GdeEventFilter filter = new GdeEventFilter(consoleGdeService, Clock.systemDefaultZone());
 
     @Test
     void unhandledExceptionWithResponseStillOkIsClassifiedAsFailWith500() throws Exception {

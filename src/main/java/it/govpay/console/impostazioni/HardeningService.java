@@ -22,6 +22,7 @@ import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.web.RepresentationValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -42,19 +43,22 @@ public class HardeningService {
     private final AclAuthorizer aclAuthorizer;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
+    private final RepresentationValidator representationValidator;
 
     public HardeningService(ConfigurazioneBlobStore blobStore,
                             HardeningMapper mapper,
                             ObjectMapper objectMapper,
                             AclAuthorizer aclAuthorizer,
                             CurrentOperatorService currentOperatorService,
-                            AuditService auditService) {
+                            AuditService auditService,
+                            RepresentationValidator representationValidator) {
         this.blobStore = blobStore;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.aclAuthorizer = aclAuthorizer;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
+        this.representationValidator = representationValidator;
     }
 
     @Transactional(readOnly = true)
@@ -93,6 +97,7 @@ public class HardeningService {
         } catch (RuntimeException e) {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
+        representationValidator.validate(body);
 
         Hardening hardening = loadOrCreate();
         mapper.applyConfig(hardening, body);

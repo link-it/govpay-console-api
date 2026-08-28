@@ -14,11 +14,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class TipoPendenzaSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "idTipoPendenza", "codTipoVersamento",
-            "descrizione", "descrizione");
-
     public static final String DEFAULT_SORT_RAW = "idTipoPendenza";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "codTipoVersamento",
+            "descrizione", "descrizione");
 
     private TipoPendenzaSortParser() {
     }

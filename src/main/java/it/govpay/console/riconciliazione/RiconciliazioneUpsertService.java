@@ -2,6 +2,7 @@ package it.govpay.console.riconciliazione;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +84,7 @@ public class RiconciliazioneUpsertService {
     private final OperazioneBatchClient operazioneBatchClient;
     private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
     private final Executor operazioniTriggerExecutor;
+    private final Clock clock;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -99,7 +101,8 @@ public class RiconciliazioneUpsertService {
                                         OperazioniProperties operazioniProperties,
                                         OperazioneBatchClient operazioneBatchClient,
                                         ExternalCallMetricsRecorder externalCallMetricsRecorder,
-                                        @Qualifier("operazioniTriggerExecutor") Executor operazioniTriggerExecutor) {
+                                        @Qualifier("operazioniTriggerExecutor") Executor operazioniTriggerExecutor,
+                                        Clock clock) {
         this.incassoRepository = incassoRepository;
         this.pagamentoRepository = pagamentoRepository;
         this.dominioRepository = dominioRepository;
@@ -113,6 +116,7 @@ public class RiconciliazioneUpsertService {
         this.operazioneBatchClient = operazioneBatchClient;
         this.externalCallMetricsRecorder = externalCallMetricsRecorder;
         this.operazioniTriggerExecutor = operazioniTriggerExecutor;
+        this.clock = clock;
     }
 
     @Transactional
@@ -246,7 +250,7 @@ public class RiconciliazioneUpsertService {
         i.setIdentificativo(id);
         i.setCodDominio(idDominio);
         applicaCampi(i, causale, idfRisolto, body);
-        i.setDataOraIncasso(OffsetDateTime.now()); // placeholder, sovrascritto sotto col clock del DB
+        i.setDataOraIncasso(OffsetDateTime.now(clock)); // placeholder, sovrascritto sotto col clock del DB
         Incasso saved = incassoRepository.saveAndFlush(i);
         touchClockDb(saved);
         return saved;

@@ -99,7 +99,9 @@ public class OperazioneSearchService {
 
     @Transactional(readOnly = true)
     public OperazionePendenza get(Long idTracciato, Long numero, HttpServletRequest request) {
-        Tracciato tracciato = loadTracciatoVisibile(idTracciato);
+        // Il valore di ritorno non serve: la chiamata e' il controllo di visibilita',
+        // che solleva NotFoundException se il tracciato non e' accessibile all'operatore.
+        loadTracciatoVisibile(idTracciato);
         Operazione operazione = repository.findByTracciato_IdAndLineaElaborazione(idTracciato, numero)
                 .orElseThrow(() -> new NotFoundException(
                         "Operazione non trovata: tracciato=" + idTracciato + ", numero=" + numero));

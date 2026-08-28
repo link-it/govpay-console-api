@@ -165,9 +165,10 @@ public class UnitaOperativaService {
         entity.setCodUo(body.getIdUnitaOperativa());
         entity.setUoCodiceIdentificativo(body.getIdUnitaOperativa());
         entity.setAbilitato(body.getAbilitato());
-        writeAnagrafica(entity, body.getRagioneSociale(), body.getIndirizzo(), body.getCivico(),
+        new AnagraficaUo(body.getRagioneSociale(), body.getIndirizzo(), body.getCivico(),
                 body.getCap(), body.getLocalita(), body.getProvincia(), body.getNazione(),
-                body.getEmail(), body.getPec(), body.getTel(), body.getFax(), body.getWeb(), body.getArea());
+                body.getEmail(), body.getPec(), body.getTel(), body.getFax(), body.getWeb(),
+                body.getArea()).applicaSu(entity);
         UnitaOperativa saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -192,9 +193,10 @@ public class UnitaOperativaService {
         checkIfMatch(ifMatch, entity);
 
         entity.setAbilitato(body.getAbilitato());
-        writeAnagrafica(entity, body.getRagioneSociale(), body.getIndirizzo(), body.getCivico(),
+        new AnagraficaUo(body.getRagioneSociale(), body.getIndirizzo(), body.getCivico(),
                 body.getCap(), body.getLocalita(), body.getProvincia(), body.getNazione(),
-                body.getEmail(), body.getPec(), body.getTel(), body.getFax(), body.getWeb(), body.getArea());
+                body.getEmail(), body.getPec(), body.getTel(), body.getFax(), body.getWeb(),
+                body.getArea()).applicaSu(entity);
         UnitaOperativa saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -227,9 +229,10 @@ public class UnitaOperativaService {
         representationValidator.validate(result);
 
         entity.setAbilitato(result.getAbilitato());
-        writeAnagrafica(entity, result.getRagioneSociale(), result.getIndirizzo(), result.getCivico(),
+        new AnagraficaUo(result.getRagioneSociale(), result.getIndirizzo(), result.getCivico(),
                 result.getCap(), result.getLocalita(), result.getProvincia(), result.getNazione(),
-                result.getEmail(), result.getPec(), result.getTel(), result.getFax(), result.getWeb(), result.getArea());
+                result.getEmail(), result.getPec(), result.getTel(), result.getFax(), result.getWeb(),
+                result.getArea()).applicaSu(entity);
         UnitaOperativa saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -238,23 +241,6 @@ public class UnitaOperativaService {
 
     // ---- helpers ----------------------------------------------------------
 
-    private void writeAnagrafica(UnitaOperativa e, String ragioneSociale, String indirizzo, String civico,
-            String cap, String localita, String provincia, String nazione, String email, String pec,
-            String tel, String fax, String web, String area) {
-        e.setUoDenominazione(ragioneSociale);
-        e.setUoIndirizzo(indirizzo);
-        e.setUoCivico(civico);
-        e.setUoCap(cap);
-        e.setUoLocalita(localita);
-        e.setUoProvincia(provincia);
-        e.setUoNazione(nazione);
-        e.setUoEmail(email);
-        e.setUoPec(pec);
-        e.setUoTel(tel);
-        e.setUoFax(fax);
-        e.setUoUrlSitoWeb(web);
-        e.setUoArea(area);
-    }
 
     private ResponseEntity<it.govpay.console.model.UnitaOperativa> ok(UnitaOperativa entity) {
         it.govpay.console.model.UnitaOperativa dto = mapper.toDetail(entity);

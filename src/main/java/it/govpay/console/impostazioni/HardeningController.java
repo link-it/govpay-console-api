@@ -2,7 +2,6 @@ package it.govpay.console.impostazioni;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,12 +15,12 @@ import jakarta.servlet.http.HttpServletRequest;
 public class HardeningController implements ImpostazioniHardeningApi {
 
     private final HardeningService service;
+    private final HttpServletRequest currentRequest;
 
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    public HardeningController(HardeningService service) {
+    public HardeningController(HardeningService service,
+                               HttpServletRequest currentRequest) {
         this.service = service;
+        this.currentRequest = currentRequest;
     }
 
     @Override

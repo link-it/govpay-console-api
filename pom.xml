@@ -534,7 +534,6 @@
                         <exclude>it/gov/digitpa/**</exclude>
                         <exclude>it/gov/pagopa/**</exclude>
                         <exclude>it/govpay/console/GovPayConsoleApplication.class</exclude>
-                        <exclude>org/openspcoop2/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

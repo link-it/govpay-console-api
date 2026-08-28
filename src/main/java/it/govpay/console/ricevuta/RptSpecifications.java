@@ -18,6 +18,8 @@ import it.govpay.console.security.VersamentoVisibilita;
  */
 public final class RptSpecifications {
 
+    private static final String FIELD_DATA_MSG_RICEVUTA = "dataMsgRicevuta";
+
     private RptSpecifications() {
     }
 
@@ -48,7 +50,7 @@ public final class RptSpecifications {
             return null;
         }
         OffsetDateTime from = da.atStartOfDay().atOffset(ZoneOffset.UTC);
-        return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get("dataMsgRicevuta"), from);
+        return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get(FIELD_DATA_MSG_RICEVUTA), from);
     }
 
     /** Limite superiore incluso: {@code data_msg_ricevuta < (dataA + 1 giorno)}. */
@@ -57,7 +59,7 @@ public final class RptSpecifications {
             return null;
         }
         OffsetDateTime toExclusive = a.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
-        return (root, q, cb) -> cb.lessThan(root.get("dataMsgRicevuta"), toExclusive);
+        return (root, q, cb) -> cb.lessThan(root.get(FIELD_DATA_MSG_RICEVUTA), toExclusive);
     }
 
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
@@ -80,6 +82,6 @@ public final class RptSpecifications {
     public static Specification<Rpt> conRicevuta() {
         return (root, q, cb) -> cb.and(
                 cb.isNotNull(root.get("xmlRt")),
-                cb.isNotNull(root.get("dataMsgRicevuta")));
+                cb.isNotNull(root.get(FIELD_DATA_MSG_RICEVUTA)));
     }
 }

@@ -211,16 +211,14 @@ public class ContoAccreditoService {
                     "La rappresentazione risultante dal PATCH non e' un conto di accredito valido: " + e.getOriginalMessage());
         }
 
+        // La rappresentazione ricomposta dal PATCH non passa dal `@Valid` del controller:
+        // si valida qui, prima delle regole di business, cosi' i vincoli dello schema
+        // (`required`, lunghezze, pattern) restano l'unica fonte per quei controlli.
+        representationValidator.validate(result);
+
         if (!ibanAccredito.equals(result.getIbanAccredito())) {
             throw new BadRequestException("Il campo 'ibanAccredito' non puo' essere modificato tramite PATCH.");
         }
-        if (result.getPostale() == null) {
-            throw new BadRequestException("La rappresentazione risultante dal PATCH ha il campo 'postale' mancante.");
-        }
-        if (result.getAbilitato() == null) {
-            throw new BadRequestException("La rappresentazione risultante dal PATCH ha il campo 'abilitato' mancante.");
-        }
-        representationValidator.validate(result);
 
         entity.setPostale(result.getPostale());
         entity.setAbilitato(result.getAbilitato());

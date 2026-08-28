@@ -62,6 +62,9 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class EntrataDominioService {
 
+    private static final String FIELD_IBAN_ACCREDITO = "ibanAccredito";
+    private static final String FIELD_IBAN_APPOGGIO = "ibanAppoggio";
+
     private static final Logger log = LoggerFactory.getLogger(EntrataDominioService.class);
 
     public static final String AZIONE_AUDIT_CREATE = "ENTRATA_DOMINIO_CREATE";
@@ -176,8 +179,8 @@ public class EntrataDominioService {
         entity.setAbilitato(body.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(body.getTipoContabilita()));
         entity.setCodiceContabilita(body.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(parent, body.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(parent, body.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(parent, body.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(parent, body.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -204,8 +207,8 @@ public class EntrataDominioService {
         entity.setAbilitato(body.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(body.getTipoContabilita()));
         entity.setCodiceContabilita(body.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(entity.getDominio(), body.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(entity.getDominio(), body.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(entity.getDominio(), body.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(entity.getDominio(), body.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -232,6 +235,11 @@ public class EntrataDominioService {
                     "La rappresentazione risultante dal PATCH non e' una entrata valida: " + e.getOriginalMessage());
         }
 
+        // La rappresentazione ricomposta dal PATCH non passa dal `@Valid` del controller:
+        // si valida qui, prima delle regole di business, cosi' i vincoli dello schema
+        // (`required`, lunghezze, pattern) restano l'unica fonte per quei controlli.
+        representationValidator.validate(result);
+
         if (!idEntrata.equals(result.getIdEntrata())) {
             throw new BadRequestException("Il campo 'idEntrata' non puo' essere modificato tramite PATCH.");
         }
@@ -239,16 +247,12 @@ public class EntrataDominioService {
             throw new BadRequestException(
                     "Il campo 'tipoEntrata' e' di sola lettura e non puo' essere modificato tramite PATCH.");
         }
-        if (result.getAbilitato() == null) {
-            throw new BadRequestException("La rappresentazione risultante dal PATCH ha il campo 'abilitato' mancante.");
-        }
-        representationValidator.validate(result);
 
         entity.setAbilitato(result.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(result.getTipoContabilita()));
         entity.setCodiceContabilita(result.getCodiceContabilita());
-        entity.setIbanAccredito(resolveIban(entity.getDominio(), result.getIbanAccredito(), "ibanAccredito"));
-        entity.setIbanAppoggio(resolveIban(entity.getDominio(), result.getIbanAppoggio(), "ibanAppoggio"));
+        entity.setIbanAccredito(resolveIban(entity.getDominio(), result.getIbanAccredito(), FIELD_IBAN_ACCREDITO));
+        entity.setIbanAppoggio(resolveIban(entity.getDominio(), result.getIbanAppoggio(), FIELD_IBAN_APPOGGIO));
         Tributo saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);

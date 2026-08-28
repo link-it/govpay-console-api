@@ -25,6 +25,8 @@ import it.govpay.console.model.RuoloEvento;
 @Component
 public class EventoMapper {
 
+    private static final String EVENTI_BASE_PATH = "/eventi/";
+
     public EventoSummary toSummary(it.govpay.gde.client.beans.Evento evento) {
         EventoSummary dto = new EventoSummary();
         dto.setId(evento.getId());
@@ -131,19 +133,26 @@ public class EventoMapper {
             return null;
         }
         int len = base64.length();
-        int padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+        int padding = paddingBase64(base64);
         return (len / 4L) * 3 - padding;
+    }
+
+    private static int paddingBase64(String base64) {
+        if (base64.endsWith("==")) {
+            return 2;
+        }
+        return base64.endsWith("=") ? 1 : 0;
     }
 
     private static EventoLinks links(Long id, String idDominio, String idA2A, String idPendenza,
             PayloadMeta richiesta, PayloadMeta risposta, Fr frCorrelato) {
         EventoLinks links = new EventoLinks();
-        links.setSelf(new Link("/eventi/" + id));
+        links.setSelf(new Link(EVENTI_BASE_PATH + id));
         if (richiesta.registrato()) {
-            links.setRichiesta(new Link("/eventi/" + id + "/richiesta"));
+            links.setRichiesta(new Link(EVENTI_BASE_PATH + id + "/richiesta"));
         }
         if (risposta.registrato()) {
-            links.setRisposta(new Link("/eventi/" + id + "/risposta"));
+            links.setRisposta(new Link(EVENTI_BASE_PATH + id + "/risposta"));
         }
         if (idDominio != null) {
             links.setDominio(new Link("/domini/" + idDominio));

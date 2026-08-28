@@ -164,9 +164,10 @@ public class TipoPendenzaDominioService {
         TipoVersamentoDominio entity = new TipoVersamentoDominio();
         entity.setDominio(parent);
         entity.setTipoVersamento(tipoVersamento);
-        mapper.applyWritable(entity, body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
-                body.getPortaleBackoffice(), body.getPortalePagamento(), body.getAvvisaturaMail(),
-                body.getAvvisaturaAppIO(), body.getVisualizzazione(), body.getTracciatoCsv());
+        mapper.applyWritable(entity, new DatiTipoPendenzaDominio(body.getCodificaIUV(),
+                body.getPagaTerzi(), body.getAbilitato(), body.getPortaleBackoffice(),
+                body.getPortalePagamento(), body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamentoDominio saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -188,9 +189,10 @@ public class TipoPendenzaDominioService {
         TipoVersamentoDominio entity = load(idDominio, idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 
-        mapper.applyWritable(entity, body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
-                body.getPortaleBackoffice(), body.getPortalePagamento(), body.getAvvisaturaMail(),
-                body.getAvvisaturaAppIO(), body.getVisualizzazione(), body.getTracciatoCsv());
+        mapper.applyWritable(entity, new DatiTipoPendenzaDominio(body.getCodificaIUV(),
+                body.getPagaTerzi(), body.getAbilitato(), body.getPortaleBackoffice(),
+                body.getPortalePagamento(), body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamentoDominio saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -224,9 +226,10 @@ public class TipoPendenzaDominioService {
         }
         representationValidator.validate(result);
 
-        mapper.applyWritable(entity, result.getCodificaIUV(), result.getPagaTerzi(), result.getAbilitato(),
-                result.getPortaleBackoffice(), result.getPortalePagamento(), result.getAvvisaturaMail(),
-                result.getAvvisaturaAppIO(), result.getVisualizzazione(), result.getTracciatoCsv());
+        mapper.applyWritable(entity, new DatiTipoPendenzaDominio(result.getCodificaIUV(),
+                result.getPagaTerzi(), result.getAbilitato(), result.getPortaleBackoffice(),
+                result.getPortalePagamento(), result.getAvvisaturaMail(), result.getAvvisaturaAppIO(),
+                result.getVisualizzazione(), result.getTracciatoCsv()));
         TipoVersamentoDominio saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);

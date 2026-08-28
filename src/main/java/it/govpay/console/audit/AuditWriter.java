@@ -1,5 +1,6 @@
 package it.govpay.console.audit;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 
 import org.slf4j.Logger;
@@ -30,9 +31,12 @@ public class AuditWriter {
     private static final Logger log = LoggerFactory.getLogger(AuditWriter.class);
 
     private final GpAuditRepository repository;
+    private final Clock clock;
 
-    public AuditWriter(GpAuditRepository repository) {
+    public AuditWriter(GpAuditRepository repository,
+            Clock clock) {
         this.repository = repository;
+        this.clock = clock;
     }
 
     @Async("auditExecutor")
@@ -41,7 +45,7 @@ public class AuditWriter {
                       Long idOperatore, String ipRichiedente) {
         try {
             GpAudit row = new GpAudit();
-            row.setData(OffsetDateTime.now());
+            row.setData(OffsetDateTime.now(clock));
             row.setIdOggetto(idOggetto);
             row.setTipoOggetto(azione);
             row.setOggetto(oggettoSerializzato);

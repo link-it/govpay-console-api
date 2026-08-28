@@ -89,8 +89,7 @@ public class PendenzaService {
         }
 
         Pendenza pendenza = mapper.toDetail(versamento, expand);
-        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza,
-                versamento.getNumeroAvviso(), pendenza.getStato());
+        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza, versamento.getNumeroAvviso());
         pendenza.setLinks(links);
         log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={}",
                 idPendenza, pendenza.getVoci().size(), links.getAvviso() != null);

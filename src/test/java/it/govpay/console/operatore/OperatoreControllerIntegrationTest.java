@@ -354,6 +354,22 @@ class OperatoreControllerIntegrationTest {
                 .andExpect(jsonPath("$.principal", is("op-alfa")));
     }
 
+    /**
+     * La guardia scritta a mano su questo campo e' stata rimossa perche' duplicava
+     * `required` sullo schema: il test verifica che la Bean Validation applicata al
+     * documento ricomposto dal PATCH produca lo stesso 400.
+     */
+    @Test
+    void patchRemovingAbilitatoReturns400() throws Exception {
+        String etag = currentEtag("op-alfa");
+        String p = """
+                [{"op":"remove","path":"/abilitato"}]""";
+        mvc.perform(patch("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(p))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void patchChangingPrincipalReturns400() throws Exception {
         String etag = currentEtag("op-alfa");

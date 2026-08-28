@@ -4,7 +4,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,19 +31,19 @@ public class RiconciliazioniController implements RiconciliazioniApi {
     private final RiconciliazioneSearchService searchService;
     private final RiconciliazioneDetailService detailService;
     private final RiconciliazioneWriteService writeService;
-
-    @Autowired(required = false)
-    private HttpServletRequest currentRequest;
-
-    @Autowired(required = false)
-    private HttpServletResponse currentResponse;
+    private final HttpServletRequest currentRequest;
+    private final HttpServletResponse currentResponse;
 
     public RiconciliazioniController(RiconciliazioneSearchService searchService,
                                      RiconciliazioneDetailService detailService,
-                                     RiconciliazioneWriteService writeService) {
+                                     RiconciliazioneWriteService writeService,
+                                     HttpServletRequest currentRequest,
+                                     HttpServletResponse currentResponse) {
         this.searchService = searchService;
         this.detailService = detailService;
         this.writeService = writeService;
+        this.currentRequest = currentRequest;
+        this.currentResponse = currentResponse;
     }
 
     @Override
@@ -62,7 +61,7 @@ public class RiconciliazioniController implements RiconciliazioniApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                cursorMode ? (cursor != null ? cursor : "") : null,
+                ListQueryValidator.cursorValue(cursorMode, cursor),
                 idDominio,
                 dataDa,
                 dataA,

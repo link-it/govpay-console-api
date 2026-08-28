@@ -32,6 +32,7 @@ import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.web.RepresentationValidator;
 import it.govpay.console.web.UnprocessableEntityException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -48,6 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class RuoloService {
 
+    private static final String FIELD_ID_RUOLO = "idRuolo";
+
     private static final Logger log = LoggerFactory.getLogger(RuoloService.class);
 
     public static final String AZIONE_AUDIT_CREATE = "RUOLO_CREATE";
@@ -58,6 +61,7 @@ public class RuoloService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final RepresentationValidator representationValidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -66,12 +70,14 @@ public class RuoloService {
                         RuoloMapper mapper,
                         CurrentOperatorService currentOperatorService,
                         AuditService auditService,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        RepresentationValidator representationValidator) {
         this.aclRepository = aclRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.representationValidator = representationValidator;
     }
 
     @Transactional(readOnly = true)
@@ -122,7 +128,9 @@ public class RuoloService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Ruolo> create(RuoloCreate body, HttpServletRequest request) {
         String idRuolo = body.getIdRuolo();
-        if (idRuolo == null || idRuolo.isBlank()) {
+        // `@NotNull` su `idRuolo` e' verificata dal `@Valid` del controller; la stringa
+        // vuota no, perche' lo schema non porta ne' `minLength` ne' `pattern`.
+        if (idRuolo.isBlank()) {
             throw new BadRequestException("Il campo 'idRuolo' e' obbligatorio.");
         }
         if (aclRepository.existsByRuoloAndIdUtenzaIsNull(idRuolo)) {
@@ -160,11 +168,11 @@ public class RuoloService {
         ObjectNode node = objectMapper.valueToTree(mapper.toDetail(idRuolo, current));
         ObjectNode patched = JsonPatchApplier.apply(node, operations, objectMapper);
 
-        String patchedId = text(patched, "idRuolo");
+        String patchedId = text(patched, FIELD_ID_RUOLO);
         if (!idRuolo.equals(patchedId)) {
             throw new BadRequestException("Il campo 'idRuolo' non puo' essere modificato tramite PATCH.");
         }
-        patched.remove("idRuolo");
+        patched.remove(FIELD_ID_RUOLO);
 
         RuoloReplace body;
         try {
@@ -172,6 +180,7 @@ public class RuoloService {
         } catch (RuntimeException e) {
             throw new BadRequestException("La rappresentazione risultante dal PATCH non e' valida: " + e.getMessage());
         }
+        representationValidator.validate(body);
         return doReplace(idRuolo, body.getAcl(), request);
     }
 
@@ -193,13 +202,10 @@ public class RuoloService {
         }
         List<Acl> out = new ArrayList<>();
         for (it.govpay.console.model.Acl a : aclList) {
-            if (a.getServizio() == null) {
-                throw new UnprocessableEntityException("Ogni elemento di 'acl' deve avere 'servizio' valorizzato.");
-            }
-            if (a.getAutorizzazioni() == null || a.getAutorizzazioni().isEmpty()) {
-                throw new UnprocessableEntityException(
-                        "Ogni elemento di 'acl' deve avere almeno un'autorizzazione (R e/o W).");
-            }
+            // `servizio` e `autorizzazioni` sono `required` sullo schema di `Acl`, con
+            // `minItems: 1` sulle autorizzazioni, e la proprieta' `acl` porta `@Valid`:
+            // i vincoli sugli elementi sono quindi applicati in cascata su tutti gli
+            // ingressi (replace via `@Valid`, PATCH via RepresentationValidator).
             Acl entity = new Acl();
             entity.setServizio(a.getServizio().getValue());
             entity.setDiritti(DirittiCodec.serialize(a.getAutorizzazioni()));
@@ -239,7 +245,7 @@ public class RuoloService {
     private void audit(String azione, String idRuolo, List<Acl> rows, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         Map<String, Object> dettaglio = new HashMap<>();
-        dettaglio.put("idRuolo", idRuolo);
+        dettaglio.put(FIELD_ID_RUOLO, idRuolo);
         long idOggetto = rows.stream().map(Acl::getId).filter(java.util.Objects::nonNull)
                 .mapToLong(Long::longValue).min().orElse(0L);
         auditService.registra(azione, idOggetto, dettaglio, operatore, request);

@@ -32,6 +32,18 @@ public final class ListQueryValidator {
      * Modalità cursor attiva se {@code ?cursor} è presente nella query string,
      * anche con valore vuoto ("prima pagina cursor-mode").
      */
+    /**
+     * Valore da passare al query record per la modalita' di paginazione in uso:
+     * {@code null} in modalita' offset, il cursore in modalita' cursor — stringa
+     * vuota alla prima pagina, dove il client non ha ancora un cursore.
+     */
+    public static String cursorValue(boolean cursorMode, String cursor) {
+        if (!cursorMode) {
+            return null;
+        }
+        return cursor != null ? cursor : "";
+    }
+
     public static boolean isCursorMode(HttpServletRequest request) {
         return request != null && request.getParameterMap().containsKey("cursor");
     }

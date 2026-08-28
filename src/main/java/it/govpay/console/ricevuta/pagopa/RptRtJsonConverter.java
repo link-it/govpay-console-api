@@ -73,15 +73,19 @@ public class RptRtJsonConverter {
 		if (xml == null) {
 			return null;
 		}
+		String versione = versione(rpt);
+		if (versione == null) {
+			throw versioneNonGestita(rpt);
+		}
 		try {
-			return switch (versione(rpt)) {
+			return switch (versione) {
 				case "SANP_230", "RPTSANP230_RTV2" -> JaxbUtils.toRPT(xml);
 				case "SANP_240", "RPTV1_RTV2" -> JaxbUtils.toPaGetPaymentResRPT(xml).getData();
 				case "SANP_321_V2", "RPTV2_RTV1" -> JaxbUtils.toPaGetPaymentV2ResponseRPT(xml).getData();
 				default -> throw versioneNonGestita(rpt);
 			};
 		} catch (JAXBException e) {
-			throw new RptRtConversionException("Errore nella conversione della RPT (versione " + versione(rpt) + ")", e);
+			throw new RptRtConversionException("Errore nella conversione della RPT (versione " + versione + ")", e);
 		}
 	}
 
@@ -91,15 +95,19 @@ public class RptRtJsonConverter {
 		if (xml == null) {
 			return null;
 		}
+		String versione = versione(rpt);
+		if (versione == null) {
+			throw versioneNonGestita(rpt);
+		}
 		try {
-			return switch (versione(rpt)) {
+			return switch (versione) {
 				case "SANP_230" -> JaxbUtils.toRT(xml);
 				case "SANP_240", "RPTV2_RTV1" -> JaxbUtils.toPaSendRTReqRT(xml).getReceipt();
 				case "SANP_321_V2", "RPTV1_RTV2", "RPTSANP230_RTV2" -> JaxbUtils.toPaSendRTV2RequestRT(xml).getReceipt();
 				default -> throw versioneNonGestita(rpt);
 			};
 		} catch (JAXBException e) {
-			throw new RptRtConversionException("Errore nella conversione della RT (versione " + versione(rpt) + ")", e);
+			throw new RptRtConversionException("Errore nella conversione della RT (versione " + versione + ")", e);
 		}
 	}
 

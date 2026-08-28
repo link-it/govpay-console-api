@@ -16,7 +16,6 @@ import java.io.OutputStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -87,14 +86,6 @@ class PendenzeEndToEndFixtureTest {
         op.setNome("Op Fixture");
         op.setIdUtenza(u.getId());
         operatoreRepository.save(op);
-    }
-
-    private static Answer<Void> writePdf(byte[] bytes) {
-        return invocation -> {
-            OutputStream out = invocation.getArgument(1);
-            out.write(bytes);
-            return null;
-        };
     }
 
     @Test

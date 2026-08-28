@@ -242,7 +242,7 @@ public class ProblemExceptionHandler {
         String msg = "{} {} -> {} {}";
         if (status.is5xxServerError()) {
             log.error(msg, request.getMethod(), request.getRequestURI(), status.value(), status.getReasonPhrase(), ex);
-        } else {
+        } else if (log.isWarnEnabled()) {
             log.warn(msg, request.getMethod(), request.getRequestURI(), status.value(), status.getReasonPhrase(),
                     ex.toString());
         }

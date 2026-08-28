@@ -389,6 +389,22 @@ class EntrataDominioControllerIntegrationTest {
                 .andExpect(jsonPath("$.tipoEntrata.idEntrata", is("TARI")));
     }
 
+    /**
+     * La guardia scritta a mano su questo campo e' stata rimossa perche' duplicava
+     * `required` sullo schema: il test verifica che la Bean Validation applicata al
+     * documento ricomposto dal PATCH produca lo stesso 400.
+     */
+    @Test
+    void patchRemovingAbilitatoReturns400() throws Exception {
+        String etag = currentEtag("TARI");
+        String p = """
+                [{"op":"remove","path":"/abilitato"}]""";
+        mvc.perform(patch("/domini/" + ID_DOMINIO + "/entrate/TARI").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(p))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void patchChangingIdEntrataReturns400() throws Exception {
         String etag = currentEtag("TARI");

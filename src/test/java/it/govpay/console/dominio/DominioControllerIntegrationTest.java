@@ -216,6 +216,42 @@ class DominioControllerIntegrationTest {
 
     // --- Create ---
 
+    /**
+     * Copre tutti e tredici i campi anagrafici con valori distinti e riconoscibili.
+     * Serve come rete per il mapping DTO -> UO "EC": i campi sono tutti stringhe e
+     * una trasposizione fra due di essi non produrrebbe alcun errore visibile.
+     */
+    @Test
+    void createPersistsEveryAnagraficaFieldOnItsOwnColumn() throws Exception {
+        String body = """
+                {"idDominio":"12345678911","ragioneSociale":"RS-val","gln":"0011223344556",
+                 "idStazione":"STAZ01","abilitato":true,"scaricaFr":true,
+                 "indirizzo":"IND-val","civico":"CIV-val","cap":"12345","localita":"LOC-val",
+                 "provincia":"PR","nazione":"NZ","email":"email@val.it","pec":"pec@val.it",
+                 "tel":"TEL-val","fax":"FAX-val","web":"WEB-val","area":"AREA-val",
+                 "auxDigit":3,"segregationCode":8}""";
+        mvc.perform(post("/domini").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        Dominio created = dominioRepository.findByCodDominio("12345678911").orElseThrow();
+        UnitaOperativa ec = uoRepository.findByDominio_IdAndCodUo(created.getId(), "EC").orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(ec.getUoCodiceIdentificativo()).isEqualTo("12345678911");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoDenominazione()).isEqualTo("RS-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoIndirizzo()).isEqualTo("IND-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoCivico()).isEqualTo("CIV-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoCap()).isEqualTo("12345");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoLocalita()).isEqualTo("LOC-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoProvincia()).isEqualTo("PR");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoNazione()).isEqualTo("NZ");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoEmail()).isEqualTo("email@val.it");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoPec()).isEqualTo("pec@val.it");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoTel()).isEqualTo("TEL-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoFax()).isEqualTo("FAX-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoUrlSitoWeb()).isEqualTo("WEB-val");
+        org.assertj.core.api.Assertions.assertThat(ec.getUoArea()).isEqualTo("AREA-val");
+    }
+
     @Test
     void createReturns201AndPersistsEcAnagrafica() throws Exception {
         String body = """

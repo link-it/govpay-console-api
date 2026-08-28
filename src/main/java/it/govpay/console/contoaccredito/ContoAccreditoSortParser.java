@@ -14,11 +14,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class ContoAccreditoSortParser {
 
-    private static final Map<String, String> WHITELIST = Map.of(
-            "ibanAccredito", "codIban",
-            "descrizione", "descrizione");
-
     public static final String DEFAULT_SORT_RAW = "ibanAccredito";
+
+    private static final Map<String, String> WHITELIST = Map.of(
+            DEFAULT_SORT_RAW, "codIban",
+            "descrizione", "descrizione");
 
     private ContoAccreditoSortParser() {
     }
