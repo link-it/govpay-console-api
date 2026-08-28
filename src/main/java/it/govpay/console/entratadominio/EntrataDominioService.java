@@ -235,6 +235,11 @@ public class EntrataDominioService {
                     "La rappresentazione risultante dal PATCH non e' una entrata valida: " + e.getOriginalMessage());
         }
 
+        // La rappresentazione ricomposta dal PATCH non passa dal `@Valid` del controller:
+        // si valida qui, prima delle regole di business, cosi' i vincoli dello schema
+        // (`required`, lunghezze, pattern) restano l'unica fonte per quei controlli.
+        representationValidator.validate(result);
+
         if (!idEntrata.equals(result.getIdEntrata())) {
             throw new BadRequestException("Il campo 'idEntrata' non puo' essere modificato tramite PATCH.");
         }
@@ -242,10 +247,6 @@ public class EntrataDominioService {
             throw new BadRequestException(
                     "Il campo 'tipoEntrata' e' di sola lettura e non puo' essere modificato tramite PATCH.");
         }
-        if (result.getAbilitato() == null) {
-            throw new BadRequestException("La rappresentazione risultante dal PATCH ha il campo 'abilitato' mancante.");
-        }
-        representationValidator.validate(result);
 
         entity.setAbilitato(result.getAbilitato());
         entity.setTipoContabilita(entrataMapper.toCodifica(result.getTipoContabilita()));

@@ -143,7 +143,9 @@ public class TipoVersamentoConfigMapper {
             e.setBoCodApplicazione(null);
             return;
         }
-        e.setBoAbilitato(bo.getAbilitato() != null ? bo.getAbilitato() : Boolean.FALSE);
+        // `abilitato` e' `required` dentro il blocco portale e il getter del blocco porta
+        // `@Valid`: se il blocco c'e', il campo c'e'.
+        e.setBoAbilitato(bo.getAbilitato());
         e.setBoFormTipo(bo.getForm() != null ? bo.getForm().getTipo() : null);
         e.setBoFormDefinizione(bo.getForm() != null ? objToText(bo.getForm().getDefinizione()) : null);
         e.setBoValidazioneDef(objToText(bo.getValidazione()));
@@ -164,7 +166,7 @@ public class TipoVersamentoConfigMapper {
             e.setPagCodApplicazione(null);
             return;
         }
-        e.setPagAbilitato(pag.getAbilitato() != null ? pag.getAbilitato() : Boolean.FALSE);
+        e.setPagAbilitato(pag.getAbilitato());
         e.setPagFormTipo(pag.getForm() != null ? pag.getForm().getTipo() : null);
         e.setPagFormDefinizione(pag.getForm() != null ? objToText(pag.getForm().getDefinizione()) : null);
         e.setPagFormImpaginazione(pag.getForm() != null ? objToText(pag.getForm().getImpaginazione()) : null);

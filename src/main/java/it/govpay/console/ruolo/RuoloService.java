@@ -128,7 +128,9 @@ public class RuoloService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Ruolo> create(RuoloCreate body, HttpServletRequest request) {
         String idRuolo = body.getIdRuolo();
-        if (idRuolo == null || idRuolo.isBlank()) {
+        // `@NotNull` su `idRuolo` e' verificata dal `@Valid` del controller; la stringa
+        // vuota no, perche' lo schema non porta ne' `minLength` ne' `pattern`.
+        if (idRuolo.isBlank()) {
             throw new BadRequestException("Il campo 'idRuolo' e' obbligatorio.");
         }
         if (aclRepository.existsByRuoloAndIdUtenzaIsNull(idRuolo)) {
@@ -200,13 +202,10 @@ public class RuoloService {
         }
         List<Acl> out = new ArrayList<>();
         for (it.govpay.console.model.Acl a : aclList) {
-            if (a.getServizio() == null) {
-                throw new UnprocessableEntityException("Ogni elemento di 'acl' deve avere 'servizio' valorizzato.");
-            }
-            if (a.getAutorizzazioni() == null || a.getAutorizzazioni().isEmpty()) {
-                throw new UnprocessableEntityException(
-                        "Ogni elemento di 'acl' deve avere almeno un'autorizzazione (R e/o W).");
-            }
+            // `servizio` e `autorizzazioni` sono `required` sullo schema di `Acl`, con
+            // `minItems: 1` sulle autorizzazioni, e la proprieta' `acl` porta `@Valid`:
+            // i vincoli sugli elementi sono quindi applicati in cascata su tutti gli
+            // ingressi (replace via `@Valid`, PATCH via RepresentationValidator).
             Acl entity = new Acl();
             entity.setServizio(a.getServizio().getValue());
             entity.setDiritti(DirittiCodec.serialize(a.getAutorizzazioni()));

@@ -183,7 +183,7 @@ public class ApplicazioneService {
         UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());
         UtenzaAssociazioniWriter.TipiResolution tipi = writer.resolveTipiPendenza(split.tipi());
         String ruoliCsv = writer.validateRuoliToCsv(body.getRuoli());
-        boolean abilitato = body.getAbilitato() == null || Boolean.TRUE.equals(body.getAbilitato());
+        boolean abilitato = Boolean.TRUE.equals(body.getAbilitato());
 
         Utenza utenza = new Utenza();
         utenza.setPrincipal(principal);
@@ -260,10 +260,10 @@ public class ApplicazioneService {
                                                                            ApplicazioneReplace body,
                                                                            HttpServletRequest request) {
         String principal = validatePrincipal(body.getPrincipal());
+        // `abilitato` e' `required` nello schema: validato dal `@Valid` del controller
+        // sulla replace e da RepresentationValidator sul documento ricomposto dal PATCH,
+        // che sono i due soli ingressi di questo metodo.
         Boolean abilitato = body.getAbilitato();
-        if (abilitato == null) {
-            throw new BadRequestException("Il campo 'abilitato' e' obbligatorio.");
-        }
 
         Utenza utenza = app.getUtenza();
         if (!principal.equals(utenza.getPrincipalOriginale()) && utenzaRepository.existsByPrincipalOriginale(principal)) {

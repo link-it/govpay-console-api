@@ -271,7 +271,10 @@ public class TracciatoUploadService {
         if (inserimenti != null) {
             for (NuovaPendenzaTracciato riga : inserimenti) {
                 String rigaIdDominio = riga.getIdDominio();
-                if (rigaIdDominio != null && !rigaIdDominio.isBlank() && !rigaIdDominio.equals(idDominioRoot)) {
+                // `idDominio` e' `required` sulla riga e `inserimenti` porta `@Valid`: il
+                // `validator.validate(post)` sopra lo ha gia' verificato. Resta la stringa
+                // vuota, che passa `@NotNull`.
+                if (!rigaIdDominio.isBlank() && !rigaIdDominio.equals(idDominioRoot)) {
                     throw new BadRequestException(
                             "Tracciati multi-dominio non supportati: la riga con idA2A='" + riga.getIdA2A()
                                     + "', idPendenza='" + riga.getIdPendenza() + "' dichiara idDominio='" + rigaIdDominio

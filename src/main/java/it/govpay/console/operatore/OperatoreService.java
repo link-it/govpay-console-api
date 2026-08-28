@@ -180,7 +180,7 @@ public class OperatoreService {
         UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());
         UtenzaAssociazioniWriter.TipiResolution tipi = writer.resolveTipiPendenza(body.getTipiPendenza());
         String ruoliCsv = writer.validateRuoliToCsv(body.getRuoli());
-        boolean abilitato = body.getAbilitato() == null || Boolean.TRUE.equals(body.getAbilitato());
+        boolean abilitato = Boolean.TRUE.equals(body.getAbilitato());
 
         Utenza utenza = new Utenza();
         utenza.setPrincipal(principal);
@@ -247,10 +247,10 @@ public class OperatoreService {
     private ResponseEntity<it.govpay.console.model.Operatore> doReplace(Operatore op, OperatoreReplace body,
                                                                         HttpServletRequest request) {
         String nome = validateNome(body.getNome());
+        // `abilitato` e' `required` nello schema: validato dal `@Valid` del controller
+        // sulla replace e da RepresentationValidator sul documento ricomposto dal PATCH,
+        // che sono i due soli ingressi di questo metodo.
         Boolean abilitato = body.getAbilitato();
-        if (abilitato == null) {
-            throw new BadRequestException("Il campo 'abilitato' e' obbligatorio.");
-        }
 
         Utenza utenza = utenzaOf(op);
         UtenzaAssociazioniWriter.DominiResolution dom = writer.resolveDomini(body.getDomini());

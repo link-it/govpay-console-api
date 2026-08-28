@@ -81,8 +81,11 @@ public class GiornaleEventiMapper {
 
     private static it.govpay.common.configurazione.model.GdeEvento toCommonEvento(GdeEvento dto) {
         it.govpay.common.configurazione.model.GdeEvento target = new it.govpay.common.configurazione.model.GdeEvento();
-        String log = dto != null && dto.getLog() != null ? dto.getLog().getValue() : DEFAULT_POLICY;
-        String dump = dto != null && dto.getDump() != null ? dto.getDump().getValue() : DEFAULT_POLICY;
+        // `log` e `dump` sono `required` sullo schema GdeEvento, quindi se il blocco c'e'
+        // ci sono anche loro. Il controllo su `dto` invece resta: il chiamante passa
+        // esplicitamente null quando il blocco e' assente.
+        String log = dto != null ? dto.getLog().getValue() : DEFAULT_POLICY;
+        String dump = dto != null ? dto.getDump().getValue() : DEFAULT_POLICY;
         target.setLog(it.govpay.common.configurazione.model.GdeEvento.LogEnum.valueOf(log));
         target.setDump(it.govpay.common.configurazione.model.GdeEvento.DumpEnum.valueOf(dump));
         return target;

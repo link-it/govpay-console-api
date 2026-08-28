@@ -457,6 +457,22 @@ class ApplicazioneControllerIntegrationTest {
                 .andExpect(jsonPath("$.principal", is("p-app1")));
     }
 
+    /**
+     * La guardia scritta a mano su questo campo e' stata rimossa perche' duplicava
+     * `required` sullo schema: il test verifica che la Bean Validation applicata al
+     * documento ricomposto dal PATCH produca lo stesso 400.
+     */
+    @Test
+    void patchRemovingAbilitatoReturns400() throws Exception {
+        String etag = currentEtag("APP-001");
+        String p = """
+                [{"op":"remove","path":"/abilitato"}]""";
+        mvc.perform(patch("/applicazioni/APP-001").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(p))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void patchChangingIdA2AReturns400() throws Exception {
         String etag = currentEtag("APP-001");

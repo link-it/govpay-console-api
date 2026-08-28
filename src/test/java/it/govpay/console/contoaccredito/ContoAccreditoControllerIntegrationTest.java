@@ -342,6 +342,24 @@ class ContoAccreditoControllerIntegrationTest {
                 .andExpect(jsonPath("$.abilitato", is(true)));
     }
 
+    /**
+     * La guardia scritta a mano su questo campo e' stata rimossa perche' duplicava
+     * `required` sullo schema: il test verifica che la Bean Validation applicata al
+     * documento ricomposto dal PATCH produca lo stesso 400.
+     */
+    @Test
+    void patchRemovingRequiredFieldReturns400() throws Exception {
+        for (String campo : new String[] {"postale", "abilitato"}) {
+            String etag = currentEtag(IBAN_A);
+            String p = "[{\"op\":\"remove\",\"path\":\"/" + campo + "\"}]";
+            mvc.perform(patch("/domini/" + ID_DOMINIO + "/contiAccredito/" + IBAN_A)
+                            .with(httpBasic(PRINCIPAL, PASSWORD))
+                            .header("If-Match", etag)
+                            .contentType(JSON_PATCH).content(p))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
     @Test
     void patchChangingIbanReturns400() throws Exception {
         String etag = currentEtag(IBAN_A);
