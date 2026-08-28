@@ -40,6 +40,7 @@ import it.govpay.console.web.IfMatchMismatchException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PreconditionRequiredException;
 import it.govpay.console.web.RepresentationEtag;
+import it.govpay.console.unitaoperativa.AnagraficaUo;
 import it.govpay.console.web.RepresentationValidator;
 import it.govpay.console.web.UnprocessableEntityException;
 import jakarta.persistence.EntityManager;
@@ -159,27 +160,26 @@ public class DominioService {
         if (repository.existsByCodDominio(body.getIdDominio())) {
             throw new ConflictException("Esiste gia' un dominio con idDominio '" + body.getIdDominio() + "'.");
         }
-        semanticValidator.validate(body.getIntermediato(), body.getGln(), body.getIdStazione(),
-                body.getSegregationCode(), body.getCbill(), body.getAutStampaPosteItaliane(),
-                body.getIuvPrefix(), body.getAuxDigit());
+        DatiDominio dati = new DatiDominio(body.getRagioneSociale(), body.getGln(), body.getCbill(),
+                body.getIuvPrefix(), body.getAutStampaPosteItaliane(), body.getAuxDigit(),
+                body.getSegregationCode(), body.getTassonomiaPagoPA(), body.getIntermediato(),
+                body.getScaricaFr(), body.getAbilitato(), body.getIdStazione());
+        semanticValidator.validate(dati);
         Stazione stazione = resolveStazioneOptional(body.getIdStazione());
 
         Dominio entity = new Dominio();
         entity.setCodDominio(body.getIdDominio());
-        writeDominio(entity, body.getRagioneSociale(), body.getGln(), body.getCbill(),
-                body.getIuvPrefix(), body.getAutStampaPosteItaliane(), body.getAuxDigit(),
-                body.getSegregationCode(), body.getTassonomiaPagoPA(), body.getIntermediato(),
-                body.getScaricaFr(), body.getAbilitato(), stazione);
+        writeDominio(entity, dati, stazione);
         Dominio saved = repository.save(entity);
 
         UnitaOperativa ec = new UnitaOperativa();
         ec.setCodUo(COD_UO_EC);
         ec.setAbilitato(Boolean.TRUE);
         ec.setDominio(saved);
-        writeEc(ec, saved.getCodDominio(), body.getRagioneSociale(), body.getIndirizzo(),
+        writeEc(ec, saved.getCodDominio(), new AnagraficaUo(body.getRagioneSociale(), body.getIndirizzo(),
                 body.getCivico(), body.getCap(), body.getLocalita(), body.getProvincia(),
                 body.getNazione(), body.getEmail(), body.getPec(), body.getTel(),
-                body.getFax(), body.getWeb(), body.getArea());
+                body.getFax(), body.getWeb(), body.getArea()));
         UnitaOperativa savedEc = uoRepository.save(ec);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -201,18 +201,17 @@ public class DominioService {
         UnitaOperativa ec = loadOrCreateEc(entity);
         checkIfMatch(ifMatch, entity, ec);
 
-        semanticValidator.validate(body.getIntermediato(), body.getGln(), body.getIdStazione(),
-                body.getSegregationCode(), body.getCbill(), body.getAutStampaPosteItaliane(),
-                body.getIuvPrefix(), body.getAuxDigit());
-        Stazione stazione = resolveStazioneOptional(body.getIdStazione());
-        writeDominio(entity, body.getRagioneSociale(), body.getGln(), body.getCbill(),
+        DatiDominio dati = new DatiDominio(body.getRagioneSociale(), body.getGln(), body.getCbill(),
                 body.getIuvPrefix(), body.getAutStampaPosteItaliane(), body.getAuxDigit(),
                 body.getSegregationCode(), body.getTassonomiaPagoPA(), body.getIntermediato(),
-                body.getScaricaFr(), body.getAbilitato(), stazione);
-        writeEc(ec, entity.getCodDominio(), body.getRagioneSociale(), body.getIndirizzo(),
+                body.getScaricaFr(), body.getAbilitato(), body.getIdStazione());
+        semanticValidator.validate(dati);
+        Stazione stazione = resolveStazioneOptional(body.getIdStazione());
+        writeDominio(entity, dati, stazione);
+        writeEc(ec, entity.getCodDominio(), new AnagraficaUo(body.getRagioneSociale(), body.getIndirizzo(),
                 body.getCivico(), body.getCap(), body.getLocalita(), body.getProvincia(),
                 body.getNazione(), body.getEmail(), body.getPec(), body.getTel(),
-                body.getFax(), body.getWeb(), body.getArea());
+                body.getFax(), body.getWeb(), body.getArea()));
 
         Dominio saved = repository.save(entity);
         UnitaOperativa savedEc = uoRepository.save(ec);
@@ -261,19 +260,18 @@ public class DominioService {
             throw new BadRequestException("La rappresentazione risultante dal PATCH ha il campo 'scaricaFr' mancante.");
         }
         representationValidator.validate(result);
-        semanticValidator.validate(result.getIntermediato(), result.getGln(), result.getIdStazione(),
-                result.getSegregationCode(), result.getCbill(), result.getAutStampaPosteItaliane(),
-                result.getIuvPrefix(), result.getAuxDigit());
-
-        Stazione stazione = resolveStazioneOptional(result.getIdStazione());
-        writeDominio(entity, result.getRagioneSociale(), result.getGln(), result.getCbill(),
+        DatiDominio dati = new DatiDominio(result.getRagioneSociale(), result.getGln(), result.getCbill(),
                 result.getIuvPrefix(), result.getAutStampaPosteItaliane(), result.getAuxDigit(),
                 result.getSegregationCode(), result.getTassonomiaPagoPA(), result.getIntermediato(),
-                result.getScaricaFr(), result.getAbilitato(), stazione);
-        writeEc(ec, entity.getCodDominio(), result.getRagioneSociale(), result.getIndirizzo(),
+                result.getScaricaFr(), result.getAbilitato(), result.getIdStazione());
+        semanticValidator.validate(dati);
+
+        Stazione stazione = resolveStazioneOptional(result.getIdStazione());
+        writeDominio(entity, dati, stazione);
+        writeEc(ec, entity.getCodDominio(), new AnagraficaUo(result.getRagioneSociale(), result.getIndirizzo(),
                 result.getCivico(), result.getCap(), result.getLocalita(), result.getProvincia(),
                 result.getNazione(), result.getEmail(), result.getPec(), result.getTel(),
-                result.getFax(), result.getWeb(), result.getArea());
+                result.getFax(), result.getWeb(), result.getArea()));
 
         Dominio saved = repository.save(entity);
         UnitaOperativa savedEc = uoRepository.save(ec);
@@ -284,41 +282,24 @@ public class DominioService {
 
     // ---- write helpers ----------------------------------------------------
 
-    private void writeDominio(Dominio e, String ragioneSociale, String gln, String cbill,
-            String iuvPrefix, String autStampaPoste, Integer auxDigit, Integer segregationCode,
-            String tassonomia, Boolean intermediato, Boolean scaricaFr, Boolean abilitato,
-            Stazione stazione) {
-        e.setRagioneSociale(ragioneSociale);
-        e.setGln(gln);
-        e.setCbill(cbill);
-        e.setIuvPrefix(iuvPrefix);
-        e.setAutStampaPoste(autStampaPoste);
-        e.setAuxDigit(auxDigit != null ? auxDigit : Integer.valueOf(0));
-        e.setSegregationCode(segregationCode);
-        e.setTassonomiaPagoPa(tassonomia);
-        e.setIntermediato(intermediato != null ? intermediato : Boolean.TRUE);
-        e.setScaricaFr(scaricaFr);
-        e.setAbilitato(abilitato);
+    private void writeDominio(Dominio e, DatiDominio d, Stazione stazione) {
+        e.setRagioneSociale(d.ragioneSociale());
+        e.setGln(d.gln());
+        e.setCbill(d.cbill());
+        e.setIuvPrefix(d.iuvPrefix());
+        e.setAutStampaPoste(d.autStampaPoste());
+        e.setAuxDigit(d.auxDigit() != null ? d.auxDigit() : Integer.valueOf(0));
+        e.setSegregationCode(d.segregationCode());
+        e.setTassonomiaPagoPa(d.tassonomia());
+        e.setIntermediato(d.intermediato() != null ? d.intermediato() : Boolean.TRUE);
+        e.setScaricaFr(d.scaricaFr());
+        e.setAbilitato(d.abilitato());
         e.setStazione(stazione);
     }
 
-    private void writeEc(UnitaOperativa ec, String codDominio, String ragioneSociale,
-            String indirizzo, String civico, String cap, String localita, String provincia,
-            String nazione, String email, String pec, String tel, String fax, String web, String area) {
+    private void writeEc(UnitaOperativa ec, String codDominio, AnagraficaUo anagrafica) {
         ec.setUoCodiceIdentificativo(codDominio);
-        ec.setUoDenominazione(ragioneSociale);
-        ec.setUoIndirizzo(indirizzo);
-        ec.setUoCivico(civico);
-        ec.setUoCap(cap);
-        ec.setUoLocalita(localita);
-        ec.setUoProvincia(provincia);
-        ec.setUoNazione(nazione);
-        ec.setUoEmail(email);
-        ec.setUoPec(pec);
-        ec.setUoTel(tel);
-        ec.setUoFax(fax);
-        ec.setUoUrlSitoWeb(web);
-        ec.setUoArea(area);
+        anagrafica.applicaSu(ec);
     }
 
     private Stazione resolveStazioneOptional(String idStazione) {

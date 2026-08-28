@@ -146,11 +146,11 @@ public class TipoPendenzaService {
         }
         TipoVersamento entity = new TipoVersamento();
         entity.setCodTipoVersamento(body.getIdTipoPendenza());
-        mapper.applyWritable(entity, body.getDescrizione(), body.getCodificaIUV(),
-                body.getPagaTerzi(), body.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(body.getDescrizione(),
+                body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
                 body.getPortaleBackoffice(), body.getPortalePagamento(),
                 body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
-                body.getVisualizzazione(), body.getTracciatoCsv());
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_CREATE, saved, request);
@@ -171,11 +171,11 @@ public class TipoPendenzaService {
         TipoVersamento entity = load(idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 
-        mapper.applyWritable(entity, body.getDescrizione(), body.getCodificaIUV(),
-                body.getPagaTerzi(), body.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(body.getDescrizione(),
+                body.getCodificaIUV(), body.getPagaTerzi(), body.getAbilitato(),
                 body.getPortaleBackoffice(), body.getPortalePagamento(),
                 body.getAvvisaturaMail(), body.getAvvisaturaAppIO(),
-                body.getVisualizzazione(), body.getTracciatoCsv());
+                body.getVisualizzazione(), body.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);
@@ -216,11 +216,11 @@ public class TipoPendenzaService {
                     "La rappresentazione risultante dal PATCH ha il campo 'descrizione' vuoto.");
         }
 
-        mapper.applyWritable(entity, result.getDescrizione(), result.getCodificaIUV(),
-                result.getPagaTerzi(), result.getAbilitato(),
+        mapper.applyWritable(entity, new DatiTipoPendenza(result.getDescrizione(),
+                result.getCodificaIUV(), result.getPagaTerzi(), result.getAbilitato(),
                 result.getPortaleBackoffice(), result.getPortalePagamento(),
                 result.getAvvisaturaMail(), result.getAvvisaturaAppIO(),
-                result.getVisualizzazione(), result.getTracciatoCsv());
+                result.getVisualizzazione(), result.getTracciatoCsv()));
         TipoVersamento saved = repository.save(entity);
 
         audit(AZIONE_AUDIT_MODIFICA, saved, request);

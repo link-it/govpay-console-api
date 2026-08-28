@@ -41,8 +41,15 @@ public class DominioSemanticValidator {
      * @param intermediato valore richiesto ({@code null} equivale a {@code true},
      *                     come in V1).
      */
-    public void validate(Boolean intermediato, String gln, String idStazione, Integer segregationCode,
-            String cbill, String autStampaPoste, String iuvPrefix, Integer auxDigit) {
+    public void validate(DatiDominio d) {
+        Boolean intermediato = d.intermediato();
+        String gln = d.gln();
+        String idStazione = d.idStazione();
+        Integer segregationCode = d.segregationCode();
+        String cbill = d.cbill();
+        String autStampaPoste = d.autStampaPoste();
+        String iuvPrefix = d.iuvPrefix();
+        Integer auxDigit = d.auxDigit();
 
         boolean intermediatoEff = intermediato == null || intermediato;
         if (intermediatoEff) {
