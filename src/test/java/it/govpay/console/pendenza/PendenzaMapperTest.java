@@ -34,10 +34,13 @@ class PendenzaMapperTest {
                 "ESEGUITO_SENZA_RPT, PAGATA",
                 "ESEGUITA_PARZIALE, PAGATA_PARZIALE",
                 "ESEGUITO_PARZIALE, PAGATA_PARZIALE",
+                "PARZIALMENTE_ESEGUITO, PAGATA_PARZIALE",
                 "INCASSATA, RICONCILIATA",
                 "INCASSATO, RICONCILIATA",
                 "ANNULLATA, ANNULLATA",
                 "ANNULLATO, ANNULLATA",
+                "SCADUTA, SCADUTA",
+                "SCADUTO, SCADUTA",
                 "ANOMALA, ANOMALA",
                 "ANOMALO, ANOMALA"
         })
@@ -88,6 +91,14 @@ class PendenzaMapperTest {
         void altriStatiIgnoranoScadenza() {
             OffsetDateTime scadenzaPassata = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).minusDays(1);
             assertEquals(StatoPendenza.PAGATA, mapper.mapStato("ESEGUITO", scadenzaPassata));
+        }
+
+        @Test
+        @DisplayName("SCADUTA letterale resta SCADUTA anche con dataScadenza futura o assente")
+        void scadutaLetteraleIndipendenteDaScadenza() {
+            OffsetDateTime scadenzaFutura = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1);
+            assertEquals(StatoPendenza.SCADUTA, mapper.mapStato("SCADUTA", scadenzaFutura));
+            assertEquals(StatoPendenza.SCADUTA, mapper.mapStato("SCADUTO", null));
         }
     }
 }

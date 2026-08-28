@@ -435,6 +435,56 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-B-002")));
     }
 
+    /**
+     * Il mapper mappa lo stato grezzo letterale SCADUTA/SCADUTO direttamente a
+     * SCADUTA, indipendentemente da data_scadenza: il filtro deve trovarla,
+     * non solo la variante derivata da NON_ESEGUITO + scadenza passata.
+     */
+    @Test
+    void filterByStatoScadutaTrovaAncheIlValoreGrezzoLetterale() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("SCADUTA");
+        v.setDataScadenza(null);
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-SCADUTA")));
+    }
+
+    /**
+     * PARZIALMENTE_ESEGUITO e' il nome V1 canonico dello stato (oltre alle
+     * varianti ESEGUITA_PARZIALE/ESEGUITO_PARZIALE): il mapper lo mostra come
+     * PAGATA_PARZIALE, quindi il filtro deve trovarlo con lo stesso nome.
+     */
+    @Test
+    void filterByStatoPagataParzialeTrovaAncheParzialmenteEseguito() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("PARZIALMENTE_ESEGUITO");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "PAGATA_PARZIALE").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
+    /**
+     * ANOMALA nel mapper e' il catch-all per qualunque valore grezzo non
+     * riconosciuto: il filtro deve trovare anche quelle righe, non solo i
+     * letterali ANOMALA/ANOMALO.
+     */
+    @Test
+    void filterByStatoAnomalaTrovaAncheValoriGrezziSconosciuti() throws Exception {
+        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v.setStatoVersamento("QUALCOSA_DI_INESISTENTE");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/pendenze").param("stato", "ANOMALA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+    }
+
     @Test
     void filterByDataRangeSuDataCreazione() throws Exception {
         // Fixture dedicata con offset in giorni: gli offset in ore del setup
