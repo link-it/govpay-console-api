@@ -99,9 +99,12 @@ class PendenzaCursorPaginationIntegrationTest {
         tvd.setTipoVersamento(tv);
         tipoVersamentoDominioRepository.save(tvd);
 
-        // 7 pendenze con dataOraUltimoAggiornamento decrescente: PEND-1 piu' recente
-        // (offset 0 ore), PEND-7 piu' vecchia (offset 6 ore). Cursor mode → DESC,
-        // quindi i risultati arriveranno PEND-1, PEND-2, ..., PEND-7.
+        // 7 pendenze con dataCreazione decrescente: PEND-1 piu' recente (offset 0
+        // ore), PEND-7 piu' vecchia (offset 6 ore). Cursor mode → DESC, quindi i
+        // risultati arriveranno PEND-1, PEND-2, ..., PEND-7. dataOraUltimoAggiornamento
+        // e' tenuta deliberatamente uguale per tutte (non decrescente): se il cursor
+        // ordinasse ancora su quel campo (bug di regressione della issue #66), le
+        // pendenze risulterebbero tutte in parita' e l'ordine atteso non reggerebbe.
         for (int i = 1; i <= 7; i++) {
             newPendenza("PEND-" + i, dom, app, tv, tvd, i - 1);
         }
@@ -118,9 +121,10 @@ class PendenzaCursorPaginationIntegrationTest {
         // sessione con la precisione di now() (nanos su Linux) mentre il DB tronca,
         // sfasando il keyset del cursor (off-by-one al confine pagina). Senza sub-
         // precisione il valore in-memory coincide con quello persistito.
-        OffsetDateTime ts = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusHours(hoursAgo);
-        v.setDataCreazione(ts);
-        v.setDataOraUltimoAggiornamento(ts);
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        v.setDataCreazione(now.minusHours(hoursAgo));
+        // Deliberatamente uguale per tutte le righe: vedi il commento nel setup().
+        v.setDataOraUltimoAggiornamento(now);
         v.setDebitoreIdentificativo("RSSMRA80A01H501U");
         v.setDebitoreAnagrafica("Mario Rossi");
         v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
