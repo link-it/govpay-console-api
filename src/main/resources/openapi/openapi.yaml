@@ -1167,12 +1167,15 @@ paths:
         - `stato` — match esatto sull'enum `StatoPendenza`;
         - `dataDa`/`dataA` — intervallo incluso sulla data di creazione della pendenza;
         - `iuv` — match esatto;
-        - `direzione`, `divisione` — match esatto.
+        - `direzione`, `divisione` — match esatto;
+        - `idA2A` — match esatto sul gestionale proprietario;
+        - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi.
 
-        Tutti i filtri sono opzionali e ortogonali (AND). I filtri V1 non
-        ancora supportati (`idA2A`, `idTipoPendenza`) ritornano 400 problem+json.
+        Tutti i filtri sono opzionali e ortogonali (AND).
 
-        `dataDa` successivo a `dataA` → 400 problem+json.
+        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`
+        vuoto, con soli separatori o oltre il limite di 50 elementi → 400
+        problem+json; un codice inesistente nella lista restringe senza errore.
 
         ACL: il filtro per dominio dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' su alcun dominio riceve
@@ -1204,6 +1207,8 @@ paths:
         - $ref: '#/components/parameters/IuvFilter'
         - $ref: '#/components/parameters/DirezioneFilter'
         - $ref: '#/components/parameters/DivisioneFilter'
+        - $ref: '#/components/parameters/IdA2A'
+        - $ref: '#/components/parameters/PendenzaIdTipoPendenzaFilter'
       responses:
         '200':
           description: Lista paginata di pendenze.
@@ -12899,6 +12904,24 @@ components:
       description: Match parziale sul codice della tipologia di pendenza.
       schema:
         type: string
+
+    PendenzaIdTipoPendenzaFilter:
+      name: idTipoPendenza
+      in: query
+      required: false
+      description: |
+        Elenco (CSV) di codici tipologia pendenza, semantica OR fra i valori
+        (in AND con gli altri filtri): `?idTipoPendenza=a,b` restituisce le
+        pendenze di tipo `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Un codice non esistente non e' un errore: la
+        lista si restringe e basta. Massimo 50 elementi. Lista vuota o
+        composta solo da separatori (`?idTipoPendenza=`, `?idTipoPendenza=,,`)
+        → 400 problem+json.
+      schema:
+        type: array
+        items:
+          type: string
+      explode: false
 
     IdDominioFilter:
       name: idDominio

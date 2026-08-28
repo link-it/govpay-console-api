@@ -51,6 +51,8 @@ public class PendenzaService {
 
     public static final String AZIONE_AUDIT_RICERCA = "PENDENZE_RICERCA_PER_DEBITORE";
 
+    private static final int MAX_ID_TIPO_PENDENZA = 50;
+
     private final VersamentoRepository repository;
     private final PendenzaMapper mapper;
     private final PendenzaLinksBuilder linksBuilder;
@@ -104,16 +106,18 @@ public class PendenzaService {
     public ListPendenze200Response list(PendenzaListQuery query, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listPendenze filtri[idPendenza={}, numeroAvviso={}, idDominio={}, identificativoDebitore={}, "
-                        + "stato={}, dataDa={}, dataA={}, iuv={}, direzione={}, divisione={}], "
-                        + "page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
+                        + "stato={}, dataDa={}, dataA={}, iuv={}, direzione={}, divisione={}, idA2A={}, "
+                        + "idTipoPendenza={}], page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
                 query.idPendenza(), query.numeroAvviso(), query.idDominio(), query.identificativoDebitore(),
                 query.stato(), query.dataDa(), query.dataA(), query.iuv(), query.direzione(), query.divisione(),
+                query.idA2A(), query.idTipoPendenza(),
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
 
         if (query.dataDa() != null && query.dataA() != null && query.dataDa().isAfter(query.dataA())) {
             throw new BadRequestException("'dataDa' non puo' essere successiva a 'dataA'.");
         }
+        List<String> idTipoPendenza = normalizeIdTipoPendenza(query.idTipoPendenza());
 
         // Spring Data JPA 4.x: Specification.allOf rifiuta null. Filtriamo i predicati assenti.
         Specification<Versamento> spec = Specification.allOf(
@@ -128,6 +132,8 @@ public class PendenzaService {
                         PendenzaSpecifications.iuvExact(query.iuv()),
                         PendenzaSpecifications.direzioneExact(query.direzione()),
                         PendenzaSpecifications.divisioneExact(query.divisione()),
+                        PendenzaSpecifications.idA2AExact(query.idA2A()),
+                        PendenzaSpecifications.idTipoPendenzaIn(idTipoPendenza),
                         PendenzaSpecifications.visibiliPerOperatore(operatore))
                 .filter(java.util.Objects::nonNull)
                 .toList());
@@ -160,6 +166,28 @@ public class PendenzaService {
         }
 
         return response;
+    }
+
+    /**
+     * {@code null} se il parametro non e' presente; altrimenti rimuove i valori
+     * vuoti (elementi CSV consecutivi, es. {@code idTipoPendenza=,,}) e valida
+     * i vincoli dell'OpenAPI: lista risultante non vuota, al massimo
+     * {@value #MAX_ID_TIPO_PENDENZA} elementi.
+     */
+    private List<String> normalizeIdTipoPendenza(List<String> raw) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> normalized = raw.stream().filter(v -> v != null && !v.isBlank()).toList();
+        if (normalized.isEmpty()) {
+            throw new BadRequestException(
+                    "'idTipoPendenza' non puo' essere vuoto o composto solo da separatori.");
+        }
+        if (normalized.size() > MAX_ID_TIPO_PENDENZA) {
+            throw new BadRequestException(
+                    "'idTipoPendenza' supporta al massimo " + MAX_ID_TIPO_PENDENZA + " elementi.");
+        }
+        return normalized;
     }
 
     private List<Versamento> listOffsetMode(Specification<Versamento> spec,

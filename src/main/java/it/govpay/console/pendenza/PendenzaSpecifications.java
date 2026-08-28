@@ -85,6 +85,21 @@ public final class PendenzaSpecifications {
         return (root, q, cb) -> cb.equal(root.get("divisione"), value);
     }
 
+    public static Specification<Versamento> idA2AExact(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return (root, q, cb) -> cb.equal(root.get("applicazione").get("codApplicazione"), value);
+    }
+
+    /** Semantica OR fra i valori: {@code versamenti.id_tipo_versamento IN (...)}. */
+    public static Specification<Versamento> idTipoPendenzaIn(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return (root, q, cb) -> root.get("tipoVersamento").get("codTipoVersamento").in(values);
+    }
+
     private static final List<String> RAW_PAGATA =
             List.of("ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO", "ESEGUITO_ALTRO_CANALE", "ESEGUITO_SENZA_RPT");
     private static final List<String> RAW_NON_ESEGUITO =

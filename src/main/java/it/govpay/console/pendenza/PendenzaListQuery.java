@@ -1,6 +1,7 @@
 package it.govpay.console.pendenza;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import it.govpay.console.model.StatoPendenza;
 
@@ -19,5 +20,7 @@ public record PendenzaListQuery(
         LocalDate dataA,
         String iuv,
         String direzione,
-        String divisione) {
+        String divisione,
+        String idA2A,
+        List<String> idTipoPendenza) {
 }

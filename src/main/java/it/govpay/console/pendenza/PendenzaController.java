@@ -29,7 +29,8 @@ public class PendenzaController implements PendenzeApi {
     private static final Set<String> LIST_PENDENZE_QUERY_PARAMS = Set.of(
             "page", "limit", "sort", "total", "cursor",
             "idPendenza", "numeroAvviso", "idDominio", "identificativoDebitore",
-            "stato", "dataDa", "dataA", "iuv", "direzione", "divisione");
+            "stato", "dataDa", "dataA", "iuv", "direzione", "divisione",
+            "idA2A", "idTipoPendenza");
 
     private static final Set<String> GET_PENDENZA_QUERY_PARAMS = Set.of("expand");
 
@@ -75,7 +76,9 @@ public class PendenzaController implements PendenzeApi {
                                                                 LocalDate dataA,
                                                                 String iuv,
                                                                 String direzione,
-                                                                String divisione) {
+                                                                String divisione,
+                                                                String idA2A,
+                                                                List<String> idTipoPendenza) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_PENDENZE_QUERY_PARAMS);
         // cursor mode attivo se ?cursor=... e' presente nella query string,
         // anche con valore vuoto ("prima pagina cursor-mode", scope G issue #9).
@@ -99,7 +102,9 @@ public class PendenzaController implements PendenzeApi {
                 dataA,
                 iuv,
                 direzione,
-                divisione);
+                divisione,
+                idA2A,
+                idTipoPendenza);
         return ResponseEntity.ok(service.list(query, currentRequest));
     }
 
