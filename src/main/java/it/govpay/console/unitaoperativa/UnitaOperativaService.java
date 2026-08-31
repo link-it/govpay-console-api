@@ -31,6 +31,7 @@ import it.govpay.console.model.UnitaOperativaReplace;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioRaggiungibilita;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -95,6 +96,7 @@ public class UnitaOperativaService {
     @Transactional(readOnly = true)
     public ListUnitaOperative200Response list(String idDominio, UnitaOperativaListQuery query) {
         Dominio parent = loadDominio(idDominio);
+        OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listUnitaOperative dominio={} filtri[ragioneSociale={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 idDominio, query.ragioneSociale(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
@@ -104,7 +106,8 @@ public class UnitaOperativaService {
                         UnitaOperativaSpecifications.byDominioId(parent.getId()),
                         UnitaOperativaSpecifications.excludeEc(COD_UO_EC),
                         UnitaOperativaSpecifications.ragioneSocialePartial(query.ragioneSociale()),
-                        UnitaOperativaSpecifications.abilitatoExact(query.abilitato()))
+                        UnitaOperativaSpecifications.abilitatoExact(query.abilitato()),
+                        UnitaOperativaSpecifications.visibiliPerOperatore(parent.getId(), operatore))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -250,8 +253,13 @@ public class UnitaOperativaService {
     }
 
     private Dominio loadDominio(String idDominio) {
-        return dominioRepository.findByCodDominio(idDominio)
+        Dominio entity = dominioRepository.findByCodDominio(idDominio)
                 .orElseThrow(() -> new NotFoundException("Dominio non trovato: " + idDominio));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!DominioRaggiungibilita.isRaggiungibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Dominio non trovato: " + idDominio);
+        }
+        return entity;
     }
 
     private UnitaOperativa load(String idDominio, String idUnitaOperativa) {
@@ -260,8 +268,15 @@ public class UnitaOperativaService {
         if (COD_UO_EC.equals(idUnitaOperativa)) {
             throw new NotFoundException("Unita' operativa non trovata: " + idUnitaOperativa);
         }
-        return repository.findByDominio_IdAndCodUo(parent.getId(), idUnitaOperativa)
+        UnitaOperativa entity = repository.findByDominio_IdAndCodUo(parent.getId(), idUnitaOperativa)
                 .orElseThrow(() -> new NotFoundException("Unita' operativa non trovata: " + idUnitaOperativa));
+
+        OperatoreCorrente operatore = currentOperatorService.get();
+        boolean accessoIntero = operatore.tuttiIDomini() || operatore.idDominiInteri().contains(parent.getId());
+        if (!accessoIntero && !operatore.idUoVisibili().contains(entity.getId())) {
+            throw new NotFoundException("Unita' operativa non trovata: " + idUnitaOperativa);
+        }
+        return entity;
     }
 
     private void checkIfMatch(String ifMatch, UnitaOperativa entity) {

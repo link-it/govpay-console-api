@@ -31,6 +31,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -249,8 +250,13 @@ public class ContoAccreditoService {
     }
 
     private Dominio loadDominio(String idDominio) {
-        return dominioRepository.findByCodDominio(idDominio)
+        Dominio entity = dominioRepository.findByCodDominio(idDominio)
                 .orElseThrow(() -> new NotFoundException("Dominio non trovato: " + idDominio));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!DominioVisibilita.isVisibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Dominio non trovato: " + idDominio);
+        }
+        return entity;
     }
 
     private IbanAccredito load(String idDominio, String ibanAccredito) {

@@ -181,6 +181,33 @@ class ContoAccreditoControllerIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneDominiStar} e senza
+     * grant su questo dominio non deve poterne leggere i conti di accredito,
+     * anche conoscendone l'idDominio esatto.
+     */
+    @Test
+    void listUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
     // --- Get detail ---
 
     @Test

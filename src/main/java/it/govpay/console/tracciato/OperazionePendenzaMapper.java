@@ -40,8 +40,8 @@ public class OperazionePendenzaMapper {
     public OperazionePendenzaSummary toSummary(Operazione op) {
         OperazionePendenzaSummary dto = new OperazionePendenzaSummary(
                 op.getLineaElaborazione(),
-                TipoOperazionePendenza.fromValue(op.getTipoOperazione()),
-                StatoOperazionePendenza.fromValue(op.getStato()));
+                TipoOperazioneMapping.map(op.getTipoOperazione()),
+                StatoOperazioneMapping.map(op.getStato()));
         dto.setDescrizioneStato(JsonNullable.of(op.getDettaglioEsito()));
         dto.setIdentificativoPendenza(JsonNullable.of(op.getCodVersamentoEnte()));
         Versamento versamento = op.getVersamento();

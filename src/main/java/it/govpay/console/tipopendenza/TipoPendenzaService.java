@@ -34,6 +34,7 @@ import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.TipoVersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -103,6 +104,7 @@ public class TipoPendenzaService {
             checkDominioVisibile(query.nonAssociati());
         }
 
+        OperatoreCorrente operatore = currentOperatorService.get();
         Specification<TipoVersamento> spec = Specification.allOf(
                 Stream.of(
                         TipoPendenzaSpecifications.codTipoVersamentoPartial(query.idTipoPendenza()),
@@ -110,7 +112,8 @@ public class TipoPendenzaService {
                         TipoPendenzaSpecifications.abilitatoExact(query.abilitato()),
                         TipoPendenzaSpecifications.formExact(query.form()),
                         TipoPendenzaSpecifications.trasformazioneExact(query.trasformazione()),
-                        TipoPendenzaSpecifications.nonAssociatiADominio(query.nonAssociati()))
+                        TipoPendenzaSpecifications.nonAssociatiADominio(query.nonAssociati()),
+                        TipoPendenzaSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -271,8 +274,13 @@ public class TipoPendenzaService {
     }
 
     private TipoVersamento load(String idTipoPendenza) {
-        return repository.findByCodTipoVersamento(idTipoPendenza)
+        TipoVersamento entity = repository.findByCodTipoVersamento(idTipoPendenza)
                 .orElseThrow(() -> new NotFoundException("Tipologia di pendenza non trovata: " + idTipoPendenza));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!TipoVersamentoVisibilita.isVisibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Tipologia di pendenza non trovata: " + idTipoPendenza);
+        }
+        return entity;
     }
 
     private void checkIfMatch(String ifMatch, TipoVersamento entity) {

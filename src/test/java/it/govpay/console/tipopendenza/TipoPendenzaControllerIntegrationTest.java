@@ -30,12 +30,14 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -62,6 +64,8 @@ class TipoPendenzaControllerIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
+    @Autowired
+    private UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -136,6 +140,90 @@ class TipoPendenzaControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idTipoPendenza", is("TARI")));
+    }
+
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneTipiVersStar} deve
+     * vedere in lista solo i tipi pendenza per cui ha un grant esplicito
+     * ({@code UtenzaTipoVersamento}), anche senza filtro esplicito.
+     */
+    @Test
+    void listRestrictsToVisibleTipiPerOperatoreRistretto() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        TipoVersamento imu = tipoVersamentoRepository.findByCodTipoVersamento("IMU").orElseThrow();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    @Test
+    void getUngrantatoTipoPendenzaPerOperatoreRistrettoReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        TipoVersamento imu = tipoVersamentoRepository.findByCodTipoVersamento("IMU").orElseThrow();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/tipiPendenza/TARI").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: il complemento di {@code nonAssociati} deve essere
+     * calcolato solo sui tipi pendenza visibili all'operatore, non sull'intero
+     * catalogo — altrimenti un operatore ristretto vedrebbe come "non
+     * associati" anche tipi pendenza che non puo' nemmeno leggere.
+     */
+    @Test
+    void nonAssociatiRispettaLaVisibilitaTipiPerOperatoreRistretto() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678901");
+        dominio.setRagioneSociale("Comune Alfa");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        TipoVersamento imu = tipoVersamentoRepository.findByCodTipoVersamento("IMU").orElseThrow();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        // TARI e TOSAP esistono nel catalogo ma non sono visibili all'operatore:
+        // non devono comparire nel complemento nonostante non siano associati al dominio.
+        mvc.perform(get("/tipiPendenza").param("nonAssociati", "12345678901")
+                        .with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    private String creaOperatoreTipiVersRistretto() {
+        String principale = "operatoreTipiVersRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principale);
+        ristretta.setPrincipalOriginale(principale);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(true);
+        ristretta.setAutorizzazioneTipiVersStar(false);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Tipi Vers Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+        return principale;
+    }
+
+    private void grantTipoVersamento(String principale, Long idTipoVersamento) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaTipoVersamento grant = new UtenzaTipoVersamento();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdTipoVersamento(idTipoVersamento);
+        utenzaTipoVersamentoRepository.save(grant);
     }
 
     @Test

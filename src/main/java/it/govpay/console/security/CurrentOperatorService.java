@@ -2,6 +2,7 @@ package it.govpay.console.security;
 
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +63,7 @@ public class CurrentOperatorService {
         boolean tuttiIDomini = Boolean.TRUE.equals(utenza.getAutorizzazioneDominiStar());
         Set<Long> idDominiInteri = Set.of();
         Set<Long> idUoVisibili = Set.of();
+        Set<Long> idDominiRaggiungibili = Set.of();
         if (!tuttiIDomini) {
             var ud = utenzaDominioRepository.findByIdUtenza(utenza.getId());
             idDominiInteri = ud.stream()
@@ -71,6 +73,12 @@ public class CurrentOperatorService {
             idUoVisibili = ud.stream()
                     .filter(r -> r.getIdUo() != null)
                     .map(UtenzaDominio::getIdUo)
+                    .collect(Collectors.toUnmodifiableSet());
+            Set<Long> idDominiConUoParziali = ud.stream()
+                    .filter(r -> r.getIdUo() != null && r.getIdDominio() != null)
+                    .map(UtenzaDominio::getIdDominio)
+                    .collect(Collectors.toSet());
+            idDominiRaggiungibili = Stream.concat(idDominiInteri.stream(), idDominiConUoParziali.stream())
                     .collect(Collectors.toUnmodifiableSet());
         }
 
@@ -89,12 +97,13 @@ public class CurrentOperatorService {
                 tuttiIDomini,
                 idDominiInteri,
                 idUoVisibili,
+                idDominiRaggiungibili,
                 tuttiITipiVersamento,
                 idTipiVersamentoVisibili);
         log.debug("operatore corrente principal={} idOperatore={} tuttiIDomini={} dominiInteri={} uoVisibili={} "
-                        + "tuttiITipiVersamento={} tipiVersamentoVisibili={}",
+                        + "dominiRaggiungibili={} tuttiITipiVersamento={} tipiVersamentoVisibili={}",
                 result.principal(), result.idOperatore(), result.tuttiIDomini(),
-                result.idDominiInteri(), result.idUoVisibili(),
+                result.idDominiInteri(), result.idUoVisibili(), result.idDominiRaggiungibili(),
                 result.tuttiITipiVersamento(), result.idTipiVersamentoVisibili());
         return result;
     }

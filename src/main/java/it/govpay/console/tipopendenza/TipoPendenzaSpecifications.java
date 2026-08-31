@@ -4,6 +4,8 @@ import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
+import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.TipoVersamentoVisibilita;
 import jakarta.persistence.criteria.Subquery;
 
 public final class TipoPendenzaSpecifications {
@@ -87,6 +89,13 @@ public final class TipoPendenzaSpecifications {
      * {@code unique_tipi_vers_domini_1 (id_dominio, id_tipo_versamento)}, che
      * copre anche l'uguaglianza su {@code id_tipo_versamento}: nessuna scan
      * completa, nessun nuovo indice proposto.
+     *
+     * <p>Confermato con {@code EXPLAIN (ANALYZE, BUFFERS)} su dataset sintetico
+     * (2.000 domini, 150 tipi versamento, ~12 associazioni/dominio, schema V1
+     * reale): {@code Index Scan} su {@code unique_domini_1} seguito da
+     * {@code Nested Loop} con {@code Index Only Scan} su
+     * {@code unique_tipi_vers_domini_1} (0 heap fetches), Hash Anti Join finale
+     * col catalogo globale — nessuna scan sequenziale, <0.1ms.
      */
     public static Specification<TipoVersamento> nonAssociatiADominio(String codDominio) {
         if (codDominio == null || codDominio.isBlank()) {
@@ -101,5 +110,9 @@ public final class TipoPendenzaSpecifications {
                     cb.equal(tvd.get("dominio").get("codDominio"), codDominio));
             return cb.not(cb.exists(sub));
         };
+    }
+
+    public static Specification<TipoVersamento> visibiliPerOperatore(OperatoreCorrente operatore) {
+        return (root, q, cb) -> TipoVersamentoVisibilita.predicate(cb, root.get("id"), operatore);
     }
 }

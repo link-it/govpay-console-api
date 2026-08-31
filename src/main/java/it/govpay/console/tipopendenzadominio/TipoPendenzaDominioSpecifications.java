@@ -3,6 +3,8 @@ package it.govpay.console.tipopendenzadominio;
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.entity.TipoVersamentoDominio;
+import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.TipoVersamentoVisibilita;
 import jakarta.persistence.criteria.Predicate;
 
 public final class TipoPendenzaDominioSpecifications {
@@ -47,6 +49,17 @@ public final class TipoPendenzaDominioSpecifications {
      * {@code TipoVersamentoDominio} nulle", altrimenti un'associazione senza
      * override ma con form globale verrebbe esclusa da {@code form=true} e
      * inclusa (erroneamente) da {@code form=false}.
+     *
+     * <p>Verifica indici (issue #67): il filtro è sempre scoped a
+     * {@code id_dominio} dal chiamante (vedi {@link #byDominioId}), quindi
+     * anche col predicato OR fra override e globale il piano parte da
+     * {@code Index Scan} su {@code unique_tipi_vers_domini_1
+     * (id_dominio, id_tipo_versamento)} e usa {@code tipi_versamento} solo
+     * come Hash Join per la parte "eredità dal globale". Confermato con
+     * {@code EXPLAIN (ANALYZE, BUFFERS)} su dataset sintetico (2.000 domini,
+     * ~12 associazioni/dominio, schema V1 reale): nessuna scan completa su
+     * {@code tipi_vers_domini} nonostante l'OR fra le due entità, nessun
+     * nuovo indice proposto.
      */
     public static Specification<TipoVersamentoDominio> formExact(Boolean value) {
         if (value == null) {
@@ -67,7 +80,9 @@ public final class TipoPendenzaDominioSpecifications {
     /**
      * Presenza dei template di trasformazione CSV, con la stessa eredita' dal
      * globale di {@link #formExact} (vedi Javadoc li') sulle quattro colonne
-     * {@code trac_csv_*}.
+     * {@code trac_csv_*}. Stessa verifica indici di {@link #formExact}: piano
+     * identico (query di forma equivalente, quattro colonne invece di due non
+     * cambia lo shape del piano).
      */
     public static Specification<TipoVersamentoDominio> trasformazioneExact(Boolean value) {
         if (value == null) {
@@ -99,5 +114,15 @@ public final class TipoPendenzaDominioSpecifications {
                     ? cb.or(override, cb.and(globale, overrideAssente))
                     : cb.and(overrideAssente, globaleAssente);
         };
+    }
+
+    /**
+     * ACL sul tipo versamento associato. V1 ({@code DominiController.findTipiPendenza})
+     * la applica solo con {@code associati=true} esplicito, qui invece e' sempre
+     * in AND — hardening deliberato coerente con l'acceptance criterion di
+     * issue #67 ("ACL sempre in AND"), non una replica letterale del default V1.
+     */
+    public static Specification<TipoVersamentoDominio> visibiliPerOperatore(OperatoreCorrente operatore) {
+        return (root, q, cb) -> TipoVersamentoVisibilita.predicate(cb, root.get("tipoVersamento").get("id"), operatore);
     }
 }

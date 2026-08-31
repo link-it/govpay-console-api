@@ -36,7 +36,8 @@ class EventoSubResourceServiceTest {
     private EventoSubResourceService service;
 
     private final OperatoreCorrente operatore = new OperatoreCorrente(
-            "op1", 1L, 1L, "Operatore Uno", true, java.util.Set.of(), java.util.Set.of(), true, java.util.Set.of());
+            "op1", 1L, 1L, "Operatore Uno", true, java.util.Set.of(), java.util.Set.of(), java.util.Set.of(),
+            true, java.util.Set.of());
 
     @BeforeEach
     void setup() {

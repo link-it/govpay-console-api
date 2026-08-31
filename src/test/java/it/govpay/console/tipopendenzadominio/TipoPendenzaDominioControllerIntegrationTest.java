@@ -30,12 +30,14 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,6 +66,8 @@ class TipoPendenzaDominioControllerIntegrationTest {
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
     private TipoVersamentoDominioRepository tvdRepository;
+    @Autowired
+    private UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -267,6 +271,104 @@ class TipoPendenzaDominioControllerIntegrationTest {
     void listUnknownDominioReturns404() throws Exception {
         mvc.perform(get("/domini/99999999999/tipiPendenza").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneDominiStar} e senza
+     * grant su questo dominio non deve poterne leggere i tipi pendenza, anche
+     * conoscendone l'idDominio esatto.
+     */
+    @Test
+    void listUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore autorizzato sul dominio ma con ACL ristretta
+     * sui tipi versamento deve vedere solo le associazioni per cui ha un
+     * grant esplicito su {@code UtenzaTipoVersamento} — hardening deliberato,
+     * V1 applica questo filtro solo con {@code associati=true} esplicito
+     * (vedi memoria di progetto), qui e' sempre in AND.
+     */
+    @Test
+    void listRestrictsToVisibleTipiVersamentoPerOperatoreRistretto() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    @Test
+    void getUngrantedTipoVersamentoPerOperatoreRistrettoReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza/TARI").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: creare un'associazione verso un tipo pendenza globale che
+     * esiste ma non e' visibile all'operatore deve fallire come se non
+     * esistesse, non con un 422/201.
+     */
+    @Test
+    void createUngrantedTipoVersamentoPerOperatoreRistrettoReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        String body = """
+                {"idTipoPendenza":"COSAP","abilitato":true}""";
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    private String creaOperatoreTipiVersRistretto() {
+        String principale = "operatoreTipiVersRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principale);
+        ristretta.setPrincipalOriginale(principale);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(true);
+        ristretta.setAutorizzazioneTipiVersStar(false);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Tipi Vers Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+        return principale;
+    }
+
+    private void grantTipoVersamento(String principale, Long idTipoVersamento) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaTipoVersamento grant = new UtenzaTipoVersamento();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdTipoVersamento(idTipoVersamento);
+        utenzaTipoVersamentoRepository.save(grant);
     }
 
     // --- Get detail ---
