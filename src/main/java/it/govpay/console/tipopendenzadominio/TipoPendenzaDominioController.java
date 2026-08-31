@@ -33,7 +33,9 @@ public class TipoPendenzaDominioController implements TipiPendenzaDominioApi {
                                                                                       Boolean total,
                                                                                       String idTipoPendenza,
                                                                                       String descrizione,
-                                                                                      Boolean abilitato) {
+                                                                                      Boolean abilitato,
+                                                                                      Boolean form,
+                                                                                      Boolean trasformazione) {
         TipoPendenzaDominioListQuery query = new TipoPendenzaDominioListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
@@ -41,7 +43,9 @@ public class TipoPendenzaDominioController implements TipiPendenzaDominioApi {
                 total,
                 idTipoPendenza,
                 descrizione,
-                abilitato);
+                abilitato,
+                form,
+                trasformazione);
         return ResponseEntity.ok(service.list(idDominio, query));
     }
 

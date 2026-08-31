@@ -1,5 +1,7 @@
 package it.govpay.console.tracciato;
 
+import java.util.List;
+
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.entity.Operazione;
@@ -19,13 +21,15 @@ public final class OperazioneSpecifications {
         if (value == null) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("stato"), value.getValue());
+        String raw = StatoOperazioneMapping.toRaw(value);
+        return (root, q, cb) -> cb.equal(root.get("stato"), raw);
     }
 
     public static Specification<Operazione> tipoOperazioneExact(TipoOperazionePendenza value) {
         if (value == null) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("tipoOperazione"), value.getValue());
+        List<String> raw = TipoOperazioneMapping.toRaw(value);
+        return (root, q, cb) -> root.get("tipoOperazione").in(raw);
     }
 }

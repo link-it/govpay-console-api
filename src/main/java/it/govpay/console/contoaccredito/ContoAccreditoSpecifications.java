@@ -27,4 +27,12 @@ public final class ContoAccreditoSpecifications {
         }
         return (root, q, cb) -> cb.equal(root.get("abilitato"), value);
     }
+
+    public static Specification<IbanAccredito> ibanPartial(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String pattern = "%" + value.toLowerCase() + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codIban")), pattern);
+    }
 }

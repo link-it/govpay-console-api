@@ -32,7 +32,10 @@ public class TipoPendenzaController implements TipiPendenzaApi {
                                                                         Boolean total,
                                                                         String idTipoPendenza,
                                                                         String descrizione,
-                                                                        Boolean abilitato) {
+                                                                        Boolean abilitato,
+                                                                        Boolean form,
+                                                                        Boolean trasformazione,
+                                                                        String nonAssociati) {
         TipoPendenzaListQuery query = new TipoPendenzaListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
@@ -40,7 +43,10 @@ public class TipoPendenzaController implements TipiPendenzaApi {
                 total,
                 idTipoPendenza,
                 descrizione,
-                abilitato);
+                abilitato,
+                form,
+                trasformazione,
+                nonAssociati);
         return ResponseEntity.ok(service.list(query));
     }
 

@@ -142,6 +142,15 @@ class ContoAccreditoControllerIntegrationTest {
     }
 
     @Test
+    void listFilterByIbanPartial() throws Exception {
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").param("iban", "000000000002")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].ibanAccredito", is(IBAN_B)));
+    }
+
+    @Test
     void listFilterByAbilitato() throws Exception {
         mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").param("abilitato", "false")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -169,6 +178,33 @@ class ContoAccreditoControllerIntegrationTest {
     @Test
     void listUnknownDominioReturns404() throws Exception {
         mvc.perform(get("/domini/99999999999/contiAccredito").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneDominiStar} e senza
+     * grant su questo dominio non deve poterne leggere i conti di accredito,
+     * anche conoscendone l'idDominio esatto.
+     */
+    @Test
+    void listUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(principaleRistretto, PASSWORD)))
                 .andExpect(status().isNotFound());
     }
 

@@ -31,12 +31,14 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
 @SpringBootTest
@@ -67,6 +69,8 @@ class DominioControllerIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private UnitaOperativaRepository uoRepository;
+    @Autowired
+    private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -174,6 +178,136 @@ class DominioControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idDominio", is("12345678902")));
+    }
+
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneDominiStar} deve
+     * vedere in lista solo i domini per cui ha una {@link UtenzaDominio}
+     * esplicita, anche se la lista non porta alcun filtro esplicito.
+     */
+    @Test
+    void listRestrictsToVisibleDominiForNonStarOperator() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        Dominio alfa = dominioRepository.findByCodDominio("12345678901").orElseThrow();
+        grantDominio(principaleRistretto, alfa.getId());
+
+        mvc.perform(get("/domini").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idDominio", is("12345678901")));
+    }
+
+    @Test
+    void getUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        Dominio alfa = dominioRepository.findByCodDominio("12345678901").orElseThrow();
+        grantDominio(principaleRistretto, alfa.getId());
+
+        mvc.perform(get("/domini/12345678902").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un dominio su cui l'operatore ha solo un grant parziale su
+     * una UO (non un dominio "intero") deve comunque comparire in lista e
+     * essere raggiungibile in get — V1 (isDominioAuthorized/getIdDomini)
+     * considera "autorizzato" un dominio anche con un solo grant su una sua UO.
+     */
+    @Test
+    void listAndGetIncludeDominioReachableOnlyViaPartialUoGrant() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        Dominio alfa = dominioRepository.findByCodDominio("12345678901").orElseThrow();
+        UnitaOperativa ec = uoRepository.findByDominio_IdAndCodUo(alfa.getId(), "EC").orElseThrow();
+        grantUo(principaleRistretto, alfa.getId(), ec.getId());
+
+        mvc.perform(get("/domini").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idDominio", is("12345678901")));
+
+        mvc.perform(get("/domini/12345678901").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
+    private void grantUo(String principale, Long idDominio, Long idUo) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaDominio grant = new UtenzaDominio();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdDominio(idDominio);
+        grant.setIdUo(idUo);
+        utenzaDominioRepository.save(grant);
+    }
+
+    private String creaOperatoreRistretto() {
+        String principale = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principale);
+        ristretta.setPrincipalOriginale(principale);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+        return principale;
+    }
+
+    private void grantDominio(String principale, Long idDominio) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaDominio grant = new UtenzaDominio();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdDominio(idDominio);
+        utenzaDominioRepository.save(grant);
+    }
+
+    @Test
+    void filterByIdStazioneExact() throws Exception {
+        Stazione altra = new Stazione();
+        altra.setCodStazione("STAZ02");
+        altra.setPassword("");
+        altra.setApplicationCode(1);
+        altra.setVersione("V2");
+        altra.setAbilitato(true);
+        altra.setIntermediario(stazione.getIntermediario());
+        stazioneRepository.save(altra);
+
+        Dominio altroDominio = new Dominio();
+        altroDominio.setCodDominio("12345678904");
+        altroDominio.setRagioneSociale("Comune Delta");
+        altroDominio.setAuxDigit(0);
+        altroDominio.setAbilitato(true);
+        altroDominio.setIntermediato(true);
+        altroDominio.setScaricaFr(true);
+        altroDominio.setStazione(altra);
+        dominioRepository.save(altroDominio);
+
+        mvc.perform(get("/domini").param("idStazione", COD_STAZIONE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)))
+                .andExpect(jsonPath("$.results[*].idDominio",
+                        contains("12345678901", "12345678902", "12345678903")));
+    }
+
+    @Test
+    void filterByIntermediato() throws Exception {
+        Dominio nonIntermediato = new Dominio();
+        nonIntermediato.setCodDominio("12345678905");
+        nonIntermediato.setRagioneSociale("Comune Epsilon");
+        nonIntermediato.setAuxDigit(0);
+        nonIntermediato.setAbilitato(true);
+        nonIntermediato.setIntermediato(false);
+        nonIntermediato.setScaricaFr(false);
+        dominioRepository.save(nonIntermediato);
+
+        mvc.perform(get("/domini").param("intermediato", "false").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idDominio", is("12345678905")));
     }
 
     @Test

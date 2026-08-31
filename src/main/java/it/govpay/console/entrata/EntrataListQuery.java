@@ -6,5 +6,6 @@ public record EntrataListQuery(
         String sort,
         Boolean total,
         String idEntrata,
-        String descrizione) {
+        String descrizione,
+        String nonAssociati) {
 }

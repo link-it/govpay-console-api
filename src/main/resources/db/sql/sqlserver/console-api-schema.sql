@@ -19,6 +19,9 @@ CREATE TABLE pagopa_ec_cache
 	segregation_code VARCHAR(4),
 	cbill_code VARCHAR(35),
 	data_ultimo_aggiornamento DATETIME2 NOT NULL,
+	cod_intermediario VARCHAR(35),
+	check_stato VARCHAR(35),
+	check_motivo VARCHAR(1024),
 	-- fk/pk columns
 	id BIGINT IDENTITY,
 	-- fk/pk keys constraints
@@ -35,6 +38,14 @@ CREATE TABLE pagopa_iban_cache
 	iban VARCHAR(35) NOT NULL,
 	attivo BIT NOT NULL,
 	data_ultima_verifica DATETIME2 NOT NULL,
+	cod_intermediario VARCHAR(35),
+	ci_name VARCHAR(255),
+	status VARCHAR(255),
+	validity_date DATETIME2,
+	description VARCHAR(512),
+	label VARCHAR(1024),
+	check_stato VARCHAR(35),
+	check_motivo VARCHAR(1024),
 	-- fk/pk columns
 	id BIGINT IDENTITY,
 	-- fk/pk keys constraints

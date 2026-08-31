@@ -34,7 +34,9 @@ import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.TipoVersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -98,8 +100,11 @@ public class TipoPendenzaDominioService {
     @Transactional(readOnly = true)
     public ListTipiPendenzaDominio200Response list(String idDominio, TipoPendenzaDominioListQuery query) {
         Dominio parent = loadDominio(idDominio);
-        log.debug("listTipiPendenzaDominio dominio={} filtri[idTipoPendenza={}, descrizione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
+        OperatoreCorrente operatore = currentOperatorService.get();
+        log.debug("listTipiPendenzaDominio dominio={} filtri[idTipoPendenza={}, descrizione={}, abilitato={}, "
+                        + "form={}, trasformazione={}], page={}, limit={}, sort={}, total={}",
                 idDominio, query.idTipoPendenza(), query.descrizione(), query.abilitato(),
+                query.form(), query.trasformazione(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<TipoVersamentoDominio> spec = Specification.allOf(
@@ -107,7 +112,10 @@ public class TipoPendenzaDominioService {
                         TipoPendenzaDominioSpecifications.byDominioId(parent.getId()),
                         TipoPendenzaDominioSpecifications.idTipoPendenzaPartial(query.idTipoPendenza()),
                         TipoPendenzaDominioSpecifications.descrizionePartial(query.descrizione()),
-                        TipoPendenzaDominioSpecifications.abilitatoExact(query.abilitato()))
+                        TipoPendenzaDominioSpecifications.abilitatoExact(query.abilitato()),
+                        TipoPendenzaDominioSpecifications.formExact(query.form()),
+                        TipoPendenzaDominioSpecifications.trasformazioneExact(query.trasformazione()),
+                        TipoPendenzaDominioSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -156,6 +164,10 @@ public class TipoPendenzaDominioService {
         TipoVersamento tipoVersamento = tipoVersamentoRepository.findByCodTipoVersamento(body.getIdTipoPendenza())
                 .orElseThrow(() -> new UnprocessableEntityException(
                         "Il tipo pendenza globale '" + body.getIdTipoPendenza() + "' non esiste."));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!TipoVersamentoVisibilita.isVisibile(tipoVersamento.getId(), operatore)) {
+            throw new NotFoundException("Tipo pendenza non trovato: " + body.getIdTipoPendenza());
+        }
         if (repository.existsByDominio_IdAndTipoVersamento_CodTipoVersamento(parent.getId(), body.getIdTipoPendenza())) {
             throw new ConflictException("Esiste gia' il tipo pendenza '" + body.getIdTipoPendenza()
                     + "' per il dominio '" + idDominio + "'.");
@@ -246,14 +258,25 @@ public class TipoPendenzaDominioService {
     }
 
     private Dominio loadDominio(String idDominio) {
-        return dominioRepository.findByCodDominio(idDominio)
+        Dominio entity = dominioRepository.findByCodDominio(idDominio)
                 .orElseThrow(() -> new NotFoundException("Dominio non trovato: " + idDominio));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!DominioVisibilita.isVisibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Dominio non trovato: " + idDominio);
+        }
+        return entity;
     }
 
     private TipoVersamentoDominio load(String idDominio, String idTipoPendenza) {
         Dominio parent = loadDominio(idDominio);
-        return repository.findByDominio_IdAndTipoVersamento_CodTipoVersamento(parent.getId(), idTipoPendenza)
+        TipoVersamentoDominio entity = repository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(parent.getId(), idTipoPendenza)
                 .orElseThrow(() -> new NotFoundException("Tipo pendenza non trovato: " + idTipoPendenza));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!TipoVersamentoVisibilita.isVisibile(entity.getTipoVersamento().getId(), operatore)) {
+            throw new NotFoundException("Tipo pendenza non trovato: " + idTipoPendenza);
+        }
+        return entity;
     }
 
     private void checkIfMatch(String ifMatch, TipoVersamentoDominio entity) {

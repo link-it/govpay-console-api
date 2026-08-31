@@ -32,14 +32,16 @@ public class ContoAccreditoController implements ContiAccreditoApi {
                                                                             String sort,
                                                                             Boolean total,
                                                                             String descrizione,
-                                                                            Boolean abilitato) {
+                                                                            Boolean abilitato,
+                                                                            String iban) {
         ContoAccreditoListQuery query = new ContoAccreditoListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
                 sort,
                 total,
                 descrizione,
-                abilitato);
+                abilitato,
+                iban);
         return ResponseEntity.ok(service.list(idDominio, query));
     }
 

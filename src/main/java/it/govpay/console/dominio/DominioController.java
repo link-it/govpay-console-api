@@ -41,7 +41,9 @@ public class DominioController implements DominiApi {
                                                             Boolean total,
                                                             String idDominio,
                                                             String ragioneSociale,
-                                                            Boolean abilitato) {
+                                                            Boolean abilitato,
+                                                            String idStazione,
+                                                            Boolean intermediato) {
         DominioListQuery query = new DominioListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
@@ -49,7 +51,9 @@ public class DominioController implements DominiApi {
                 total,
                 idDominio,
                 ragioneSociale,
-                abilitato);
+                abilitato,
+                idStazione,
+                intermediato);
         return ResponseEntity.ok(service.list(query));
     }
 

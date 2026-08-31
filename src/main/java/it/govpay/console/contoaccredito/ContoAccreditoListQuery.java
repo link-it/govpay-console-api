@@ -6,5 +6,6 @@ public record ContoAccreditoListQuery(
         String sort,
         Boolean total,
         String descrizione,
-        Boolean abilitato) {
+        Boolean abilitato,
+        String iban) {
 }

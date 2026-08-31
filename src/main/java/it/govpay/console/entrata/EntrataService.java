@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.Entrata;
@@ -29,8 +30,10 @@ import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListEntrate200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoContabilita;
+import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -64,6 +67,7 @@ public class EntrataService {
     private static final int MAX_COD_CONTABILITA = 255;
 
     private final TipoTributoRepository repository;
+    private final DominioRepository dominioRepository;
     private final EntrataMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -73,11 +77,13 @@ public class EntrataService {
     private EntityManager entityManager;
 
     public EntrataService(TipoTributoRepository repository,
+                          DominioRepository dominioRepository,
                           EntrataMapper mapper,
                           CurrentOperatorService currentOperatorService,
                           AuditService auditService,
                           ObjectMapper objectMapper) {
         this.repository = repository;
+        this.dominioRepository = dominioRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
@@ -86,14 +92,20 @@ public class EntrataService {
 
     @Transactional(readOnly = true)
     public ListEntrate200Response list(EntrataListQuery query) {
-        log.debug("listEntrate filtri[idEntrata={}, descrizione={}], page={}, limit={}, sort={}, total={}",
-                query.idEntrata(), query.descrizione(),
+        log.debug("listEntrate filtri[idEntrata={}, descrizione={}, nonAssociati={}], "
+                        + "page={}, limit={}, sort={}, total={}",
+                query.idEntrata(), query.descrizione(), query.nonAssociati(),
                 query.page(), query.limit(), query.sort(), query.total());
+
+        if (query.nonAssociati() != null) {
+            checkDominioVisibile(query.nonAssociati());
+        }
 
         Specification<TipoTributo> spec = Specification.allOf(
                 Stream.of(
                         EntrataSpecifications.codTributoPartial(query.idEntrata()),
-                        EntrataSpecifications.descrizionePartial(query.descrizione()))
+                        EntrataSpecifications.descrizionePartial(query.descrizione()),
+                        EntrataSpecifications.nonAssociatiADominio(query.nonAssociati()))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -207,6 +219,28 @@ public class EntrataService {
         return ResponseEntity.ok()
                 .eTag(RepresentationEtag.of(dto, objectMapper))
                 .body(dto);
+    }
+
+    /**
+     * Valida che {@code nonAssociati} indichi un dominio visibile all'operatore
+     * corrente (formato gia' garantito dal pattern OpenAPI). Un operatore con
+     * visibilita' totale non ha restrizioni da verificare: se il dominio non
+     * esiste il predicato NOT EXISTS restituira' semplicemente l'intero catalogo,
+     * senza che questo sia un errore.
+     */
+    private void checkDominioVisibile(String codDominio) {
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (operatore.tuttiIDomini()) {
+            return;
+        }
+        boolean visibile = dominioRepository.findByCodDominio(codDominio)
+                .map(Dominio::getId)
+                .map(id -> DominioVisibilita.isVisibile(id, operatore))
+                .orElse(false);
+        if (!visibile) {
+            throw new BadRequestException("Il dominio '" + codDominio
+                    + "' indicato nel parametro 'nonAssociati' non e' tra quelli visibili all'operatore corrente.");
+        }
     }
 
     private TipoTributo load(String idEntrata) {

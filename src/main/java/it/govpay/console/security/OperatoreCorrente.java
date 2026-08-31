@@ -15,6 +15,17 @@ import java.util.Set;
  *                                (utenze_domini con id_uo IS NULL)
  * @param idUoVisibili            UO specifiche su cui l'utenza ha visibilita'
  *                                (utenze_domini con id_uo IS NOT NULL)
+ * @param idDominiRaggiungibili   {@code idDominiInteri} unito ai domini che
+ *                                contengono almeno una UO in {@code idUoVisibili}
+ *                                (V1: {@code Utenza.getIdDomini()}/{@code isDominioAuthorized}
+ *                                considera "autorizzato" un dominio anche con
+ *                                un solo grant parziale). Criterio piu' largo di
+ *                                {@code idDominiInteri}: usarlo solo dove la
+ *                                risorsa ha un fallback a grana UO (es. la lista
+ *                                dei domini stessa, o le sue unita' operative);
+ *                                le risorse senza asse UO (es. flussi di
+ *                                rendicontazione) restano su {@code idDominiInteri}
+ *                                via {@link DominioVisibilita}.
  * @param tuttiITipiVersamento    utenze.autorizzazione_tipi_vers_star
  * @param idTipiVersamentoVisibili tipi versamento su cui l'utenza ha visibilita'
  *                                (utenze_tipo_vers); significativo solo se
@@ -28,6 +39,7 @@ public record OperatoreCorrente(
         boolean tuttiIDomini,
         Set<Long> idDominiInteri,
         Set<Long> idUoVisibili,
+        Set<Long> idDominiRaggiungibili,
         boolean tuttiITipiVersamento,
         Set<Long> idTipiVersamentoVisibili) {
 }

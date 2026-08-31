@@ -7,5 +7,7 @@ public record DominioListQuery(
         Boolean total,
         String idDominio,
         String ragioneSociale,
-        Boolean abilitato) {
+        Boolean abilitato,
+        String idStazione,
+        Boolean intermediato) {
 }

@@ -31,6 +31,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -91,15 +92,16 @@ public class ContoAccreditoService {
     @Transactional(readOnly = true)
     public ListContiAccredito200Response list(String idDominio, ContoAccreditoListQuery query) {
         Dominio parent = loadDominio(idDominio);
-        log.debug("listContiAccredito dominio={} filtri[descrizione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
-                idDominio, query.descrizione(), query.abilitato(),
+        log.debug("listContiAccredito dominio={} filtri[descrizione={}, abilitato={}, iban={}], page={}, limit={}, sort={}, total={}",
+                idDominio, query.descrizione(), query.abilitato(), query.iban(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<IbanAccredito> spec = Specification.allOf(
                 Stream.of(
                         ContoAccreditoSpecifications.byDominioId(parent.getId()),
                         ContoAccreditoSpecifications.descrizionePartial(query.descrizione()),
-                        ContoAccreditoSpecifications.abilitatoExact(query.abilitato()))
+                        ContoAccreditoSpecifications.abilitatoExact(query.abilitato()),
+                        ContoAccreditoSpecifications.ibanPartial(query.iban()))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -248,8 +250,13 @@ public class ContoAccreditoService {
     }
 
     private Dominio loadDominio(String idDominio) {
-        return dominioRepository.findByCodDominio(idDominio)
+        Dominio entity = dominioRepository.findByCodDominio(idDominio)
                 .orElseThrow(() -> new NotFoundException("Dominio non trovato: " + idDominio));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!DominioVisibilita.isVisibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Dominio non trovato: " + idDominio);
+        }
+        return entity;
     }
 
     private IbanAccredito load(String idDominio, String ibanAccredito) {

@@ -33,6 +33,7 @@ import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioRaggiungibilita;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
@@ -103,16 +104,21 @@ public class DominioService {
 
     @Transactional(readOnly = true)
     public ListDomini200Response list(DominioListQuery query) {
-        log.debug("listDomini filtri[idDominio={}, ragioneSociale={}, abilitato={}], "
+        log.debug("listDomini filtri[idDominio={}, ragioneSociale={}, abilitato={}, idStazione={}, intermediato={}], "
                         + "page={}, limit={}, sort={}, total={}",
                 query.idDominio(), query.ragioneSociale(), query.abilitato(),
+                query.idStazione(), query.intermediato(),
                 query.page(), query.limit(), query.sort(), query.total());
 
+        OperatoreCorrente operatore = currentOperatorService.get();
         Specification<Dominio> spec = Specification.allOf(
                 Stream.of(
                         DominioSpecifications.codDominioPartial(query.idDominio()),
                         DominioSpecifications.ragioneSocialePartial(query.ragioneSociale()),
-                        DominioSpecifications.abilitatoExact(query.abilitato()))
+                        DominioSpecifications.abilitatoExact(query.abilitato()),
+                        DominioSpecifications.idStazioneExact(query.idStazione()),
+                        DominioSpecifications.intermediatoExact(query.intermediato()),
+                        DominioSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -319,8 +325,13 @@ public class DominioService {
     }
 
     private Dominio load(String idDominio) {
-        return repository.findByCodDominio(idDominio)
+        Dominio entity = repository.findByCodDominio(idDominio)
                 .orElseThrow(() -> new NotFoundException("Dominio non trovato: " + idDominio));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!DominioRaggiungibilita.isRaggiungibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Dominio non trovato: " + idDominio);
+        }
+        return entity;
     }
 
     private UnitaOperativa loadEc(Dominio dominio) {

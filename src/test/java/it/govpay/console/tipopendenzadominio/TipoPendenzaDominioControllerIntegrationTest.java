@@ -30,12 +30,14 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,6 +66,8 @@ class TipoPendenzaDominioControllerIntegrationTest {
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
     private TipoVersamentoDominioRepository tvdRepository;
+    @Autowired
+    private UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -181,9 +185,190 @@ class TipoPendenzaDominioControllerIntegrationTest {
     }
 
     @Test
+    void listFilterByFormPresente() throws Exception {
+        TipoVersamentoDominio tvdTari = tvdRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dominio.getId(), "TARI").orElseThrow();
+        tvdTari.setBoFormTipo("angular");
+        tvdTari.setBoFormDefinizione("{}");
+        tvdRepository.save(tvdTari);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("TARI")));
+    }
+
+    @Test
+    void listFilterByTrasformazionePresente() throws Exception {
+        TipoVersamentoDominio tvdImu = tvdRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dominio.getId(), "IMU").orElseThrow();
+        tvdImu.setTracCsvTipo("freemarker");
+        tvdImu.setTracCsvHeaderRisposta("a,b");
+        tvdImu.setTracCsvTemplateRichiesta("{}");
+        tvdImu.setTracCsvTemplateRisposta("{}");
+        tvdRepository.save(tvdImu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("trasformazione", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    /**
+     * Regressione: senza override di dominio, {@code form=true} deve comunque
+     * includere un'associazione il cui tipo pendenza globale ha la form —
+     * V1 eredita dal globale quando il dominio non ridefinisce nulla.
+     */
+    @Test
+    void listFilterByFormTrueIncludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setBoFormTipo("angular");
+        imu.setBoFormDefinizione("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    /**
+     * Speculare al test precedente: {@code form=false} non e' "override
+     * assente", e' "nessuna form a nessun livello" — un'associazione che
+     * eredita la form dal globale non deve comparire.
+     */
+    @Test
+    void listFilterByFormFalseExcludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setBoFormTipo("angular");
+        imu.setBoFormDefinizione("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "false")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].idTipoPendenza", contains("TARI", "TASI")));
+    }
+
+    @Test
+    void listFilterByTrasformazioneTrueIncludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setTracCsvTipo("freemarker");
+        imu.setTracCsvHeaderRisposta("a,b");
+        imu.setTracCsvTemplateRichiesta("{}");
+        imu.setTracCsvTemplateRisposta("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("trasformazione", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    @Test
     void listUnknownDominioReturns404() throws Exception {
         mvc.perform(get("/domini/99999999999/tipiPendenza").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore senza {@code autorizzazioneDominiStar} e senza
+     * grant su questo dominio non deve poterne leggere i tipi pendenza, anche
+     * conoscendone l'idDominio esatto.
+     */
+    @Test
+    void listUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore autorizzato sul dominio ma con ACL ristretta
+     * sui tipi versamento deve vedere solo le associazioni per cui ha un
+     * grant esplicito su {@code UtenzaTipoVersamento} — hardening deliberato,
+     * V1 applica questo filtro solo con {@code associati=true} esplicito
+     * (vedi memoria di progetto), qui e' sempre in AND.
+     */
+    @Test
+    void listRestrictsToVisibleTipiVersamentoPerOperatoreRistretto() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    @Test
+    void getUngrantedTipoVersamentoPerOperatoreRistrettoReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza/TARI").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: creare un'associazione verso un tipo pendenza globale che
+     * esiste ma non e' visibile all'operatore deve fallire come se non
+     * esistesse, non con un 422/201.
+     */
+    @Test
+    void createUngrantedTipoVersamentoPerOperatoreRistrettoReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreTipiVersRistretto();
+        grantTipoVersamento(principaleRistretto, imu.getId());
+
+        String body = """
+                {"idTipoPendenza":"COSAP","abilitato":true}""";
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    private String creaOperatoreTipiVersRistretto() {
+        String principale = "operatoreTipiVersRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principale);
+        ristretta.setPrincipalOriginale(principale);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(true);
+        ristretta.setAutorizzazioneTipiVersStar(false);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Tipi Vers Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+        return principale;
+    }
+
+    private void grantTipoVersamento(String principale, Long idTipoVersamento) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaTipoVersamento grant = new UtenzaTipoVersamento();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdTipoVersamento(idTipoVersamento);
+        utenzaTipoVersamentoRepository.save(grant);
     }
 
     // --- Get detail ---

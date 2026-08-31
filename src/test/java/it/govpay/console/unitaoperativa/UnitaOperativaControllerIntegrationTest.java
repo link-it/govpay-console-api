@@ -29,10 +29,12 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
 @SpringBootTest
@@ -59,6 +61,8 @@ class UnitaOperativaControllerIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private UnitaOperativaRepository uoRepository;
+    @Autowired
+    private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -164,6 +168,79 @@ class UnitaOperativaControllerIntegrationTest {
     void listUnknownDominioReturns404() throws Exception {
         mvc.perform(get("/domini/99999999999/unitaOperative").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void listUngrantedDominioForNonStarOperatorReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/unitaOperative").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regressione: un operatore con solo un grant parziale su una UO (nessun
+     * dominio "intero") deve comunque raggiungere il dominio e vedere
+     * esclusivamente quella UO, non l'intera lista.
+     */
+    @Test
+    void listRestrictsToGrantedUoForPartialOperator() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        UnitaOperativa uoA = uoRepository.findByDominio_IdAndCodUo(dominio.getId(), "UO-A").orElseThrow();
+        grantUo(principaleRistretto, dominio.getId(), uoA.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/unitaOperative").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idUnitaOperativa", is("UO-A")));
+    }
+
+    @Test
+    void getUngrantedUoForPartialOperatorReturns404() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        UnitaOperativa uoA = uoRepository.findByDominio_IdAndCodUo(dominio.getId(), "UO-A").orElseThrow();
+        grantUo(principaleRistretto, dominio.getId(), uoA.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/unitaOperative/UO-B").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getGrantedUoForPartialOperatorSucceeds() throws Exception {
+        String principaleRistretto = creaOperatoreRistretto();
+        UnitaOperativa uoA = uoRepository.findByDominio_IdAndCodUo(dominio.getId(), "UO-A").orElseThrow();
+        grantUo(principaleRistretto, dominio.getId(), uoA.getId());
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/unitaOperative/UO-A").with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idUnitaOperativa", is("UO-A")));
+    }
+
+    private String creaOperatoreRistretto() {
+        String principale = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principale);
+        ristretta.setPrincipalOriginale(principale);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+        return principale;
+    }
+
+    private void grantUo(String principale, Long idDominio, Long idUo) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principale).orElseThrow();
+        UtenzaDominio grant = new UtenzaDominio();
+        grant.setIdUtenza(utenza.getId());
+        grant.setIdDominio(idDominio);
+        grant.setIdUo(idUo);
+        utenzaDominioRepository.save(grant);
     }
 
     // --- Get detail ---

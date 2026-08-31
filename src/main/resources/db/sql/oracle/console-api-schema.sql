@@ -21,6 +21,9 @@ CREATE TABLE pagopa_ec_cache
 	segregation_code VARCHAR2(4 CHAR),
 	cbill_code VARCHAR2(35 CHAR),
 	data_ultimo_aggiornamento TIMESTAMP NOT NULL,
+	cod_intermediario VARCHAR2(35 CHAR),
+	check_stato VARCHAR2(35 CHAR),
+	check_motivo VARCHAR2(1024 CHAR),
 	-- fk/pk columns
 	id NUMBER NOT NULL,
 	-- fk/pk keys constraints
@@ -50,6 +53,14 @@ CREATE TABLE pagopa_iban_cache
 	iban VARCHAR2(35 CHAR) NOT NULL,
 	attivo NUMBER NOT NULL,
 	data_ultima_verifica TIMESTAMP NOT NULL,
+	cod_intermediario VARCHAR2(35 CHAR),
+	ci_name VARCHAR2(255 CHAR),
+	status VARCHAR2(255 CHAR),
+	validity_date TIMESTAMP,
+	description VARCHAR2(512 CHAR),
+	label VARCHAR2(1024 CHAR),
+	check_stato VARCHAR2(35 CHAR),
+	check_motivo VARCHAR2(1024 CHAR),
 	-- fk/pk columns
 	id NUMBER NOT NULL,
 	-- fk/pk keys constraints

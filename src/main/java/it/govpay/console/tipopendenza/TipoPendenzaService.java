@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.intermediario.JsonPatchApplier;
 import it.govpay.console.model.JsonPatchOperation;
@@ -28,9 +29,12 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoPendenza;
 import it.govpay.console.model.TipoPendenzaCreate;
 import it.govpay.console.model.TipoPendenzaReplace;
+import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
+import it.govpay.console.security.TipoVersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -62,6 +66,7 @@ public class TipoPendenzaService {
 
 
     private final TipoVersamentoRepository repository;
+    private final DominioRepository dominioRepository;
     private final TipoPendenzaMapper mapper;
     private final RepresentationValidator representationValidator;
     private final CurrentOperatorService currentOperatorService;
@@ -72,12 +77,14 @@ public class TipoPendenzaService {
     private EntityManager entityManager;
 
     public TipoPendenzaService(TipoVersamentoRepository repository,
+                               DominioRepository dominioRepository,
                                TipoPendenzaMapper mapper,
                                RepresentationValidator representationValidator,
                                CurrentOperatorService currentOperatorService,
                                AuditService auditService,
                                ObjectMapper objectMapper) {
         this.repository = repository;
+        this.dominioRepository = dominioRepository;
         this.mapper = mapper;
         this.representationValidator = representationValidator;
         this.currentOperatorService = currentOperatorService;
@@ -87,16 +94,26 @@ public class TipoPendenzaService {
 
     @Transactional(readOnly = true)
     public ListTipiPendenza200Response list(TipoPendenzaListQuery query) {
-        log.debug("listTipiPendenza filtri[idTipoPendenza={}, descrizione={}, abilitato={}], "
-                        + "page={}, limit={}, sort={}, total={}",
+        log.debug("listTipiPendenza filtri[idTipoPendenza={}, descrizione={}, abilitato={}, form={}, "
+                        + "trasformazione={}, nonAssociati={}], page={}, limit={}, sort={}, total={}",
                 query.idTipoPendenza(), query.descrizione(), query.abilitato(),
+                query.form(), query.trasformazione(), query.nonAssociati(),
                 query.page(), query.limit(), query.sort(), query.total());
 
+        if (query.nonAssociati() != null) {
+            checkDominioVisibile(query.nonAssociati());
+        }
+
+        OperatoreCorrente operatore = currentOperatorService.get();
         Specification<TipoVersamento> spec = Specification.allOf(
                 Stream.of(
                         TipoPendenzaSpecifications.codTipoVersamentoPartial(query.idTipoPendenza()),
                         TipoPendenzaSpecifications.descrizionePartial(query.descrizione()),
-                        TipoPendenzaSpecifications.abilitatoExact(query.abilitato()))
+                        TipoPendenzaSpecifications.abilitatoExact(query.abilitato()),
+                        TipoPendenzaSpecifications.formExact(query.form()),
+                        TipoPendenzaSpecifications.trasformazioneExact(query.trasformazione()),
+                        TipoPendenzaSpecifications.nonAssociatiADominio(query.nonAssociati()),
+                        TipoPendenzaSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
 
@@ -234,9 +251,36 @@ public class TipoPendenzaService {
                 .body(dto);
     }
 
+    /**
+     * Valida che {@code nonAssociati} indichi un dominio visibile all'operatore
+     * corrente (formato gia' garantito dal pattern OpenAPI). Un operatore con
+     * visibilita' totale non ha restrizioni da verificare: se il dominio non
+     * esiste il predicato NOT EXISTS restituira' semplicemente l'intero catalogo,
+     * senza che questo sia un errore.
+     */
+    private void checkDominioVisibile(String codDominio) {
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (operatore.tuttiIDomini()) {
+            return;
+        }
+        boolean visibile = dominioRepository.findByCodDominio(codDominio)
+                .map(Dominio::getId)
+                .map(id -> DominioVisibilita.isVisibile(id, operatore))
+                .orElse(false);
+        if (!visibile) {
+            throw new BadRequestException("Il dominio '" + codDominio
+                    + "' indicato nel parametro 'nonAssociati' non e' tra quelli visibili all'operatore corrente.");
+        }
+    }
+
     private TipoVersamento load(String idTipoPendenza) {
-        return repository.findByCodTipoVersamento(idTipoPendenza)
+        TipoVersamento entity = repository.findByCodTipoVersamento(idTipoPendenza)
                 .orElseThrow(() -> new NotFoundException("Tipologia di pendenza non trovata: " + idTipoPendenza));
+        OperatoreCorrente operatore = currentOperatorService.get();
+        if (!TipoVersamentoVisibilita.isVisibile(entity.getId(), operatore)) {
+            throw new NotFoundException("Tipologia di pendenza non trovata: " + idTipoPendenza);
+        }
+        return entity;
     }
 
     private void checkIfMatch(String ifMatch, TipoVersamento entity) {

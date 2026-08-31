@@ -315,16 +315,64 @@ class TracciatoSubResourceIntegrationTest {
         app.setCodApplicazione("APP-SUB-1");
         applicazioneRepository.save(app);
         Versamento v = nuovoVersamento("PEND-001", app);
-        nuovaOperazione(id, 1, "ADD", "ESEGUITO", v);
-        nuovaOperazione(id, 2, "DEL", "SCARTATO", null);
+        nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", v);
+        nuovaOperazione(id, 2, "DEL", "ESEGUITO_KO", null);
         long auditPrima = gpAuditRepository.count();
 
         mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni").with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].stato", is("ESEGUITO")))
+                .andExpect(jsonPath("$.results[1].stato", is("SCARTATO")))
                 .andExpect(jsonPath("$.results[0].soggettoPagatore").doesNotExist());
 
         org.assertj.core.api.Assertions.assertThat(gpAuditRepository.count()).isEqualTo(auditPrima);
+    }
+
+    /**
+     * Regressione: {@code operazioni.stato} nel DB porta i valori grezzi V1
+     * ({@code ESEGUITO_OK}/{@code ESEGUITO_KO}), non i nomi semantici esposti
+     * dall'API ({@code ESEGUITO}/{@code SCARTATO}). Il filtro deve tradurre,
+     * non confrontare alla lettera.
+     */
+    @Test
+    void filtraPerStatoTraduceIlValoreGrezzo() throws Exception {
+        Long id = uploadTracciato();
+        nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", null);
+        nuovaOperazione(id, 2, "DEL", "ESEGUITO_KO", null);
+        nuovaOperazione(id, 3, "ADD", "NON_VALIDO", null);
+
+        mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni").param("stato", "ESEGUITO")
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].numero", is(1)));
+
+        mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni").param("stato", "SCARTATO")
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].numero", is(2)));
+    }
+
+    /**
+     * Regressione: {@code operazioni.tipo_operazione} nel DB puo' valere sia
+     * {@code N_V} sia {@code INC} per una riga non valida (V1 li tratta come
+     * sinonimi, stesso ramo default) — entrambi devono confluire nel filtro
+     * {@code tipoOperazione=NON_VALIDA}.
+     */
+    @Test
+    void filtraPerTipoOperazioneNonValidaCopreEntrambiIRawValues() throws Exception {
+        Long id = uploadTracciato();
+        nuovaOperazione(id, 1, "N_V", "NON_VALIDO", null);
+        nuovaOperazione(id, 2, "INC", "NON_VALIDO", null);
+        nuovaOperazione(id, 3, "ADD", "ESEGUITO_OK", null);
+
+        mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni").param("tipoOperazione", "NON_VALIDA")
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].numero", org.hamcrest.Matchers.contains(1, 2)));
     }
 
     @Test
@@ -334,7 +382,7 @@ class TracciatoSubResourceIntegrationTest {
         app.setCodApplicazione("APP-SUB-2");
         applicazioneRepository.save(app);
         Versamento v = nuovoVersamento("PEND-001", app);
-        nuovaOperazione(id, 1, "ADD", "ESEGUITO", v);
+        nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", v);
         long auditPrima = gpAuditRepository.count();
 
         mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni/1").with(httpBasic(principal, PASSWORD)))
