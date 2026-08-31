@@ -142,6 +142,15 @@ class ContoAccreditoControllerIntegrationTest {
     }
 
     @Test
+    void listFilterByIbanPartial() throws Exception {
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").param("iban", "000000000002")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].ibanAccredito", is(IBAN_B)));
+    }
+
+    @Test
     void listFilterByAbilitato() throws Exception {
         mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").param("abilitato", "false")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))

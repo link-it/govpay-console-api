@@ -31,14 +31,16 @@ public class EntrataController implements EntrateApi {
                                                               String sort,
                                                               Boolean total,
                                                               String idEntrata,
-                                                              String descrizione) {
+                                                              String descrizione,
+                                                              String nonAssociati) {
         EntrataListQuery query = new EntrataListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
                 sort,
                 total,
                 idEntrata,
-                descrizione);
+                descrizione,
+                nonAssociati);
         return ResponseEntity.ok(service.list(query));
     }
 

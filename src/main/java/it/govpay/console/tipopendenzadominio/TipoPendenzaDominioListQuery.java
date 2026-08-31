@@ -7,5 +7,7 @@ public record TipoPendenzaDominioListQuery(
         Boolean total,
         String idTipoPendenza,
         String descrizione,
-        Boolean abilitato) {
+        Boolean abilitato,
+        Boolean form,
+        Boolean trasformazione) {
 }

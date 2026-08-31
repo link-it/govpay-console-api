@@ -25,11 +25,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
+import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
+import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
@@ -54,6 +58,10 @@ class TipoPendenzaControllerIntegrationTest {
     private OperatoreRepository operatoreRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
+    @Autowired
+    private DominioRepository dominioRepository;
+    @Autowired
+    private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -128,6 +136,123 @@ class TipoPendenzaControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idTipoPendenza", is("TARI")));
+    }
+
+    @Test
+    void filterByFormPresente() throws Exception {
+        TipoVersamento conFormale = new TipoVersamento();
+        conFormale.setCodTipoVersamento("CONFORM");
+        conFormale.setDescrizione("Con form");
+        conFormale.setPagaTerzi(false);
+        conFormale.setAbilitato(true);
+        conFormale.setBoFormTipo("angular");
+        conFormale.setBoFormDefinizione("{}");
+        tipoVersamentoRepository.save(conFormale);
+
+        mvc.perform(get("/tipiPendenza").param("form", "true").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("CONFORM")));
+    }
+
+    @Test
+    void filterByTrasformazionePresente() throws Exception {
+        TipoVersamento conTrasf = new TipoVersamento();
+        conTrasf.setCodTipoVersamento("CONTRASF");
+        conTrasf.setDescrizione("Con trasformazione");
+        conTrasf.setPagaTerzi(false);
+        conTrasf.setAbilitato(true);
+        conTrasf.setTracCsvTipo("freemarker");
+        conTrasf.setTracCsvHeaderRisposta("a,b");
+        conTrasf.setTracCsvTemplateRichiesta("{}");
+        conTrasf.setTracCsvTemplateRisposta("{}");
+        tipoVersamentoRepository.save(conTrasf);
+
+        mvc.perform(get("/tipiPendenza").param("trasformazione", "true").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("CONTRASF")));
+    }
+
+    @Test
+    void nonAssociatiReturnsComplementOfDominioAssociations() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678901");
+        dominio.setRagioneSociale("Comune Alfa");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        TipoVersamento imu = tipoVersamentoRepository.findByCodTipoVersamento("IMU").orElseThrow();
+        TipoVersamentoDominio associazione = new TipoVersamentoDominio();
+        associazione.setDominio(dominio);
+        associazione.setTipoVersamento(imu);
+        associazione.setAbilitato(true);
+        tipoVersamentoDominioRepository.save(associazione);
+
+        mvc.perform(get("/tipiPendenza").param("nonAssociati", "12345678901").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].idTipoPendenza", contains("TARI", "TOSAP")));
+    }
+
+    @Test
+    void nonAssociatiOfDominioWithoutAssociationsReturnsWholeCatalog() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678902");
+        dominio.setRagioneSociale("Comune Beta");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        mvc.perform(get("/tipiPendenza").param("nonAssociati", "12345678902").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)));
+    }
+
+    @Test
+    void nonAssociatiMalformedReturns400() throws Exception {
+        mvc.perform(get("/tipiPendenza").param("nonAssociati", "ABC").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void nonAssociatiWithDominioNotVisibleReturns400() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678903");
+        dominio.setRagioneSociale("Comune Gamma");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/tipiPendenza").param("nonAssociati", "12345678903")
+                        .with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("12345678903")));
     }
 
     @Test

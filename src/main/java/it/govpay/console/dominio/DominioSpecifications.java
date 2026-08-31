@@ -31,4 +31,18 @@ public final class DominioSpecifications {
         }
         return (root, q, cb) -> cb.equal(root.get("abilitato"), value);
     }
+
+    public static Specification<Dominio> idStazioneExact(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return (root, q, cb) -> cb.equal(root.get("stazione").get("codStazione"), value);
+    }
+
+    public static Specification<Dominio> intermediatoExact(Boolean value) {
+        if (value == null) {
+            return null;
+        }
+        return (root, q, cb) -> cb.equal(root.get("intermediato"), value);
+    }
 }

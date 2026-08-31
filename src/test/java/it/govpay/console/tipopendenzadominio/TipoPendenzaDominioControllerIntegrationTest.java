@@ -181,6 +181,89 @@ class TipoPendenzaDominioControllerIntegrationTest {
     }
 
     @Test
+    void listFilterByFormPresente() throws Exception {
+        TipoVersamentoDominio tvdTari = tvdRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dominio.getId(), "TARI").orElseThrow();
+        tvdTari.setBoFormTipo("angular");
+        tvdTari.setBoFormDefinizione("{}");
+        tvdRepository.save(tvdTari);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("TARI")));
+    }
+
+    @Test
+    void listFilterByTrasformazionePresente() throws Exception {
+        TipoVersamentoDominio tvdImu = tvdRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dominio.getId(), "IMU").orElseThrow();
+        tvdImu.setTracCsvTipo("freemarker");
+        tvdImu.setTracCsvHeaderRisposta("a,b");
+        tvdImu.setTracCsvTemplateRichiesta("{}");
+        tvdImu.setTracCsvTemplateRisposta("{}");
+        tvdRepository.save(tvdImu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("trasformazione", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    /**
+     * Regressione: senza override di dominio, {@code form=true} deve comunque
+     * includere un'associazione il cui tipo pendenza globale ha la form —
+     * V1 eredita dal globale quando il dominio non ridefinisce nulla.
+     */
+    @Test
+    void listFilterByFormTrueIncludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setBoFormTipo("angular");
+        imu.setBoFormDefinizione("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    /**
+     * Speculare al test precedente: {@code form=false} non e' "override
+     * assente", e' "nessuna form a nessun livello" — un'associazione che
+     * eredita la form dal globale non deve comparire.
+     */
+    @Test
+    void listFilterByFormFalseExcludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setBoFormTipo("angular");
+        imu.setBoFormDefinizione("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("form", "false")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].idTipoPendenza", contains("TARI", "TASI")));
+    }
+
+    @Test
+    void listFilterByTrasformazioneTrueIncludesAssociationInheritingFromGlobal() throws Exception {
+        imu.setTracCsvTipo("freemarker");
+        imu.setTracCsvHeaderRisposta("a,b");
+        imu.setTracCsvTemplateRichiesta("{}");
+        imu.setTracCsvTemplateRisposta("{}");
+        tipoVersamentoRepository.save(imu);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").param("trasformazione", "true")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idTipoPendenza", is("IMU")));
+    }
+
+    @Test
     void listUnknownDominioReturns404() throws Exception {
         mvc.perform(get("/domini/99999999999/tipiPendenza").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isNotFound());

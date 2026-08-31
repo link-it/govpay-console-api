@@ -91,15 +91,16 @@ public class ContoAccreditoService {
     @Transactional(readOnly = true)
     public ListContiAccredito200Response list(String idDominio, ContoAccreditoListQuery query) {
         Dominio parent = loadDominio(idDominio);
-        log.debug("listContiAccredito dominio={} filtri[descrizione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
-                idDominio, query.descrizione(), query.abilitato(),
+        log.debug("listContiAccredito dominio={} filtri[descrizione={}, abilitato={}, iban={}], page={}, limit={}, sort={}, total={}",
+                idDominio, query.descrizione(), query.abilitato(), query.iban(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<IbanAccredito> spec = Specification.allOf(
                 Stream.of(
                         ContoAccreditoSpecifications.byDominioId(parent.getId()),
                         ContoAccreditoSpecifications.descrizionePartial(query.descrizione()),
-                        ContoAccreditoSpecifications.abilitatoExact(query.abilitato()))
+                        ContoAccreditoSpecifications.abilitatoExact(query.abilitato()),
+                        ContoAccreditoSpecifications.ibanPartial(query.iban()))
                 .filter(Objects::nonNull)
                 .toList());
 

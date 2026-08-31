@@ -7,5 +7,8 @@ public record TipoPendenzaListQuery(
         Boolean total,
         String idTipoPendenza,
         String descrizione,
-        Boolean abilitato) {
+        Boolean abilitato,
+        Boolean form,
+        Boolean trasformazione,
+        String nonAssociati) {
 }

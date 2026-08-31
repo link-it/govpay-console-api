@@ -2598,7 +2598,12 @@ paths:
       description: |
         Filtri opzionali e ortogonali (AND):
         - `idEntrata` — match parziale sul codice entrata;
-        - `descrizione` — match parziale.
+        - `descrizione` — match parziale;
+        - `nonAssociati` — restrizione alle sole entrate del catalogo globale
+          non ancora associate al dominio indicato (idDominio). Il dominio deve
+          essere visibile all'operatore corrente, altrimenti → 400. Un dominio
+          visibile ma senza entrate associate non e' un errore: restituisce
+          l'intero catalogo.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
         valorizza `pagination` con `hasNextPage` (modalita' Slice, senza COUNT).
@@ -2614,6 +2619,7 @@ paths:
         - $ref: '#/components/parameters/Total'
         - $ref: '#/components/parameters/IdEntrataFilter'
         - $ref: '#/components/parameters/Descrizione'
+        - $ref: '#/components/parameters/NonAssociati'
       responses:
         '200':
           description: Lista paginata di tipologie di entrata.
@@ -2781,7 +2787,14 @@ paths:
         Filtri opzionali e ortogonali (AND):
         - `idTipoPendenza` — match parziale;
         - `descrizione` — match parziale;
-        - `abilitato` — match esatto.
+        - `abilitato` — match esatto;
+        - `form` — presenza della form di inserimento custom;
+        - `trasformazione` — presenza dei template di trasformazione CSV;
+        - `nonAssociati` — restrizione ai soli tipi pendenza del catalogo
+          globale non ancora associati al dominio indicato (idDominio). Il
+          dominio deve essere visibile all'operatore corrente, altrimenti →
+          400. Un dominio visibile ma senza tipi pendenza associati non e' un
+          errore: restituisce l'intero catalogo.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
         valorizza `hasNextPage` (modalita' Slice, senza COUNT). Con `?total=true`
@@ -2797,6 +2810,9 @@ paths:
         - $ref: '#/components/parameters/IdTipoPendenzaFilter'
         - $ref: '#/components/parameters/Descrizione'
         - $ref: '#/components/parameters/Abilitato'
+        - $ref: '#/components/parameters/Form'
+        - $ref: '#/components/parameters/Trasformazione'
+        - $ref: '#/components/parameters/NonAssociati'
       responses:
         '200':
           description: Lista paginata di tipologie di pendenza.
@@ -2964,7 +2980,10 @@ paths:
         Filtri opzionali e ortogonali (AND):
         - `idDominio` — match parziale;
         - `ragioneSociale` — match parziale;
-        - `abilitato` — match esatto.
+        - `abilitato` — match esatto;
+        - `idStazione` — match esatto, restrizione ai domini associati alla
+          stazione indicata;
+        - `intermediato` — match esatto sul flag di intermediazione.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
         valorizza `hasNextPage` (modalita' Slice, senza COUNT). Con `?total=true`
@@ -2980,6 +2999,8 @@ paths:
         - $ref: '#/components/parameters/IdDominioFilter'
         - $ref: '#/components/parameters/RagioneSociale'
         - $ref: '#/components/parameters/Abilitato'
+        - $ref: '#/components/parameters/IdStazioneFilter'
+        - $ref: '#/components/parameters/Intermediato'
       responses:
         '200':
           description: Lista paginata di domini.
@@ -3437,7 +3458,8 @@ paths:
       description: |
         Filtri opzionali e ortogonali (AND):
         - `descrizione` — match parziale;
-        - `abilitato` — match esatto.
+        - `abilitato` — match esatto;
+        - `iban` — match parziale sull'IBAN.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default `pagination`
         valorizza `hasNextPage` (Slice, senza COUNT). Con `?total=true` vengono
@@ -3452,6 +3474,7 @@ paths:
         - $ref: '#/components/parameters/Total'
         - $ref: '#/components/parameters/Descrizione'
         - $ref: '#/components/parameters/Abilitato'
+        - $ref: '#/components/parameters/Iban'
       responses:
         '200':
           description: Lista paginata di conti di accredito.
@@ -3834,7 +3857,9 @@ paths:
         (AND):
         - `idTipoPendenza` — match parziale;
         - `descrizione` — match parziale (sulla descrizione del tipo pendenza globale);
-        - `abilitato` — match esatto.
+        - `abilitato` — match esatto;
+        - `form` — presenza della form di inserimento custom (override di dominio);
+        - `trasformazione` — presenza dei template di trasformazione CSV (override di dominio).
 
         **Paginazione** (offset): `?page=N&limit=L`. Con `?total=true` vengono
         aggiunti `totalResults` e `totalPages`.
@@ -3849,6 +3874,8 @@ paths:
         - $ref: '#/components/parameters/IdTipoPendenzaFilter'
         - $ref: '#/components/parameters/Descrizione'
         - $ref: '#/components/parameters/Abilitato'
+        - $ref: '#/components/parameters/Form'
+        - $ref: '#/components/parameters/Trasformazione'
       responses:
         '200':
           description: Lista paginata di tipi pendenza del dominio.
@@ -12948,6 +12975,22 @@ components:
         type: string
         pattern: '^[a-zA-Z0-9\-_]{1,35}$'
 
+    IdStazioneFilter:
+      name: idStazione
+      in: query
+      required: false
+      description: Restrizione ai soli domini associati alla stazione indicata (match esatto).
+      schema:
+        type: string
+
+    Intermediato:
+      name: intermediato
+      in: query
+      required: false
+      description: Match esatto sul flag di intermediazione del dominio.
+      schema:
+        type: boolean
+
     IdUnitaOperativaPath:
       name: idUnitaOperativa
       in: path
@@ -12965,6 +13008,14 @@ components:
       schema:
         type: string
         pattern: '^[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$'
+
+    Iban:
+      name: iban
+      in: query
+      required: false
+      description: Match parziale sull'IBAN del conto di accredito.
+      schema:
+        type: string
 
     CodStazione:
       name: codStazione
@@ -12989,6 +13040,39 @@ components:
       description: Match esatto sullo stato di abilitazione.
       schema:
         type: boolean
+
+    Form:
+      name: form
+      in: query
+      required: false
+      description: |
+        Restrizione ai soli elementi che mettono a disposizione la form di
+        inserimento custom (definizione e tipo form entrambi valorizzati).
+      schema:
+        type: boolean
+
+    Trasformazione:
+      name: trasformazione
+      in: query
+      required: false
+      description: |
+        Restrizione ai soli elementi che mettono a disposizione i template di
+        trasformazione per i tracciati CSV (header e template richiesta/risposta
+        e tipo tutti valorizzati).
+      schema:
+        type: boolean
+
+    NonAssociati:
+      name: nonAssociati
+      in: query
+      required: false
+      description: |
+        Restrizione ai soli elementi del catalogo globale non ancora associati
+        al dominio indicato (codice fiscale, 11 cifre). Il dominio deve essere
+        visibile all'operatore corrente, altrimenti → 400.
+      schema:
+        type: string
+        pattern: '^[0-9]{11}$'
 
     IdA2APath:
       name: idA2A

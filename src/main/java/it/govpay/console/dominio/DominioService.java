@@ -103,16 +103,19 @@ public class DominioService {
 
     @Transactional(readOnly = true)
     public ListDomini200Response list(DominioListQuery query) {
-        log.debug("listDomini filtri[idDominio={}, ragioneSociale={}, abilitato={}], "
+        log.debug("listDomini filtri[idDominio={}, ragioneSociale={}, abilitato={}, idStazione={}, intermediato={}], "
                         + "page={}, limit={}, sort={}, total={}",
                 query.idDominio(), query.ragioneSociale(), query.abilitato(),
+                query.idStazione(), query.intermediato(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<Dominio> spec = Specification.allOf(
                 Stream.of(
                         DominioSpecifications.codDominioPartial(query.idDominio()),
                         DominioSpecifications.ragioneSocialePartial(query.ragioneSociale()),
-                        DominioSpecifications.abilitatoExact(query.abilitato()))
+                        DominioSpecifications.abilitatoExact(query.abilitato()),
+                        DominioSpecifications.idStazioneExact(query.idStazione()),
+                        DominioSpecifications.intermediatoExact(query.intermediato()))
                 .filter(Objects::nonNull)
                 .toList());
 

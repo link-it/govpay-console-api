@@ -98,8 +98,10 @@ public class TipoPendenzaDominioService {
     @Transactional(readOnly = true)
     public ListTipiPendenzaDominio200Response list(String idDominio, TipoPendenzaDominioListQuery query) {
         Dominio parent = loadDominio(idDominio);
-        log.debug("listTipiPendenzaDominio dominio={} filtri[idTipoPendenza={}, descrizione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
+        log.debug("listTipiPendenzaDominio dominio={} filtri[idTipoPendenza={}, descrizione={}, abilitato={}, "
+                        + "form={}, trasformazione={}], page={}, limit={}, sort={}, total={}",
                 idDominio, query.idTipoPendenza(), query.descrizione(), query.abilitato(),
+                query.form(), query.trasformazione(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<TipoVersamentoDominio> spec = Specification.allOf(
@@ -107,7 +109,9 @@ public class TipoPendenzaDominioService {
                         TipoPendenzaDominioSpecifications.byDominioId(parent.getId()),
                         TipoPendenzaDominioSpecifications.idTipoPendenzaPartial(query.idTipoPendenza()),
                         TipoPendenzaDominioSpecifications.descrizionePartial(query.descrizione()),
-                        TipoPendenzaDominioSpecifications.abilitatoExact(query.abilitato()))
+                        TipoPendenzaDominioSpecifications.abilitatoExact(query.abilitato()),
+                        TipoPendenzaDominioSpecifications.formExact(query.form()),
+                        TipoPendenzaDominioSpecifications.trasformazioneExact(query.trasformazione()))
                 .filter(Objects::nonNull)
                 .toList());
 

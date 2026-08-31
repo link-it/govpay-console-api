@@ -25,12 +25,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoTributo;
+import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoTributoRepository;
+import it.govpay.console.repository.TributoRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
 @SpringBootTest
@@ -54,6 +58,10 @@ class EntrataControllerIntegrationTest {
     private OperatoreRepository operatoreRepository;
     @Autowired
     private TipoTributoRepository tipoTributoRepository;
+    @Autowired
+    private DominioRepository dominioRepository;
+    @Autowired
+    private TributoRepository tributoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
 
@@ -136,6 +144,71 @@ class EntrataControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idEntrata", is("IMU")));
+    }
+
+    @Test
+    void nonAssociatiReturnsComplementOfDominioAssociations() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678901");
+        dominio.setRagioneSociale("Comune Alfa");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        TipoTributo imu = tipoTributoRepository.findByCodTributo("IMU").orElseThrow();
+        Tributo associazione = new Tributo();
+        associazione.setDominio(dominio);
+        associazione.setTipoTributo(imu);
+        associazione.setAbilitato(true);
+        tributoRepository.save(associazione);
+
+        mvc.perform(get("/entrate").param("nonAssociati", "12345678901").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].idEntrata", contains("TARI", "TOSAP")));
+    }
+
+    @Test
+    void nonAssociatiMalformedReturns400() throws Exception {
+        mvc.perform(get("/entrate").param("nonAssociati", "ABC").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void nonAssociatiWithDominioNotVisibleReturns400() throws Exception {
+        Dominio dominio = new Dominio();
+        dominio.setCodDominio("12345678902");
+        dominio.setRagioneSociale("Comune Beta");
+        dominio.setAuxDigit(0);
+        dominio.setAbilitato(true);
+        dominio.setIntermediato(false);
+        dominio.setScaricaFr(false);
+        dominioRepository.save(dominio);
+
+        String principaleRistretto = "operatoreRistretto";
+        Utenza ristretta = new Utenza();
+        ristretta.setPrincipal(principaleRistretto);
+        ristretta.setPrincipalOriginale(principaleRistretto);
+        ristretta.setAbilitato(true);
+        ristretta.setAutorizzazioneDominiStar(false);
+        ristretta.setAutorizzazioneTipiVersStar(true);
+        ristretta.setRuoli("OPERATORE");
+        ristretta.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(ristretta);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Ristretto");
+        op.setIdUtenza(ristretta.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/entrate").param("nonAssociati", "12345678902")
+                        .with(httpBasic(principaleRistretto, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("12345678902")));
     }
 
     @Test

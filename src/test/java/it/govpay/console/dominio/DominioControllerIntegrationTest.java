@@ -177,6 +177,51 @@ class DominioControllerIntegrationTest {
     }
 
     @Test
+    void filterByIdStazioneExact() throws Exception {
+        Stazione altra = new Stazione();
+        altra.setCodStazione("STAZ02");
+        altra.setPassword("");
+        altra.setApplicationCode(1);
+        altra.setVersione("V2");
+        altra.setAbilitato(true);
+        altra.setIntermediario(stazione.getIntermediario());
+        stazioneRepository.save(altra);
+
+        Dominio altroDominio = new Dominio();
+        altroDominio.setCodDominio("12345678904");
+        altroDominio.setRagioneSociale("Comune Delta");
+        altroDominio.setAuxDigit(0);
+        altroDominio.setAbilitato(true);
+        altroDominio.setIntermediato(true);
+        altroDominio.setScaricaFr(true);
+        altroDominio.setStazione(altra);
+        dominioRepository.save(altroDominio);
+
+        mvc.perform(get("/domini").param("idStazione", COD_STAZIONE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)))
+                .andExpect(jsonPath("$.results[*].idDominio",
+                        contains("12345678901", "12345678902", "12345678903")));
+    }
+
+    @Test
+    void filterByIntermediato() throws Exception {
+        Dominio nonIntermediato = new Dominio();
+        nonIntermediato.setCodDominio("12345678905");
+        nonIntermediato.setRagioneSociale("Comune Epsilon");
+        nonIntermediato.setAuxDigit(0);
+        nonIntermediato.setAbilitato(true);
+        nonIntermediato.setIntermediato(false);
+        nonIntermediato.setScaricaFr(false);
+        dominioRepository.save(nonIntermediato);
+
+        mvc.perform(get("/domini").param("intermediato", "false").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idDominio", is("12345678905")));
+    }
+
+    @Test
     void defaultSortByIdAsc() throws Exception {
         mvc.perform(get("/domini").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
