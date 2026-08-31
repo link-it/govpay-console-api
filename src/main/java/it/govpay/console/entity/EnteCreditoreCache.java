@@ -45,6 +45,15 @@ public class EnteCreditoreCache {
     @Column(name = "data_ultimo_aggiornamento", nullable = false)
     private OffsetDateTime dataUltimoAggiornamento;
 
+    @Column(name = "cod_intermediario", length = 35)
+    private String codIntermediario;
+
+    @Column(name = "check_stato", length = 35)
+    private String checkStato;
+
+    @Column(name = "check_motivo", length = 1024)
+    private String checkMotivo;
+
     public Long getId() {
         return id;
     }
@@ -107,5 +116,29 @@ public class EnteCreditoreCache {
 
     public void setDataUltimoAggiornamento(OffsetDateTime dataUltimoAggiornamento) {
         this.dataUltimoAggiornamento = dataUltimoAggiornamento;
+    }
+
+    public String getCodIntermediario() {
+        return codIntermediario;
+    }
+
+    public void setCodIntermediario(String codIntermediario) {
+        this.codIntermediario = codIntermediario;
+    }
+
+    public String getCheckStato() {
+        return checkStato;
+    }
+
+    public void setCheckStato(String checkStato) {
+        this.checkStato = checkStato;
+    }
+
+    public String getCheckMotivo() {
+        return checkMotivo;
+    }
+
+    public void setCheckMotivo(String checkMotivo) {
+        this.checkMotivo = checkMotivo;
     }
 }

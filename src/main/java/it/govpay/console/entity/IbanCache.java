@@ -37,6 +37,30 @@ public class IbanCache {
     @Column(name = "data_ultima_verifica", nullable = false)
     private OffsetDateTime dataUltimaVerifica;
 
+    @Column(name = "cod_intermediario", length = 35)
+    private String codIntermediario;
+
+    @Column(name = "ci_name", length = 255)
+    private String ciName;
+
+    @Column(name = "status", length = 255)
+    private String status;
+
+    @Column(name = "validity_date")
+    private OffsetDateTime validityDate;
+
+    @Column(name = "description", length = 512)
+    private String description;
+
+    @Column(name = "label", length = 1024)
+    private String label;
+
+    @Column(name = "check_stato", length = 35)
+    private String checkStato;
+
+    @Column(name = "check_motivo", length = 1024)
+    private String checkMotivo;
+
     public Long getId() {
         return id;
     }
@@ -75,5 +99,69 @@ public class IbanCache {
 
     public void setDataUltimaVerifica(OffsetDateTime dataUltimaVerifica) {
         this.dataUltimaVerifica = dataUltimaVerifica;
+    }
+
+    public String getCodIntermediario() {
+        return codIntermediario;
+    }
+
+    public void setCodIntermediario(String codIntermediario) {
+        this.codIntermediario = codIntermediario;
+    }
+
+    public String getCiName() {
+        return ciName;
+    }
+
+    public void setCiName(String ciName) {
+        this.ciName = ciName;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public OffsetDateTime getValidityDate() {
+        return validityDate;
+    }
+
+    public void setValidityDate(OffsetDateTime validityDate) {
+        this.validityDate = validityDate;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
+    public String getCheckStato() {
+        return checkStato;
+    }
+
+    public void setCheckStato(String checkStato) {
+        this.checkStato = checkStato;
+    }
+
+    public String getCheckMotivo() {
+        return checkMotivo;
+    }
+
+    public void setCheckMotivo(String checkMotivo) {
+        this.checkMotivo = checkMotivo;
     }
 }

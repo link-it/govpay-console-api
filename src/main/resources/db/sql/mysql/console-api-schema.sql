@@ -19,6 +19,9 @@ CREATE TABLE pagopa_ec_cache
 	segregation_code VARCHAR(4) COMMENT 'Codice segregazione',
 	cbill_code VARCHAR(35) COMMENT 'Codice CBILL',
 	data_ultimo_aggiornamento DATETIME(3) NOT NULL COMMENT 'Timestamp ultima sincronizzazione dal batch',
+	cod_intermediario VARCHAR(35) COMMENT 'Codice intermediario dell''ultima sincronizzazione',
+	check_stato VARCHAR(35) COMMENT 'Esito dell''ultima verifica contro i domini censiti',
+	check_motivo VARCHAR(1024) COMMENT 'Descrizione testuale della discrepanza',
 	-- fk/pk columns
 	id BIGINT AUTO_INCREMENT COMMENT 'Identificativo fisico',
 	-- fk/pk keys constraints
@@ -35,6 +38,14 @@ CREATE TABLE pagopa_iban_cache
 	iban VARCHAR(35) NOT NULL COMMENT 'IBAN abilitato su pagoPA',
 	attivo BOOLEAN NOT NULL COMMENT 'Stato ENABLED su pagoPA',
 	data_ultima_verifica DATETIME(3) NOT NULL COMMENT 'Timestamp ultima sincronizzazione dal batch',
+	cod_intermediario VARCHAR(35) COMMENT 'Codice intermediario dell''ultima sincronizzazione',
+	ci_name VARCHAR(255) COMMENT 'Nome del titolare (ciName pagoPA)',
+	status VARCHAR(255) COMMENT 'Stato grezzo pagoPA (es. ENABLED/DISABLED)',
+	validity_date DATETIME(3) COMMENT 'Activation date pagoPA',
+	description VARCHAR(512) COMMENT 'Descrizione pagoPA',
+	label VARCHAR(1024) COMMENT 'Label pagoPA',
+	check_stato VARCHAR(35) COMMENT 'Esito dell''ultima verifica contro IBAN_ACCREDITO',
+	check_motivo VARCHAR(1024) COMMENT 'Descrizione testuale della discrepanza',
 	-- fk/pk columns
 	id BIGINT AUTO_INCREMENT COMMENT 'Identificativo fisico',
 	-- fk/pk keys constraints
