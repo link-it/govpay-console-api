@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Tracciato;
 import it.govpay.console.model.FormatoTracciato;
 import it.govpay.console.model.StatoTracciatoPendenza;
@@ -53,11 +54,11 @@ public final class TracciatoSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
         return (root, q, cb) -> {
             var operatoreJoin = root.join("operatore", JoinType.LEFT);
             var utenzaJoin = operatoreJoin.join("utenza", JoinType.LEFT);
-            return cb.like(cb.lower(utenzaJoin.get("principal")), pattern);
+            return cb.like(cb.lower(utenzaJoin.get("principal")), pattern, LikePatterns.ESCAPE_CHAR);
         };
     }
 

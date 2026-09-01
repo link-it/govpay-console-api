@@ -134,7 +134,7 @@ public class RicevutaService {
 
     /**
      * Lista (metadata-only) delle RT di una pendenza, ordinata per
-     * {@code dataPagamento DESC}. Pendenza inesistente o non visibile per ACL
+     * {@code dataRicevuta DESC}. Pendenza inesistente o non visibile per ACL
      * → 404 (anti-leak); pendenza senza RT → lista vuota.
      */
     @Transactional(readOnly = true)

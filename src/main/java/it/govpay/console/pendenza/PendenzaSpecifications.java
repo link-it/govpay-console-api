@@ -7,6 +7,8 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
+import it.govpay.console.common.VersamentoPredicates;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.security.OperatoreCorrente;
@@ -21,8 +23,8 @@ public final class PendenzaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codVersamentoEnte")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codVersamentoEnte")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Versamento> numeroAvvisoExact(String value) {
@@ -43,7 +45,7 @@ public final class PendenzaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("srcDebitoreIdentificativo"), value);
+        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, root, value);
     }
 
     /** Limite inferiore incluso sulla data di creazione ({@code data_creazione}). */
@@ -72,7 +74,15 @@ public final class PendenzaSpecifications {
     }
 
     /**
-     * Verifica indici (issue #66, non applicata: lo schema di {@code versamenti}
+     * Semantica OR fra i valori: {@code versamenti.direzione IN (...)}. Cardinalita'
+     * allineata a {@code /ricevute} (issue #68): stessa colonna, stesso predicato
+     * condiviso via {@link VersamentoPredicates}, deliberatamente piu' larga del
+     * match esatto originario di questa issue (#66) — V1 stesso trattava
+     * {@code direzione}/{@code divisione} in modo incoerente fra {@code /pendenze}
+     * (match esatto) e {@code /rpp} (lista): qui si sceglie la lista per entrambe le
+     * risorse V2, non la replica letterale di una delle due.
+     *
+     * <p>Verifica indici (issue #66, non applicata: lo schema di {@code versamenti}
      * e' condiviso col core, la migrazione va concordata a parte). Sul DDL V1
      * reale, {@code direzione}/{@code divisione} non hanno alcun indice: se
      * usati in isolamento (senza {@code idDominio}, gia' indicizzato) il filtro
@@ -80,22 +90,23 @@ public final class PendenzaSpecifications {
      * {@code CREATE INDEX idx_vrs_direzione ON versamenti (direzione);}
      * {@code CREATE INDEX idx_vrs_divisione ON versamenti (divisione);}
      */
-    public static Specification<Versamento> direzioneExact(String value) {
-        if (value == null || value.isBlank()) {
+    public static Specification<Versamento> direzioneIn(List<String> values) {
+        if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("direzione"), value);
+        return (root, q, cb) -> VersamentoPredicates.direzioneIn(cb, root, values);
     }
 
-    public static Specification<Versamento> divisioneExact(String value) {
-        if (value == null || value.isBlank()) {
+    /** Semantica OR fra i valori: {@code versamenti.divisione IN (...)}. Vedi {@link #direzioneIn}. */
+    public static Specification<Versamento> divisioneIn(List<String> values) {
+        if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("divisione"), value);
+        return (root, q, cb) -> VersamentoPredicates.divisioneIn(cb, root, values);
     }
 
     /**
-     * Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneExact}).
+     * Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
      * {@code id_applicazione} non ha un indice con se stesso come colonna leading
      * (solo 2a colonna in {@code idx_vrs_id_pendenza(cod_versamento_ente, id_applicazione)}):
      * un {@code idA2A} senza {@code idDominio} fa scan. Proposta:
@@ -105,13 +116,13 @@ public final class PendenzaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("applicazione").get("codApplicazione"), value);
+        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, root, value);
     }
 
     /**
      * Semantica OR fra i valori: {@code versamenti.id_tipo_versamento IN (...)}.
      *
-     * <p>Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneExact}).
+     * <p>Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
      * {@code id_tipo_versamento} non ha un indice con se stesso come colonna leading
      * (solo 2a colonna in {@code idx_vrs_auth(id_dominio, id_tipo_versamento, id_uo)}):
      * un {@code idTipoPendenza} senza {@code idDominio} fa scan. Proposta:
@@ -121,7 +132,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> root.get("tipoVersamento").get("codTipoVersamento").in(values);
+        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(cb, root, values);
     }
 
     /**

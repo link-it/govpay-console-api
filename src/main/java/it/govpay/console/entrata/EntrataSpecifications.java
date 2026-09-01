@@ -2,6 +2,7 @@ package it.govpay.console.entrata;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.Tributo;
 import jakarta.persistence.criteria.Subquery;
@@ -15,16 +16,16 @@ public final class EntrataSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codTributo")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codTributo")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<TipoTributo> descrizionePartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("descrizione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     /**

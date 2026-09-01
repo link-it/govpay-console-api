@@ -328,18 +328,47 @@ paths:
       description: |
         Consultazione read-only delle ricevute telematiche emesse da pagoPA.
         Restituisce solo metadati tecnico-finanziari (`RicevutaSummary`): nessun
-        dato personale, quindi la lista non genera audit GDPR.
+        dato personale in risposta. La ricerca per `identificativoDebitore`
+        genera comunque un audit dedicato (vedi sotto): non e' l'esposizione
+        del dato a richiedere l'audit, ma l'atto di cercare per una persona
+        specifica.
 
-        Filtri supportati in Fase 1:
+        Filtri supportati:
         - `iuv` — match esatto;
         - `idDominio` — match esatto, 11 cifre;
         - `idRicevuta` — match esatto (era `ccp` in V1);
-        - `dataDa` / `dataA` — intervallo (incluso) sulla data di pagamento.
+        - `dataRicevutaDa` / `dataRicevutaA` — intervallo (incluso) sulla data di
+          ricezione della ricevuta (era `dataDa`/`dataA`, rinominato per non
+          collidere con `data_pagamento`, un concetto diverso su `pagamenti`);
+        - `dataRichiestaDa` / `dataRichiestaA` — intervallo (incluso) sulla data
+          della richiesta di pagamento (RPT), indipendente dal precedente;
+        - `idA2A` — match esatto sul gestionale proprietario della pendenza associata;
+        - `idPendenza` — match esatto sull'identificativo pendenza associato;
+        - `identificativoDebitore` — match esatto sul CF/PIVA del debitore (vedi audit sotto);
+        - `idUnitaOperativa` — match esatto;
+        - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi;
+        - `direzione`, `divisione` — elenco CSV, semantica OR, max 50 elementi;
+        - `tassonomia` — match esatto;
+        - `anagraficaDebitore` — ricerca testuale (contains, case-insensitive) su
+          nome/ragione sociale del debitore, minimo 3 caratteri (vedi audit sotto).
 
-        Tutti i filtri sono opzionali e in AND. I numerosi filtri V1 non ancora
-        supportati (`idA2A`, `idPendenza`, `esito`, `dataRptDa`/`dataRptA`,
-        `tassonomia`, `idDebitore`/`identificativoDebitore`, ...) ritornano 400
-        problem+json.
+        Tutti i filtri sono opzionali e in AND. `esitoRpp`, `idPagamentoRpp` e
+        `retrocompatibilitaMessaggiPagoPAV1` di V1 non si portano per scelta di
+        progetto (vedi issue #68): non sono filtri rimandati, non verranno mai
+        aggiunti. Ritornano 400 problem+json.
+
+        Quando `identificativoDebitore` e' valorizzato la richiesta viene
+        registrata in `gp_audit` (azione `PENDENZE_RICERCA_PER_DEBITORE`,
+        condivisa con `/pendenze`: stessa colonna, stesso evento da tracciare,
+        non un audit distinto per endpoint). Quando `anagraficaDebitore` e'
+        valorizzato la richiesta viene registrata con azione dedicata
+        (`RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE`, distinta da quella
+        dell'identificativo: e' una ricerca testuale su un nome, un vettore di
+        rischio diverso da un match esatto su un codice fiscale). Con
+        `anagraficaDebitore` valorizzato, `limit` non puo' superare 50 (contro i
+        200 delle altre ricerche): e' una ricerca per persona, il risultato deve
+        restare mirato. Termine sotto i 3 caratteri o `limit` oltre 50 con
+        `anagraficaDebitore` valorizzato → 400 problem+json.
 
         ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
@@ -347,7 +376,7 @@ paths:
         **Paginazione**: due modalita' mutuamente esclusive.
         - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
         - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
-          ordinamento fisso `(dataPagamento DESC, id DESC)`.
+          ordinamento fisso `(dataRicevuta DESC, id DESC)`.
         In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
         generano 400 con motivazione parlante. Cursor malformato → 400.
       parameters:
@@ -359,8 +388,19 @@ paths:
         - $ref: '#/components/parameters/IuvFilter'
         - $ref: '#/components/parameters/IdDominio'
         - $ref: '#/components/parameters/IdRicevutaFilter'
-        - $ref: '#/components/parameters/DataDa'
-        - $ref: '#/components/parameters/DataA'
+        - $ref: '#/components/parameters/DataRicevutaDa'
+        - $ref: '#/components/parameters/DataRicevutaA'
+        - $ref: '#/components/parameters/DataRichiestaDa'
+        - $ref: '#/components/parameters/DataRichiestaA'
+        - $ref: '#/components/parameters/RicevutaIdA2AFilter'
+        - $ref: '#/components/parameters/RicevutaIdPendenzaFilter'
+        - $ref: '#/components/parameters/IdentificativoDebitore'
+        - $ref: '#/components/parameters/RicevutaIdUnitaOperativaFilter'
+        - $ref: '#/components/parameters/RicevutaIdTipoPendenzaFilter'
+        - $ref: '#/components/parameters/DirezioneFilter'
+        - $ref: '#/components/parameters/DivisioneFilter'
+        - $ref: '#/components/parameters/TassonomiaFilter'
+        - $ref: '#/components/parameters/AnagraficaDebitoreFilter'
       responses:
         '200':
           description: Lista paginata di ricevute.
@@ -1167,15 +1207,16 @@ paths:
         - `stato` — match esatto sull'enum `StatoPendenza`;
         - `dataDa`/`dataA` — intervallo incluso sulla data di creazione della pendenza;
         - `iuv` — match esatto;
-        - `direzione`, `divisione` — match esatto;
+        - `direzione`, `divisione` — elenco CSV, semantica OR, max 50 elementi;
         - `idA2A` — match esatto sul gestionale proprietario;
         - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi.
 
         Tutti i filtri sono opzionali e ortogonali (AND).
 
-        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`
-        vuoto, con soli separatori o oltre il limite di 50 elementi → 400
-        problem+json; un codice inesistente nella lista restringe senza errore.
+        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`,
+        `direzione`, `divisione` vuoti, con soli separatori o oltre il limite di
+        50 elementi → 400 problem+json; un valore inesistente nella lista
+        restringe senza errore.
 
         ACL: il filtro per dominio dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' su alcun dominio riceve
@@ -1463,7 +1504,7 @@ paths:
       description: |
         Ritorna la lista (metadata-only) delle Ricevute Telematiche (RT) associate
         alla pendenza identificata da `(idA2A, idPendenza)`, ordinate per
-        `dataPagamento DESC` (RT piu' recenti prima). Una pendenza puo' avere piu'
+        `dataRicevuta DESC` (RT piu' recenti prima). Una pendenza puo' avere piu'
         RT (pagamenti parziali, retry, attestazioni out-of-band).
 
         Nessuna paginazione: il numero di RT per pendenza e' limitato. Nessuna
@@ -7519,7 +7560,7 @@ components:
         - idDominio
         - iuv
         - idRicevuta
-        - dataPagamento
+        - dataRicevuta
         - stato
       properties:
         idDominio:
@@ -7531,9 +7572,10 @@ components:
         idRicevuta:
           type: string
           description: Identificativo della ricevuta (era `ccp` in V1).
-        dataPagamento:
+        dataRicevuta:
           type: string
           format: date-time
+          description: Data di ricezione della ricevuta (non e' la data di pagamento).
         codPsp:
           type: string
           description: Codice del PSP che ha emesso la RT.
@@ -12490,17 +12532,33 @@ components:
       name: direzione
       in: query
       required: false
-      description: Identificativo interno all'ente, match esatto.
+      description: |
+        Elenco (CSV) di identificativi di direzione interni all'ente, semantica OR
+        fra i valori (in AND con gli altri filtri): `?direzione=a,b` restituisce i
+        risultati di direzione `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Massimo 50 elementi. Lista vuota o composta solo da
+        separatori (`?direzione=`, `?direzione=,,`) → 400 problem+json.
       schema:
-        type: string
+        type: array
+        items:
+          type: string
+      explode: false
 
     DivisioneFilter:
       name: divisione
       in: query
       required: false
-      description: Identificativo interno all'ente, match esatto.
+      description: |
+        Elenco (CSV) di identificativi di divisione interni all'ente, semantica OR
+        fra i valori (in AND con gli altri filtri): `?divisione=a,b` restituisce i
+        risultati di divisione `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Massimo 50 elementi. Lista vuota o composta solo da
+        separatori (`?divisione=`, `?divisione=,,`) → 400 problem+json.
       schema:
-        type: string
+        type: array
+        items:
+          type: string
+      explode: false
 
     IuvFilter:
       name: iuv
@@ -12520,23 +12578,112 @@ components:
       schema:
         type: string
 
-    DataDa:
-      name: dataDa
+    DataRicevutaDa:
+      name: dataRicevutaDa
       in: query
       required: false
-      description: Limite inferiore (incluso) sulla data di pagamento (ISO 8601 date).
+      description: |
+        Limite inferiore (incluso) sulla data di ricezione della ricevuta
+        (`data_msg_ricevuta`, ISO 8601 date). Non e' la data di pagamento
+        (`pagamenti.data_pagamento`/`versamenti.data_pagamento`, un concetto
+        diverso): e' il momento in cui la RT e' arrivata dal PSP.
       schema:
         type: string
         format: date
 
-    DataA:
-      name: dataA
+    DataRicevutaA:
+      name: dataRicevutaA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data di pagamento (ISO 8601 date).
+      description: Limite superiore (incluso) sulla data di ricezione della ricevuta. Vedi `dataRicevutaDa`.
       schema:
         type: string
         format: date
+
+    DataRichiestaDa:
+      name: dataRichiestaDa
+      in: query
+      required: false
+      description: |
+        Limite inferiore (incluso) sulla data della richiesta di pagamento
+        (`data_msg_richiesta`, ISO 8601 date), indipendente da `dataRicevutaDa`.
+      schema:
+        type: string
+        format: date
+
+    DataRichiestaA:
+      name: dataRichiestaA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data della richiesta di pagamento. Vedi `dataRichiestaDa`.
+      schema:
+        type: string
+        format: date
+
+    RicevutaIdA2AFilter:
+      name: idA2A
+      in: query
+      required: false
+      description: Identificativo del gestionale proprietario (A2A) della pendenza associata alla ricevuta, match esatto.
+      schema:
+        type: string
+
+    RicevutaIdPendenzaFilter:
+      name: idPendenza
+      in: query
+      required: false
+      description: Identificativo della pendenza associata alla ricevuta, match esatto (in V1 il filtro equivalente su `/rpp` era anch'esso a match esatto).
+      schema:
+        type: string
+
+    RicevutaIdUnitaOperativaFilter:
+      name: idUnitaOperativa
+      in: query
+      required: false
+      description: Identificativo dell'unita' operativa associata alla pendenza della ricevuta, match esatto.
+      schema:
+        type: string
+
+    RicevutaIdTipoPendenzaFilter:
+      name: idTipoPendenza
+      in: query
+      required: false
+      description: |
+        Elenco (CSV) di codici tipologia pendenza, semantica OR fra i valori
+        (in AND con gli altri filtri): `?idTipoPendenza=a,b` restituisce le
+        ricevute delle pendenze di tipo `a` **o** `b`. Un valore singolo e'
+        trattato come lista di un elemento. Un codice non esistente non e' un
+        errore: la lista si restringe e basta. Massimo 50 elementi. Lista
+        vuota o composta solo da separatori (`?idTipoPendenza=`,
+        `?idTipoPendenza=,,`) → 400 problem+json.
+      schema:
+        type: array
+        items:
+          type: string
+      explode: false
+
+    TassonomiaFilter:
+      name: tassonomia
+      in: query
+      required: false
+      description: Tassonomia della pendenza associata alla ricevuta, match esatto.
+      schema:
+        type: string
+
+    AnagraficaDebitoreFilter:
+      name: anagraficaDebitore
+      in: query
+      required: false
+      description: |
+        Ricerca testuale (contains, case-insensitive) su nome/ragione sociale del
+        debitore della pendenza associata alla ricevuta. Minimo 3 caratteri, per
+        impedire l'enumerazione dell'archivio con un singolo carattere — sotto
+        soglia → 400 problem+json. Genera un audit dedicato
+        (`RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE`) e limita `limit` a 50
+        (contro i 200 delle altre ricerche): e' una ricerca per persona, non una
+        lista ordinaria.
+      schema:
+        type: string
 
     IdFlusso:
       name: idFlusso

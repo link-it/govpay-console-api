@@ -1,7 +1,9 @@
 package it.govpay.console.ricevuta;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -14,15 +16,18 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.model.ListRicevute200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.pagination.CursorCodec;
+import it.govpay.console.pendenza.PendenzaService;
 import it.govpay.console.repository.RptRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
+import it.govpay.console.web.ListQueryValidator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -31,11 +36,24 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Ricerca paginata della collection top-level {@code GET /ricevute}. Espone solo
- * {@link RicevutaSummary} (metadata-only): nessun dato personale, quindi nessun
- * audit GDPR sulla lista.
+ * {@link RicevutaSummary} (metadata-only): nessun dato personale in risposta.
+ * La ricerca per {@code identificativoDebitore} genera comunque un audit
+ * (issue #68 §A), riusando la stessa azione di {@code /pendenze} — vedi
+ * {@link PendenzaService#AZIONE_AUDIT_RICERCA}: non e' un audit distinto per
+ * endpoint, e' lo stesso evento ("ricerca per debitore") tracciato una volta
+ * sola indipendentemente da dove parte la richiesta.
+ *
+ * <p>La ricerca per {@code anagraficaDebitore} (issue #68 §C) usa invece
+ * un'azione di audit dedicata ({@link #AZIONE_AUDIT_RICERCA_ANAGRAFICA}): non
+ * e' un riuso di un filtro esistente come {@code identificativoDebitore}, e'
+ * una ricerca testuale su un nome — un vettore di rischio diverso (enumerabile,
+ * non un match esatto su un codice) che merita un evento distinguibile in
+ * {@code gp_audit}. Vincoli aggiuntivi validati qui, non nello {@code Specification}:
+ * lunghezza minima del termine e limite risultati piu' stretto.
  *
  * <p>Due modalità mutuamente esclusive (come {@code GET /pendenze}): offset
  * (Slice di default, Page con {@code total=true}) e cursor keyset opt-in con
@@ -47,29 +65,55 @@ public class RicevutaSearchService {
 
     private static final Logger log = LoggerFactory.getLogger(RicevutaSearchService.class);
 
+    public static final String AZIONE_AUDIT_RICERCA_ANAGRAFICA = "RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE";
+
+    private static final int MAX_ID_TIPO_PENDENZA = 50;
+    private static final int MAX_DIREZIONE_DIVISIONE = 50;
+    private static final int MIN_ANAGRAFICA_DEBITORE_LENGTH = 3;
+    private static final int MAX_LIMIT_ANAGRAFICA_DEBITORE = 50;
+
     private final RptRepository rptRepository;
     private final RicevutaMapper mapper;
     private final CurrentOperatorService currentOperatorService;
+    private final AuditService auditService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public RicevutaSearchService(RptRepository rptRepository,
                                  RicevutaMapper mapper,
-                                 CurrentOperatorService currentOperatorService) {
+                                 CurrentOperatorService currentOperatorService,
+                                 AuditService auditService) {
         this.rptRepository = rptRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
-    public ListRicevute200Response search(RicevutaListQuery query) {
+    public ListRicevute200Response search(RicevutaListQuery query, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        log.debug("listRicevute filtri[iuv={}, idDominio={}, idRicevuta={}, dataDa={}, dataA={}], "
+        log.debug("listRicevute filtri[iuv={}, idDominio={}, idRicevuta={}, dataRicevutaDa={}, "
+                        + "dataRicevutaA={}, dataRichiestaDa={}, dataRichiestaA={}, idA2A={}, idPendenza={}, "
+                        + "identificativoDebitore={}, idUnitaOperativa={}, idTipoPendenza={}, direzione={}, "
+                        + "divisione={}, tassonomia={}, anagraficaDebitore={}], "
                         + "page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
-                query.iuv(), query.idDominio(), query.idRicevuta(), query.dataDa(), query.dataA(),
+                query.iuv(), query.idDominio(), query.idRicevuta(),
+                query.dataRicevutaDa(), query.dataRicevutaA(), query.dataRichiestaDa(), query.dataRichiestaA(),
+                query.idA2A(), query.idPendenza(), query.identificativoDebitore(), query.idUnitaOperativa(),
+                query.idTipoPendenza(), query.direzione(), query.divisione(), query.tassonomia(),
+                query.anagraficaDebitore() != null,
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
+
+        String anagraficaDebitore = validateAnagraficaDebitore(query.anagraficaDebitore(), query.limit());
+
+        List<String> idTipoPendenza = ListQueryValidator.normalizeCsvList(
+                query.idTipoPendenza(), "idTipoPendenza", MAX_ID_TIPO_PENDENZA);
+        List<String> direzione = ListQueryValidator.normalizeCsvList(
+                query.direzione(), "direzione", MAX_DIREZIONE_DIVISIONE);
+        List<String> divisione = ListQueryValidator.normalizeCsvList(
+                query.divisione(), "divisione", MAX_DIREZIONE_DIVISIONE);
 
         Specification<Rpt> spec = Specification.allOf(
                 Stream.of(
@@ -77,8 +121,19 @@ public class RicevutaSearchService {
                         RptSpecifications.iuvExact(query.iuv()),
                         RptSpecifications.idDominioExact(query.idDominio()),
                         RptSpecifications.idRicevutaExact(query.idRicevuta()),
-                        RptSpecifications.dataPagamentoDa(query.dataDa()),
-                        RptSpecifications.dataPagamentoA(query.dataA()),
+                        RptSpecifications.dataRicevutaDa(query.dataRicevutaDa()),
+                        RptSpecifications.dataRicevutaA(query.dataRicevutaA()),
+                        RptSpecifications.dataRichiestaDa(query.dataRichiestaDa()),
+                        RptSpecifications.dataRichiestaA(query.dataRichiestaA()),
+                        RptSpecifications.idA2AExact(query.idA2A()),
+                        RptSpecifications.idPendenzaExact(query.idPendenza()),
+                        RptSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
+                        RptSpecifications.idUnitaOperativaExact(query.idUnitaOperativa()),
+                        RptSpecifications.idTipoPendenzaIn(idTipoPendenza),
+                        RptSpecifications.direzioneIn(direzione),
+                        RptSpecifications.divisioneIn(divisione),
+                        RptSpecifications.tassonomiaExact(query.tassonomia()),
+                        RptSpecifications.anagraficaDebitorePartial(anagraficaDebitore),
                         RptSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
@@ -92,7 +147,48 @@ public class RicevutaSearchService {
         response.setResults(summaries);
         log.debug("listRicevute risultati={} nextCursor={} pagination={}",
                 summaries.size(), response.getNextCursor() != null, response.getPagination() != null);
+
+        if (query.identificativoDebitore() != null && !query.identificativoDebitore().isBlank()) {
+            Map<String, Object> dettaglio = new HashMap<>();
+            dettaglio.put("identificativoDebitore", query.identificativoDebitore());
+            Map<String, Object> altriFiltri = new HashMap<>();
+            if (query.idDominio() != null) altriFiltri.put("idDominio", query.idDominio());
+            if (query.idPendenza() != null) altriFiltri.put("idPendenza", query.idPendenza());
+            if (query.idA2A() != null) altriFiltri.put("idA2A", query.idA2A());
+            dettaglio.put("altriFiltri", altriFiltri);
+            dettaglio.put("totaleRisultati", summaries.size());
+            auditService.registra(PendenzaService.AZIONE_AUDIT_RICERCA, 0L, dettaglio, operatore, request);
+        }
+
+        if (anagraficaDebitore != null) {
+            Map<String, Object> dettaglio = new HashMap<>();
+            dettaglio.put("anagraficaDebitore", anagraficaDebitore);
+            dettaglio.put("totaleRisultati", summaries.size());
+            auditService.registra(AZIONE_AUDIT_RICERCA_ANAGRAFICA, 0L, dettaglio, operatore, request);
+        }
+
         return response;
+    }
+
+    /**
+     * {@code null} se il parametro non e' presente; altrimenti applica i vincoli
+     * dell'issue #68 §C, entrambi anti-enumerazione: lunghezza minima del
+     * termine e limite risultati piu' stretto delle altre ricerche.
+     */
+    private String validateAnagraficaDebitore(String raw, int limit) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.length() < MIN_ANAGRAFICA_DEBITORE_LENGTH) {
+            throw new BadRequestException("'anagraficaDebitore' richiede almeno "
+                    + MIN_ANAGRAFICA_DEBITORE_LENGTH + " caratteri.");
+        }
+        if (limit > MAX_LIMIT_ANAGRAFICA_DEBITORE) {
+            throw new BadRequestException("'limit' non puo' superare " + MAX_LIMIT_ANAGRAFICA_DEBITORE
+                    + " quando 'anagraficaDebitore' e' valorizzato.");
+        }
+        return trimmed;
     }
 
     private List<Rpt> listOffsetMode(Specification<Rpt> spec,

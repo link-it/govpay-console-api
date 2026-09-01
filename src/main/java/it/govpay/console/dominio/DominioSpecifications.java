@@ -2,6 +2,7 @@ package it.govpay.console.dominio;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.security.DominioRaggiungibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -15,16 +16,16 @@ public final class DominioSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codDominio")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codDominio")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Dominio> ragioneSocialePartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("ragioneSociale")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("ragioneSociale")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Dominio> abilitatoExact(Boolean value) {

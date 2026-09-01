@@ -2,6 +2,7 @@ package it.govpay.console.entecreditore;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.EnteCreditoreCache;
 
 public final class EnteCreditoreSpecifications {
@@ -17,9 +18,9 @@ public final class EnteCreditoreSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
         return (root, q, cb) -> cb.or(
-                cb.like(cb.lower(root.get("codFiscale")), pattern),
-                cb.like(cb.lower(root.get("denominazione")), pattern));
+                cb.like(cb.lower(root.get("codFiscale")), pattern, LikePatterns.ESCAPE_CHAR),
+                cb.like(cb.lower(root.get("denominazione")), pattern, LikePatterns.ESCAPE_CHAR));
     }
 }

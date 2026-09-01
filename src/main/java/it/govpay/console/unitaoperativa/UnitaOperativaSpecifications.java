@@ -4,6 +4,7 @@ import java.util.Set;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.security.OperatoreCorrente;
 
@@ -25,8 +26,8 @@ public final class UnitaOperativaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("uoDenominazione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("uoDenominazione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<UnitaOperativa> abilitatoExact(Boolean value) {

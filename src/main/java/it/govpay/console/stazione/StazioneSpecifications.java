@@ -2,6 +2,7 @@ package it.govpay.console.stazione;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Stazione;
 
 public final class StazioneSpecifications {
@@ -17,8 +18,8 @@ public final class StazioneSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codStazione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codStazione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Stazione> abilitatoExact(Boolean value) {

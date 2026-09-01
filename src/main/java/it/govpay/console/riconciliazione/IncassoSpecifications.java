@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Incasso;
 import it.govpay.console.model.StatoRiconciliazione;
 
@@ -62,7 +63,7 @@ public final class IncassoSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.like(root.get("sct"), "%" + value + "%");
+        return (root, q, cb) -> cb.like(root.get("sct"), "%" + LikePatterns.escape(value) + "%", LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Incasso> idFlussoExact(String value) {

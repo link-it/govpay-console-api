@@ -2,6 +2,7 @@ package it.govpay.console.tipopendenzadominio;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.TipoVersamentoVisibilita;
@@ -20,16 +21,16 @@ public final class TipoPendenzaDominioSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("codTipoVersamento")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("codTipoVersamento")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<TipoVersamentoDominio> descrizionePartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("descrizione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<TipoVersamentoDominio> abilitatoExact(Boolean value) {
