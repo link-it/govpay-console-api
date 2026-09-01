@@ -348,20 +348,27 @@ paths:
         - `idUnitaOperativa` — match esatto;
         - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi;
         - `direzione`, `divisione` — elenco CSV, semantica OR, max 50 elementi;
-        - `tassonomia` — match esatto.
+        - `tassonomia` — match esatto;
+        - `anagraficaDebitore` — ricerca testuale (contains, case-insensitive) su
+          nome/ragione sociale del debitore, minimo 3 caratteri (vedi audit sotto).
 
         Tutti i filtri sono opzionali e in AND. `esitoRpp`, `idPagamentoRpp` e
-        `retrocompatibilitaMessaggiPagoPAV1` di V1 e `anagraficaDebitore` non
-        sono filtri rimandati ma esclusi/non ancora implementati per scelta di
-        progetto (vedi issue #68): `esitoRpp`/`idPagamentoRpp`/
-        `retrocompatibilitaMessaggiPagoPAV1` non verranno mai aggiunti;
-        `anagraficaDebitore` e' previsto in una fase successiva (audit e
-        vincoli di riservatezza dedicati). Tutti ritornano 400 problem+json.
+        `retrocompatibilitaMessaggiPagoPAV1` di V1 non si portano per scelta di
+        progetto (vedi issue #68): non sono filtri rimandati, non verranno mai
+        aggiunti. Ritornano 400 problem+json.
 
         Quando `identificativoDebitore` e' valorizzato la richiesta viene
         registrata in `gp_audit` (azione `PENDENZE_RICERCA_PER_DEBITORE`,
         condivisa con `/pendenze`: stessa colonna, stesso evento da tracciare,
-        non un audit distinto per endpoint).
+        non un audit distinto per endpoint). Quando `anagraficaDebitore` e'
+        valorizzato la richiesta viene registrata con azione dedicata
+        (`RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE`, distinta da quella
+        dell'identificativo: e' una ricerca testuale su un nome, un vettore di
+        rischio diverso da un match esatto su un codice fiscale). Con
+        `anagraficaDebitore` valorizzato, `limit` non puo' superare 50 (contro i
+        200 delle altre ricerche): e' una ricerca per persona, il risultato deve
+        restare mirato. Termine sotto i 3 caratteri o `limit` oltre 50 con
+        `anagraficaDebitore` valorizzato → 400 problem+json.
 
         ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
@@ -393,6 +400,7 @@ paths:
         - $ref: '#/components/parameters/DirezioneFilter'
         - $ref: '#/components/parameters/DivisioneFilter'
         - $ref: '#/components/parameters/TassonomiaFilter'
+        - $ref: '#/components/parameters/AnagraficaDebitoreFilter'
       responses:
         '200':
           description: Lista paginata di ricevute.
@@ -12659,6 +12667,21 @@ components:
       in: query
       required: false
       description: Tassonomia della pendenza associata alla ricevuta, match esatto.
+      schema:
+        type: string
+
+    AnagraficaDebitoreFilter:
+      name: anagraficaDebitore
+      in: query
+      required: false
+      description: |
+        Ricerca testuale (contains, case-insensitive) su nome/ragione sociale del
+        debitore della pendenza associata alla ricevuta. Minimo 3 caratteri, per
+        impedire l'enumerazione dell'archivio con un singolo carattere — sotto
+        soglia → 400 problem+json. Genera un audit dedicato
+        (`RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE`) e limita `limit` a 50
+        (contro i 200 delle altre ricerche): e' una ricerca per persona, non una
+        lista ordinaria.
       schema:
         type: string
 

@@ -27,5 +27,6 @@ public record RicevutaListQuery(
         List<String> idTipoPendenza,
         List<String> direzione,
         List<String> divisione,
-        String tassonomia) {
+        String tassonomia,
+        String anagraficaDebitore) {
 }

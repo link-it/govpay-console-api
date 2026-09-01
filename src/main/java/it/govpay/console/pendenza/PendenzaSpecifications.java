@@ -7,6 +7,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.common.VersamentoPredicates;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.StatoPendenza;
@@ -22,8 +23,8 @@ public final class PendenzaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codVersamentoEnte")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codVersamentoEnte")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Versamento> numeroAvvisoExact(String value) {
@@ -105,7 +106,7 @@ public final class PendenzaSpecifications {
     }
 
     /**
-     * Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneExact}).
+     * Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
      * {@code id_applicazione} non ha un indice con se stesso come colonna leading
      * (solo 2a colonna in {@code idx_vrs_id_pendenza(cod_versamento_ente, id_applicazione)}):
      * un {@code idA2A} senza {@code idDominio} fa scan. Proposta:
@@ -121,7 +122,7 @@ public final class PendenzaSpecifications {
     /**
      * Semantica OR fra i valori: {@code versamenti.id_tipo_versamento IN (...)}.
      *
-     * <p>Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneExact}).
+     * <p>Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
      * {@code id_tipo_versamento} non ha un indice con se stesso come colonna leading
      * (solo 2a colonna in {@code idx_vrs_auth(id_dominio, id_tipo_versamento, id_uo)}):
      * un {@code idTipoPendenza} senza {@code idDominio} fa scan. Proposta:

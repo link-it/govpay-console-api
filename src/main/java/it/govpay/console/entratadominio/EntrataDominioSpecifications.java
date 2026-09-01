@@ -2,6 +2,7 @@ package it.govpay.console.entratadominio;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Tributo;
 
 public final class EntrataDominioSpecifications {
@@ -17,16 +18,16 @@ public final class EntrataDominioSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoTributo").get("codTributo")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoTributo").get("codTributo")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Tributo> descrizionePartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoTributo").get("descrizione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoTributo").get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Tributo> abilitatoExact(Boolean value) {

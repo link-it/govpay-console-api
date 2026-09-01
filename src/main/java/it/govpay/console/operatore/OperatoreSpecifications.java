@@ -2,6 +2,7 @@ package it.govpay.console.operatore;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.Operatore;
 
 public final class OperatoreSpecifications {
@@ -13,16 +14,16 @@ public final class OperatoreSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("utenza").get("principalOriginale")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("utenza").get("principalOriginale")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Operatore> nomePartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("nome")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("nome")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Operatore> abilitatoExact(Boolean value) {

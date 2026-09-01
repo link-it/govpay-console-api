@@ -364,6 +364,84 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(jsonPath("$.results", hasSize(0)));
     }
 
+    // ----- anagraficaDebitore (issue #68 §C) ----------------------------------
+
+    @Test
+    void filterByAnagraficaDebitorePartialCaseInsensitive() throws Exception {
+        String p = utenteDominiStar("u-anagrafica");
+        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        v.setDebitoreAnagrafica("Anna Verdi");
+        versamentoRepository.save(v);
+
+        // le altre 4 righe fixture hanno "Mario Rossi": contains su "ver", case-insensitive.
+        mvc.perform(get("/ricevute?anagraficaDebitore=VER").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")));
+    }
+
+    /**
+     * `%` e `_` nel termine cercato devono restare caratteri letterali, non
+     * wildcard SQL: senza escaping, `%%%` o `___` (3 caratteri, superano la
+     * soglia minima) matcherebbero quasi tutto l'archivio invece di cercare
+     * letteralmente quella sequenza. Nessuna fixture ha quei caratteri nel
+     * nome: il match letterale corretto e' zero risultati.
+     */
+    @Test
+    void anagraficaDebitoreConWildcardPercentTrattatoLetteralmente() throws Exception {
+        String p = utenteDominiStar("u-anagraficawild1");
+        mvc.perform(get("/ricevute").param("anagraficaDebitore", "%%%").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    @Test
+    void anagraficaDebitoreConWildcardUnderscoreTrattatoLetteralmente() throws Exception {
+        String p = utenteDominiStar("u-anagraficawild2");
+        mvc.perform(get("/ricevute").param("anagraficaDebitore", "___").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    /** Azione di audit dedicata (issue #68 §C), distinta da quella di {@code identificativoDebitore}. */
+    @Test
+    void filterByAnagraficaDebitoreWritesDedicatedAudit() throws Exception {
+        String p = utenteDominiStar("u-anagraficaaudit");
+        long auditBefore = gpAuditRepository.count();
+
+        mvc.perform(get("/ricevute?anagraficaDebitore=ros").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(5)));
+
+        assertThat(gpAuditRepository.count()).isEqualTo(auditBefore + 1);
+        assertThat(gpAuditRepository.findAll().stream()
+                .anyMatch(a -> "RICEVUTE_RICERCA_PER_ANAGRAFICA_DEBITORE".equals(a.getTipoOggetto())))
+                .as("azione di audit dedicata attesa")
+                .isTrue();
+    }
+
+    @Test
+    void anagraficaDebitoreSottoLunghezzaMinimaReturns400() throws Exception {
+        String p = utenteDominiStar("u-anagraficamin");
+        mvc.perform(get("/ricevute?anagraficaDebitore=ro").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("anagraficaDebitore")));
+    }
+
+    @Test
+    void anagraficaDebitoreConLimitOltreSogliaReturns400() throws Exception {
+        String p = utenteDominiStar("u-anagraficalimit");
+        mvc.perform(get("/ricevute?anagraficaDebitore=ros&limit=51").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("limit")));
+
+        // al limite consentito, nessun 400.
+        mvc.perform(get("/ricevute?anagraficaDebitore=ros&limit=50").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void escludeRptConSolaRichiestaSenzaRt() throws Exception {
         String p = utenteDominiStar("u-nort");
@@ -484,6 +562,39 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
                 .andExpect(jsonPath("$.nextCursor").exists());
+    }
+
+    /**
+     * Issue #68: la paginazione a cursore va verificata anche con filtri attivi,
+     * non solo senza (acceptance criterion esplicito). Fixture: 3 RT sul dominio
+     * A (piu' del limit=2, cosi' servono due pagine) e 2 RT sul dominio B (il
+     * "risultato non corrispondente" che il filtro deve escludere su entrambe
+     * le pagine). Verifica: nessun elemento del dominio B, nessun duplicato fra
+     * le pagine, nessun elemento perso — l'unione delle due pagine e' esattamente
+     * l'insieme filtrato.
+     */
+    @Test
+    void cursorConFiltroAttivoNonPerdeNonDuplicaNonAmpliaIRisultati() throws Exception {
+        String p = utenteDominiStar("u-curfiltro");
+
+        String firstBody = mvc.perform(get("/ricevute?cursor=&idDominio=" + DOM_A + "&limit=2")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(2)))
+                .andExpect(jsonPath("$.results[*].idDominio", contains(DOM_A, DOM_A)))
+                .andExpect(jsonPath("$.results[*].iuv", contains("AAAAAAAAAA3", "AAAAAAAAAA2")))
+                .andExpect(jsonPath("$.nextCursor").exists())
+                .andReturn().getResponse().getContentAsString();
+        String next = com.jayway.jsonpath.JsonPath.read(firstBody, "$.nextCursor");
+
+        mvc.perform(get("/ricevute?cursor=" + next + "&idDominio=" + DOM_A + "&limit=2")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].idDominio", is(DOM_A)))
+                .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")))
+                // ultima pagina: nessun elemento del dominio B "recuperato" per errore, nessun nextCursor.
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
     }
 
     @Test

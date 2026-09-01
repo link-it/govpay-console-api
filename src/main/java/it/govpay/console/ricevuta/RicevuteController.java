@@ -27,7 +27,7 @@ public class RicevuteController implements RicevuteApi {
             "iuv", "idDominio", "idRicevuta",
             "dataRicevutaDa", "dataRicevutaA", "dataRichiestaDa", "dataRichiestaA",
             "idA2A", "idPendenza", "identificativoDebitore", "idUnitaOperativa",
-            "idTipoPendenza", "direzione", "divisione", "tassonomia");
+            "idTipoPendenza", "direzione", "divisione", "tassonomia", "anagraficaDebitore");
 
     private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
 
@@ -68,7 +68,8 @@ public class RicevuteController implements RicevuteApi {
                                                                 List<String> idTipoPendenza,
                                                                 List<String> direzione,
                                                                 List<String> divisione,
-                                                                String tassonomia) {
+                                                                String tassonomia,
+                                                                String anagraficaDebitore) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_RICEVUTE_QUERY_PARAMS);
         boolean cursorMode = ListQueryValidator.isCursorMode(currentRequest);
         if (cursorMode) {
@@ -94,7 +95,8 @@ public class RicevuteController implements RicevuteApi {
                 idTipoPendenza,
                 direzione,
                 divisione,
-                tassonomia);
+                tassonomia,
+                anagraficaDebitore);
         return ResponseEntity.ok(searchService.search(query, currentRequest));
     }
 

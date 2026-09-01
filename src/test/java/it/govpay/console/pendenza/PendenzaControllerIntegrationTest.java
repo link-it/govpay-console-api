@@ -319,6 +319,20 @@ class PendenzaControllerIntegrationTest {
                         containsInAnyOrder("PEND-B-001", "PEND-B-002")));
     }
 
+    /**
+     * `%`/`_` nel termine devono restare caratteri letterali (via
+     * {@link it.govpay.console.common.LikePatterns}), non wildcard SQL: senza
+     * escaping `_______` (7 underscore, quanti "PEND-B-" e' lungo) matcherebbe
+     * qualunque idPendenza di 7+ caratteri invece di cercare letteralmente
+     * quella sequenza — nessuna fixture ha underscore nel nome.
+     */
+    @Test
+    void filterByIdPendenzaConWildcardTrattatoLetteralmente() throws Exception {
+        mvc.perform(get("/pendenze").param("idPendenza", "_______").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
     @Test
     void defaultSortByDataCreazioneDesc() throws Exception {
         mvc.perform(get("/pendenze").param("idDominio", "11111111111")

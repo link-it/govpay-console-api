@@ -2,6 +2,7 @@ package it.govpay.console.contoaccredito;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.entity.IbanAccredito;
 
 public final class ContoAccreditoSpecifications {
@@ -17,8 +18,8 @@ public final class ContoAccreditoSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("descrizione")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<IbanAccredito> abilitatoExact(Boolean value) {
@@ -32,7 +33,7 @@ public final class ContoAccreditoSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pattern = "%" + value.toLowerCase() + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codIban")), pattern);
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("codIban")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 }

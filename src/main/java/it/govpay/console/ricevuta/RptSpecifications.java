@@ -7,6 +7,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.LikePatterns;
 import it.govpay.console.common.VersamentoPredicates;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.security.OperatoreCorrente;
@@ -169,6 +170,30 @@ public final class RptSpecifications {
             return null;
         }
         return (root, q, cb) -> cb.equal(root.get("versamento").get("tassonomia"), value);
+    }
+
+    /**
+     * Ricerca testuale (contains, case-insensitive) su nome/ragione sociale del
+     * debitore ({@code versamento.debitoreAnagrafica}, V1: {@code RptFilter.anagraficaDebitore}
+     * → {@code ilike '%value%'} su {@code debitore_anagrafica}). Non condivisa con
+     * {@code VersamentoPredicates}: nessuna risorsa esistente ha un filtro
+     * equivalente da riusare. Il chiamante valida la lunghezza minima del
+     * termine (issue #68 §C, anti-enumerazione) prima di applicare il predicato:
+     * qui si assume già verificata.
+     *
+     * <p>{@code %} e {@code _} nel termine cercato sono escaped prima di essere
+     * racchiusi fra i due {@code %} che delimitano il "contains": senza
+     * escaping sarebbero wildcard SQL, non caratteri letterali, e un termine
+     * come {@code ___} (3 caratteri, supera la soglia minima) matcherebbe
+     * quasi tutto l'archivio invece di essere un contains letterale su
+     * "___" — esattamente la ricerca-per-persona che l'issue vuole mirata.
+     */
+    public static Specification<Rpt> anagraficaDebitorePartial(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
+        return (root, q, cb) -> cb.like(cb.lower(root.get("versamento").get("debitoreAnagrafica")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
