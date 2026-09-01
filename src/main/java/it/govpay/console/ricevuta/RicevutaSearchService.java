@@ -65,9 +65,11 @@ public class RicevutaSearchService {
     @Transactional(readOnly = true)
     public ListRicevute200Response search(RicevutaListQuery query) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        log.debug("listRicevute filtri[iuv={}, idDominio={}, idRicevuta={}, dataDa={}, dataA={}], "
+        log.debug("listRicevute filtri[iuv={}, idDominio={}, idRicevuta={}, dataRicevutaDa={}, "
+                        + "dataRicevutaA={}, dataRichiestaDa={}, dataRichiestaA={}], "
                         + "page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
-                query.iuv(), query.idDominio(), query.idRicevuta(), query.dataDa(), query.dataA(),
+                query.iuv(), query.idDominio(), query.idRicevuta(),
+                query.dataRicevutaDa(), query.dataRicevutaA(), query.dataRichiestaDa(), query.dataRichiestaA(),
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
 
@@ -77,8 +79,10 @@ public class RicevutaSearchService {
                         RptSpecifications.iuvExact(query.iuv()),
                         RptSpecifications.idDominioExact(query.idDominio()),
                         RptSpecifications.idRicevutaExact(query.idRicevuta()),
-                        RptSpecifications.dataPagamentoDa(query.dataDa()),
-                        RptSpecifications.dataPagamentoA(query.dataA()),
+                        RptSpecifications.dataRicevutaDa(query.dataRicevutaDa()),
+                        RptSpecifications.dataRicevutaA(query.dataRicevutaA()),
+                        RptSpecifications.dataRichiestaDa(query.dataRichiestaDa()),
+                        RptSpecifications.dataRichiestaA(query.dataRichiestaA()),
                         RptSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());

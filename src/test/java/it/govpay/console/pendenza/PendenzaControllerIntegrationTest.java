@@ -550,6 +550,57 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
     }
 
+    /** direzione/divisione: cardinalita' allineata a /ricevute (issue #68), semantica OR come idTipoPendenza. */
+    @Test
+    void filterByDirezioneMultiploUnisceIRisultati() throws Exception {
+        Versamento v1 = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v1.setDirezione("DIR-1");
+        versamentoRepository.save(v1);
+        Versamento v2 = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
+        v2.setDirezione("DIR-2");
+        versamentoRepository.save(v2);
+
+        mvc.perform(get("/pendenze").param("direzione", "DIR-1")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+
+        mvc.perform(get("/pendenze").param("direzione", "DIR-1,DIR-2")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-002")));
+    }
+
+    @Test
+    void filterByDivisioneMultiploUnisceIRisultati() throws Exception {
+        Versamento v1 = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        v1.setDivisione("DIV-1");
+        versamentoRepository.save(v1);
+        Versamento v2 = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
+        v2.setDivisione("DIV-2");
+        versamentoRepository.save(v2);
+
+        mvc.perform(get("/pendenze").param("divisione", "DIV-1,DIV-2")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-A-001", "PEND-A-002")));
+    }
+
+    @Test
+    void direzioneEDivisioneVuoteOSoloSeparatoriReturns400() throws Exception {
+        mvc.perform(get("/pendenze").param("direzione", ",,").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("direzione")));
+
+        mvc.perform(get("/pendenze").param("divisione", ",,").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("divisione")));
+    }
+
     /**
      * Combinazione richiesta dagli acceptance criteria: stato + range data.
      * Fixture dedicata con offset in giorni (non ore, a differenza del resto

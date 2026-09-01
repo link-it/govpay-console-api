@@ -19,6 +19,7 @@ import it.govpay.console.security.VersamentoVisibilita;
 public final class RptSpecifications {
 
     private static final String FIELD_DATA_MSG_RICEVUTA = "dataMsgRicevuta";
+    private static final String FIELD_DATA_MSG_RICHIESTA = "dataMsgRichiesta";
 
     private RptSpecifications() {
     }
@@ -44,8 +45,8 @@ public final class RptSpecifications {
         return (root, q, cb) -> cb.equal(root.get("ccp"), value);
     }
 
-    /** Limite inferiore incluso sulla data di pagamento ({@code data_msg_ricevuta}). */
-    public static Specification<Rpt> dataPagamentoDa(LocalDate da) {
+    /** Limite inferiore incluso sulla data di ricezione della ricevuta ({@code data_msg_ricevuta}). */
+    public static Specification<Rpt> dataRicevutaDa(LocalDate da) {
         if (da == null) {
             return null;
         }
@@ -53,13 +54,36 @@ public final class RptSpecifications {
         return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get(FIELD_DATA_MSG_RICEVUTA), from);
     }
 
-    /** Limite superiore incluso: {@code data_msg_ricevuta < (dataA + 1 giorno)}. */
-    public static Specification<Rpt> dataPagamentoA(LocalDate a) {
+    /** Limite superiore incluso: {@code data_msg_ricevuta < (dataRicevutaA + 1 giorno)}. */
+    public static Specification<Rpt> dataRicevutaA(LocalDate a) {
         if (a == null) {
             return null;
         }
         OffsetDateTime toExclusive = a.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
         return (root, q, cb) -> cb.lessThan(root.get(FIELD_DATA_MSG_RICEVUTA), toExclusive);
+    }
+
+    /**
+     * Limite inferiore incluso sulla data della richiesta di pagamento
+     * ({@code data_msg_richiesta}), indipendente da {@link #dataRicevutaDa}: RPT e
+     * RT hanno colonne date separate, i due intervalli si combinano in AND senza
+     * vincoli reciproci.
+     */
+    public static Specification<Rpt> dataRichiestaDa(LocalDate da) {
+        if (da == null) {
+            return null;
+        }
+        OffsetDateTime from = da.atStartOfDay().atOffset(ZoneOffset.UTC);
+        return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get(FIELD_DATA_MSG_RICHIESTA), from);
+    }
+
+    /** Limite superiore incluso: {@code data_msg_richiesta < (dataRichiestaA + 1 giorno)}. */
+    public static Specification<Rpt> dataRichiestaA(LocalDate a) {
+        if (a == null) {
+            return null;
+        }
+        OffsetDateTime toExclusive = a.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        return (root, q, cb) -> cb.lessThan(root.get(FIELD_DATA_MSG_RICHIESTA), toExclusive);
     }
 
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
@@ -76,7 +100,7 @@ public final class RptSpecifications {
      *
      * <p>Si richiede inoltre {@code data_msg_ricevuta IS NOT NULL}: la colonna è
      * nullable a DB e non vincolata a {@code xml_rt}, mentre la collection ordina e
-     * pagina (cursor keyset) proprio su {@code dataPagamento}. Senza questo vincolo
+     * pagina (cursor keyset) proprio su {@code dataRicevuta}. Senza questo vincolo
      * una riga con data nulla romperebbe l'ordinamento e la codifica del cursore.
      */
     public static Specification<Rpt> conRicevuta() {

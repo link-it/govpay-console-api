@@ -75,8 +75,8 @@ public class PendenzaController implements PendenzeApi {
                                                                 LocalDate dataDa,
                                                                 LocalDate dataA,
                                                                 String iuv,
-                                                                String direzione,
-                                                                String divisione,
+                                                                List<String> direzione,
+                                                                List<String> divisione,
                                                                 String idA2A,
                                                                 List<String> idTipoPendenza) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_PENDENZE_QUERY_PARAMS);

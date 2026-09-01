@@ -23,11 +23,12 @@ public class RicevuteController implements RicevuteApi {
 
     private static final Set<String> LIST_RICEVUTE_QUERY_PARAMS = Set.of(
             "page", "limit", "sort", "total", "cursor",
-            "iuv", "idDominio", "idRicevuta", "dataDa", "dataA");
+            "iuv", "idDominio", "idRicevuta",
+            "dataRicevutaDa", "dataRicevutaA", "dataRichiestaDa", "dataRichiestaA");
 
     private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
 
-    private static final String CURSOR_FIXED_SORT = "dataPagamento DESC, id DESC";
+    private static final String CURSOR_FIXED_SORT = "dataRicevuta DESC, id DESC";
 
     private final RicevutaSearchService searchService;
     private final RicevutaService ricevutaService;
@@ -53,8 +54,10 @@ public class RicevuteController implements RicevuteApi {
                                                                 String iuv,
                                                                 String idDominio,
                                                                 String idRicevuta,
-                                                                LocalDate dataDa,
-                                                                LocalDate dataA) {
+                                                                LocalDate dataRicevutaDa,
+                                                                LocalDate dataRicevutaA,
+                                                                LocalDate dataRichiestaDa,
+                                                                LocalDate dataRichiestaA) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_RICEVUTE_QUERY_PARAMS);
         boolean cursorMode = ListQueryValidator.isCursorMode(currentRequest);
         if (cursorMode) {
@@ -69,8 +72,10 @@ public class RicevuteController implements RicevuteApi {
                 iuv,
                 idDominio,
                 idRicevuta,
-                dataDa,
-                dataA);
+                dataRicevutaDa,
+                dataRicevutaA,
+                dataRichiestaDa,
+                dataRichiestaA);
         return ResponseEntity.ok(searchService.search(query));
     }
 

@@ -1,6 +1,7 @@
 package it.govpay.console.web;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -83,10 +84,33 @@ public final class ListQueryValidator {
     }
 
     /**
+     * {@code null} se il parametro non e' presente; altrimenti rimuove i valori
+     * vuoti (elementi CSV consecutivi, es. {@code ?param=,,}) e valida i vincoli
+     * comuni ai filtri CSV multi-valore: lista risultante non vuota, al massimo
+     * {@code max} elementi. Usato da ogni filtro con semantica OR su piu' valori
+     * ({@code idTipoPendenza}, {@code direzione}, {@code divisione}, ...).
+     */
+    public static List<String> normalizeCsvList(List<String> raw, String paramName, int max) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> normalized = raw.stream().filter(v -> v != null && !v.isBlank()).toList();
+        if (normalized.isEmpty()) {
+            throw new BadRequestException(
+                    "'" + paramName + "' non puo' essere vuoto o composto solo da separatori.");
+        }
+        if (normalized.size() > max) {
+            throw new BadRequestException(
+                    "'" + paramName + "' supporta al massimo " + max + " elementi.");
+        }
+        return normalized;
+    }
+
+    /**
      * In modalità cursor sono incompatibili {@code page}/{@code sort} espliciti e
      * {@code total=true}. {@code total=false} (default) è ammesso: solo la richiesta
      * esplicita del conteggio confligge con il keyset. {@code fixedSort} descrive
-     * l'ordinamento fisso della risorsa (es. {@code "dataPagamento DESC, id DESC"}).
+     * l'ordinamento fisso della risorsa (es. {@code "dataRicevuta DESC, id DESC"}).
      */
     public static void rejectCursorIncompatible(HttpServletRequest request, String fixedSort) {
         if (request == null) {

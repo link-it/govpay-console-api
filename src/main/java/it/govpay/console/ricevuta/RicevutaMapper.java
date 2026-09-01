@@ -46,7 +46,7 @@ public class RicevutaMapper {
         s.setIdDominio(rpt.getCodDominio());
         s.setIuv(rpt.getIuv());
         s.setIdRicevuta(rpt.getCcp());
-        s.setDataPagamento(rpt.getDataMsgRicevuta());
+        s.setDataRicevuta(rpt.getDataMsgRicevuta());
         s.setCodPsp(rpt.getCodPsp());
         s.setVersione(versioneProtocollo(rpt.getVersione()));
         s.setStato(rpt.getStato());
@@ -64,7 +64,7 @@ public class RicevutaMapper {
         r.setIdDominio(rpt.getCodDominio());
         r.setIuv(rpt.getIuv());
         r.setIdRicevuta(rpt.getCcp());
-        r.setDataPagamento(rpt.getDataMsgRicevuta());
+        r.setDataRicevuta(rpt.getDataMsgRicevuta());
         r.setCodPsp(rpt.getCodPsp());
         r.setVersione(versioneProtocollo(rpt.getVersione()));
         r.setStato(rpt.getStato());

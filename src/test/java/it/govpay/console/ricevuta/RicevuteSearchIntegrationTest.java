@@ -105,7 +105,7 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(jsonPath("$.results[0].idDominio", is(DOM_A)))
                 .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")))
                 .andExpect(jsonPath("$.results[0].idRicevuta", is("CCP-A1")))
-                .andExpect(jsonPath("$.results[0].dataPagamento").exists())
+                .andExpect(jsonPath("$.results[0].dataRicevuta").exists())
                 .andExpect(jsonPath("$.results[0].importo", is(10.0)))
                 .andExpect(jsonPath("$.results[0].codPsp", is("PSP-X")))
                 .andExpect(jsonPath("$.results[0].versione", is("2.0")))
@@ -144,16 +144,48 @@ class RicevuteSearchIntegrationTest {
     void filtroDataRangeInclusivo() throws Exception {
         String p = utenteDominiStar("u-data");
         // 19→20 incluso: A2 (19), A3 (20). Esclude A1/B1 (18) e B2 (21).
-        mvc.perform(get("/ricevute?dataDa=2026-06-19&dataA=2026-06-20").with(httpBasic(p, PASSWORD)))
+        mvc.perform(get("/ricevute?dataRicevutaDa=2026-06-19&dataRicevutaA=2026-06-20").with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
                 .andExpect(jsonPath("$.results[*].iuv", contains("AAAAAAAAAA3", "AAAAAAAAAA2")));
     }
 
+    /**
+     * Issue #68 §B: {@code dataRichiestaDa/A} e {@code dataRicevutaDa/A} sono
+     * intervalli indipendenti su colonne diverse ({@code data_msg_richiesta} vs
+     * {@code data_msg_ricevuta}), combinabili in AND. Fixture con richiesta a
+     * gennaio e ricevuta a marzo: deve comparire filtrando su gennaio per la
+     * richiesta *e* su marzo per la ricevuta, e non deve comparire invertendo i
+     * due intervalli.
+     */
+    @Test
+    void dataRichiestaEDataRicevutaSonoIndipendenti() throws Exception {
+        String p = utenteDominiStar("u-datesplit");
+        newRpt(domA, tvA, tvdA, "CCCCCCCCCC1", "CCP-SPLIT",
+                date(2026, 1, 10), date(2026, 3, 10), 99.0, "SANP_240");
+
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A
+                        + "&dataRichiestaDa=2026-01-01&dataRichiestaA=2026-01-31"
+                        + "&dataRicevutaDa=2026-03-01&dataRicevutaA=2026-03-31")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].iuv", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].iuv", is("CCCCCCCCCC1")));
+
+        // Invertiti: la richiesta e' a gennaio, non a marzo; la ricevuta e' a
+        // marzo, non a gennaio. Nessuna riga puo' soddisfare entrambi.
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A
+                        + "&dataRichiestaDa=2026-03-01&dataRichiestaA=2026-03-31"
+                        + "&dataRicevutaDa=2026-01-01&dataRicevutaA=2026-01-31")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
     @Test
     void filtriCombinatiAnd() throws Exception {
         String p = utenteDominiStar("u-and");
-        mvc.perform(get("/ricevute?idDominio=" + DOM_A + "&dataDa=2026-06-20")
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A + "&dataRicevutaDa=2026-06-20")
                         .with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
@@ -226,7 +258,7 @@ class RicevuteSearchIntegrationTest {
     // ----- sort --------------------------------------------------------------
 
     @Test
-    void sortDefaultDataPagamentoDesc() throws Exception {
+    void sortDefaultDataRicevutaDesc() throws Exception {
         String p = utenteDominiStar("u-sortd");
         mvc.perform(get("/ricevute?idDominio=" + DOM_A).with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
@@ -238,7 +270,7 @@ class RicevuteSearchIntegrationTest {
     void sortAscendente() throws Exception {
         String p = utenteDominiStar("u-sorta");
         // direzione di default = ASC (nessun prefisso)
-        mvc.perform(get("/ricevute?idDominio=" + DOM_A + "&sort=dataPagamento")
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A + "&sort=dataRicevuta")
                         .with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].iuv",
@@ -356,13 +388,20 @@ class RicevuteSearchIntegrationTest {
     private void newRpt(Dominio dominio, TipoVersamento tv, TipoVersamentoDominio tvd,
                         String iuv, String ccp, OffsetDateTime dataPagamento,
                         double importo, String versione) {
+        newRpt(dominio, tv, tvd, iuv, ccp, dataPagamento.minusHours(1), dataPagamento, importo, versione);
+    }
+
+    /** Variante con richiesta e ricevuta su date indipendenti (issue #68 §B). */
+    private void newRpt(Dominio dominio, TipoVersamento tv, TipoVersamentoDominio tvd,
+                        String iuv, String ccp, OffsetDateTime dataRichiesta, OffsetDateTime dataRicevuta,
+                        double importo, String versione) {
         Versamento v = new Versamento();
         v.setCodVersamentoEnte("PEND-" + iuv);
         v.setImportoTotale(importo);
         v.setImportoPagato(importo);
         v.setStatoVersamento("ESEGUITO");
-        v.setDataCreazione(dataPagamento);
-        v.setDataOraUltimoAggiornamento(dataPagamento);
+        v.setDataCreazione(dataRicevuta);
+        v.setDataOraUltimoAggiornamento(dataRicevuta);
         v.setDebitoreIdentificativo("RSSMRA80A01H501U");
         v.setDebitoreAnagrafica("Mario Rossi");
         v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
@@ -382,8 +421,8 @@ class RicevuteSearchIntegrationTest {
         r.setXmlRt("<RT/>".getBytes());
         r.setCodEsitoPagamento(0);
         r.setImportoTotalePagato(importo);
-        r.setDataMsgRichiesta(dataPagamento.minusHours(1));
-        r.setDataMsgRicevuta(dataPagamento);
+        r.setDataMsgRichiesta(dataRichiesta);
+        r.setDataMsgRicevuta(dataRicevuta);
         r.setVersione(versione);
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("ok");

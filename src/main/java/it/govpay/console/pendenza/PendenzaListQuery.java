@@ -19,8 +19,8 @@ public record PendenzaListQuery(
         LocalDate dataDa,
         LocalDate dataA,
         String iuv,
-        String direzione,
-        String divisione,
+        List<String> direzione,
+        List<String> divisione,
         String idA2A,
         List<String> idTipoPendenza) {
 }

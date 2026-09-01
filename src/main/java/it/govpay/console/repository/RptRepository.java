@@ -69,8 +69,8 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
      *
      * <p>Solo righe che sono effettivamente ricevute ({@code xml_rt IS NOT NULL} e
      * {@code data_msg_ricevuta IS NOT NULL}): una {@code rpt} con sola richiesta, o
-     * senza data pagamento, non è una ricevuta → 404 sul dettaglio e sui
-     * sub-resource. Garantisce inoltre che {@code Ricevuta.dataPagamento} (required)
+     * senza data ricevuta, non è una ricevuta → 404 sul dettaglio e sui
+     * sub-resource. Garantisce inoltre che {@code Ricevuta.dataRicevuta} (required)
      * sia sempre valorizzato.
      *
      * <p>L'EntityGraph carica le associazioni del {@code versamento} usate dal

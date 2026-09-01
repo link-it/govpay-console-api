@@ -15,6 +15,8 @@ public record RicevutaListQuery(
         String iuv,
         String idDominio,
         String idRicevuta,
-        LocalDate dataDa,
-        LocalDate dataA) {
+        LocalDate dataRicevutaDa,
+        LocalDate dataRicevutaA,
+        LocalDate dataRichiestaDa,
+        LocalDate dataRichiestaA) {
 }

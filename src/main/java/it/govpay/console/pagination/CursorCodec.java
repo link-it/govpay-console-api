@@ -12,7 +12,7 @@ import java.util.Base64;
  * <p>Formato: base64 URL-safe (no padding) di {@code "<timestamp ISO_8601>|<id>"}.
  * Esempio: {@code "2026-06-12T10:15:30.123Z|42"} → base64. Il significato del
  * timestamp dipende dall'ordinamento della collection (es.
- * {@code dataOraUltimoAggiornamento} per le pendenze, {@code dataPagamento} per le
+ * {@code dataOraUltimoAggiornamento} per le pendenze, {@code dataRicevuta} per le
  * ricevute).
  *
  * <p><b>Non firmato</b>: il cursore è un hint di paginazione, non un token di

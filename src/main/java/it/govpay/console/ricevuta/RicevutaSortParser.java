@@ -16,9 +16,9 @@ public final class RicevutaSortParser {
 
     /** Chiave = nome pubblico (query param), valore = campo entity JPA. */
     private static final Map<String, String> WHITELIST = Map.of(
-            "dataPagamento", "dataMsgRicevuta");
+            "dataRicevuta", "dataMsgRicevuta");
 
-    public static final String DEFAULT_SORT_RAW = "-dataPagamento";
+    public static final String DEFAULT_SORT_RAW = "-dataRicevuta";
 
     private RicevutaSortParser() {
     }

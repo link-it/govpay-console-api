@@ -334,12 +334,20 @@ paths:
         - `iuv` — match esatto;
         - `idDominio` — match esatto, 11 cifre;
         - `idRicevuta` — match esatto (era `ccp` in V1);
-        - `dataDa` / `dataA` — intervallo (incluso) sulla data di pagamento.
+        - `dataRicevutaDa` / `dataRicevutaA` — intervallo (incluso) sulla data di
+          ricezione della ricevuta (era `dataDa`/`dataA`, rinominato per non
+          collidere con `data_pagamento`, un concetto diverso su `pagamenti`);
+        - `dataRichiestaDa` / `dataRichiestaA` — intervallo (incluso) sulla data
+          della richiesta di pagamento (RPT), indipendente dal precedente.
 
-        Tutti i filtri sono opzionali e in AND. I numerosi filtri V1 non ancora
-        supportati (`idA2A`, `idPendenza`, `esito`, `dataRptDa`/`dataRptA`,
-        `tassonomia`, `idDebitore`/`identificativoDebitore`, ...) ritornano 400
-        problem+json.
+        Tutti i filtri sono opzionali e in AND. Un sottoinsieme dei filtri V1 di
+        `/rpp` non e' ancora implementato in questa fase (`idA2A`, `idPendenza`,
+        `identificativoDebitore`, `idUnitaOperativa`, `idTipoPendenza`,
+        `direzione`, `divisione`, `tassonomia`, `anagraficaDebitore`): ritornano
+        400 problem+json. `esitoRpp`, `idPagamentoRpp` e
+        `retrocompatibilitaMessaggiPagoPAV1` di V1 non sono filtri rimandati ma
+        esclusi per scelta di progetto: non compaiono in questo elenco perche'
+        non verranno mai aggiunti (vedi issue #68).
 
         ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
@@ -347,7 +355,7 @@ paths:
         **Paginazione**: due modalita' mutuamente esclusive.
         - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
         - **cursor** (opt-in): `?cursor=<opaco>`; risposta con `nextCursor`,
-          ordinamento fisso `(dataPagamento DESC, id DESC)`.
+          ordinamento fisso `(dataRicevuta DESC, id DESC)`.
         In modalita' cursor `page` esplicito, `sort` esplicito o `total=true`
         generano 400 con motivazione parlante. Cursor malformato → 400.
       parameters:
@@ -359,8 +367,10 @@ paths:
         - $ref: '#/components/parameters/IuvFilter'
         - $ref: '#/components/parameters/IdDominio'
         - $ref: '#/components/parameters/IdRicevutaFilter'
-        - $ref: '#/components/parameters/DataDa'
-        - $ref: '#/components/parameters/DataA'
+        - $ref: '#/components/parameters/DataRicevutaDa'
+        - $ref: '#/components/parameters/DataRicevutaA'
+        - $ref: '#/components/parameters/DataRichiestaDa'
+        - $ref: '#/components/parameters/DataRichiestaA'
       responses:
         '200':
           description: Lista paginata di ricevute.
@@ -1167,15 +1177,16 @@ paths:
         - `stato` — match esatto sull'enum `StatoPendenza`;
         - `dataDa`/`dataA` — intervallo incluso sulla data di creazione della pendenza;
         - `iuv` — match esatto;
-        - `direzione`, `divisione` — match esatto;
+        - `direzione`, `divisione` — elenco CSV, semantica OR, max 50 elementi;
         - `idA2A` — match esatto sul gestionale proprietario;
         - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi.
 
         Tutti i filtri sono opzionali e ortogonali (AND).
 
-        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`
-        vuoto, con soli separatori o oltre il limite di 50 elementi → 400
-        problem+json; un codice inesistente nella lista restringe senza errore.
+        `dataDa` successivo a `dataA` → 400 problem+json. `idTipoPendenza`,
+        `direzione`, `divisione` vuoti, con soli separatori o oltre il limite di
+        50 elementi → 400 problem+json; un valore inesistente nella lista
+        restringe senza errore.
 
         ACL: il filtro per dominio dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' su alcun dominio riceve
@@ -1463,7 +1474,7 @@ paths:
       description: |
         Ritorna la lista (metadata-only) delle Ricevute Telematiche (RT) associate
         alla pendenza identificata da `(idA2A, idPendenza)`, ordinate per
-        `dataPagamento DESC` (RT piu' recenti prima). Una pendenza puo' avere piu'
+        `dataRicevuta DESC` (RT piu' recenti prima). Una pendenza puo' avere piu'
         RT (pagamenti parziali, retry, attestazioni out-of-band).
 
         Nessuna paginazione: il numero di RT per pendenza e' limitato. Nessuna
@@ -7519,7 +7530,7 @@ components:
         - idDominio
         - iuv
         - idRicevuta
-        - dataPagamento
+        - dataRicevuta
         - stato
       properties:
         idDominio:
@@ -7531,9 +7542,10 @@ components:
         idRicevuta:
           type: string
           description: Identificativo della ricevuta (era `ccp` in V1).
-        dataPagamento:
+        dataRicevuta:
           type: string
           format: date-time
+          description: Data di ricezione della ricevuta (non e' la data di pagamento).
         codPsp:
           type: string
           description: Codice del PSP che ha emesso la RT.
@@ -12490,17 +12502,33 @@ components:
       name: direzione
       in: query
       required: false
-      description: Identificativo interno all'ente, match esatto.
+      description: |
+        Elenco (CSV) di identificativi di direzione interni all'ente, semantica OR
+        fra i valori (in AND con gli altri filtri): `?direzione=a,b` restituisce i
+        risultati di direzione `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Massimo 50 elementi. Lista vuota o composta solo da
+        separatori (`?direzione=`, `?direzione=,,`) → 400 problem+json.
       schema:
-        type: string
+        type: array
+        items:
+          type: string
+      explode: false
 
     DivisioneFilter:
       name: divisione
       in: query
       required: false
-      description: Identificativo interno all'ente, match esatto.
+      description: |
+        Elenco (CSV) di identificativi di divisione interni all'ente, semantica OR
+        fra i valori (in AND con gli altri filtri): `?divisione=a,b` restituisce i
+        risultati di divisione `a` **o** `b`. Un valore singolo e' trattato come
+        lista di un elemento. Massimo 50 elementi. Lista vuota o composta solo da
+        separatori (`?divisione=`, `?divisione=,,`) → 400 problem+json.
       schema:
-        type: string
+        type: array
+        items:
+          type: string
+      explode: false
 
     IuvFilter:
       name: iuv
@@ -12520,20 +12548,44 @@ components:
       schema:
         type: string
 
-    DataDa:
-      name: dataDa
+    DataRicevutaDa:
+      name: dataRicevutaDa
       in: query
       required: false
-      description: Limite inferiore (incluso) sulla data di pagamento (ISO 8601 date).
+      description: |
+        Limite inferiore (incluso) sulla data di ricezione della ricevuta
+        (`data_msg_ricevuta`, ISO 8601 date). Non e' la data di pagamento
+        (`pagamenti.data_pagamento`/`versamenti.data_pagamento`, un concetto
+        diverso): e' il momento in cui la RT e' arrivata dal PSP.
       schema:
         type: string
         format: date
 
-    DataA:
-      name: dataA
+    DataRicevutaA:
+      name: dataRicevutaA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data di pagamento (ISO 8601 date).
+      description: Limite superiore (incluso) sulla data di ricezione della ricevuta. Vedi `dataRicevutaDa`.
+      schema:
+        type: string
+        format: date
+
+    DataRichiestaDa:
+      name: dataRichiestaDa
+      in: query
+      required: false
+      description: |
+        Limite inferiore (incluso) sulla data della richiesta di pagamento
+        (`data_msg_richiesta`, ISO 8601 date), indipendente da `dataRicevutaDa`.
+      schema:
+        type: string
+        format: date
+
+    DataRichiestaA:
+      name: dataRichiestaA
+      in: query
+      required: false
+      description: Limite superiore (incluso) sulla data della richiesta di pagamento. Vedi `dataRichiestaDa`.
       schema:
         type: string
         format: date
