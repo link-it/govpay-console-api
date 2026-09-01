@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Parametri normalizzati della ricerca {@code GET /ricevute}. {@code cursor} non
@@ -18,5 +19,13 @@ public record RicevutaListQuery(
         LocalDate dataRicevutaDa,
         LocalDate dataRicevutaA,
         LocalDate dataRichiestaDa,
-        LocalDate dataRichiestaA) {
+        LocalDate dataRichiestaA,
+        String idA2A,
+        String idPendenza,
+        String identificativoDebitore,
+        String idUnitaOperativa,
+        List<String> idTipoPendenza,
+        List<String> direzione,
+        List<String> divisione,
+        String tassonomia) {
 }

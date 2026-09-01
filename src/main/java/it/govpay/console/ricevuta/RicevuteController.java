@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 import org.springframework.http.CacheControl;
@@ -24,7 +25,9 @@ public class RicevuteController implements RicevuteApi {
     private static final Set<String> LIST_RICEVUTE_QUERY_PARAMS = Set.of(
             "page", "limit", "sort", "total", "cursor",
             "iuv", "idDominio", "idRicevuta",
-            "dataRicevutaDa", "dataRicevutaA", "dataRichiestaDa", "dataRichiestaA");
+            "dataRicevutaDa", "dataRicevutaA", "dataRichiestaDa", "dataRichiestaA",
+            "idA2A", "idPendenza", "identificativoDebitore", "idUnitaOperativa",
+            "idTipoPendenza", "direzione", "divisione", "tassonomia");
 
     private static final Set<String> GET_RICEVUTA_QUERY_PARAMS = Set.of();
 
@@ -57,7 +60,15 @@ public class RicevuteController implements RicevuteApi {
                                                                 LocalDate dataRicevutaDa,
                                                                 LocalDate dataRicevutaA,
                                                                 LocalDate dataRichiestaDa,
-                                                                LocalDate dataRichiestaA) {
+                                                                LocalDate dataRichiestaA,
+                                                                String idA2A,
+                                                                String idPendenza,
+                                                                String identificativoDebitore,
+                                                                String idUnitaOperativa,
+                                                                List<String> idTipoPendenza,
+                                                                List<String> direzione,
+                                                                List<String> divisione,
+                                                                String tassonomia) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_RICEVUTE_QUERY_PARAMS);
         boolean cursorMode = ListQueryValidator.isCursorMode(currentRequest);
         if (cursorMode) {
@@ -75,8 +86,16 @@ public class RicevuteController implements RicevuteApi {
                 dataRicevutaDa,
                 dataRicevutaA,
                 dataRichiestaDa,
-                dataRichiestaA);
-        return ResponseEntity.ok(searchService.search(query));
+                dataRichiestaA,
+                idA2A,
+                idPendenza,
+                identificativoDebitore,
+                idUnitaOperativa,
+                idTipoPendenza,
+                direzione,
+                divisione,
+                tassonomia);
+        return ResponseEntity.ok(searchService.search(query, currentRequest));
     }
 
     @Override

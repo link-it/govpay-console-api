@@ -1,7 +1,9 @@
 package it.govpay.console.ricevuta;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -14,15 +16,18 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.model.ListRicevute200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.pagination.CursorCodec;
+import it.govpay.console.pendenza.PendenzaService;
 import it.govpay.console.repository.RptRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
+import it.govpay.console.web.ListQueryValidator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -31,11 +36,16 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Ricerca paginata della collection top-level {@code GET /ricevute}. Espone solo
- * {@link RicevutaSummary} (metadata-only): nessun dato personale, quindi nessun
- * audit GDPR sulla lista.
+ * {@link RicevutaSummary} (metadata-only): nessun dato personale in risposta.
+ * La ricerca per {@code identificativoDebitore} genera comunque un audit
+ * (issue #68 §A), riusando la stessa azione di {@code /pendenze} — vedi
+ * {@link PendenzaService#AZIONE_AUDIT_RICERCA}: non e' un audit distinto per
+ * endpoint, e' lo stesso evento ("ricerca per debitore") tracciato una volta
+ * sola indipendentemente da dove parte la richiesta.
  *
  * <p>Due modalità mutuamente esclusive (come {@code GET /pendenze}): offset
  * (Slice di default, Page con {@code total=true}) e cursor keyset opt-in con
@@ -47,31 +57,47 @@ public class RicevutaSearchService {
 
     private static final Logger log = LoggerFactory.getLogger(RicevutaSearchService.class);
 
+    private static final int MAX_ID_TIPO_PENDENZA = 50;
+    private static final int MAX_DIREZIONE_DIVISIONE = 50;
+
     private final RptRepository rptRepository;
     private final RicevutaMapper mapper;
     private final CurrentOperatorService currentOperatorService;
+    private final AuditService auditService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public RicevutaSearchService(RptRepository rptRepository,
                                  RicevutaMapper mapper,
-                                 CurrentOperatorService currentOperatorService) {
+                                 CurrentOperatorService currentOperatorService,
+                                 AuditService auditService) {
         this.rptRepository = rptRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
-    public ListRicevute200Response search(RicevutaListQuery query) {
+    public ListRicevute200Response search(RicevutaListQuery query, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listRicevute filtri[iuv={}, idDominio={}, idRicevuta={}, dataRicevutaDa={}, "
-                        + "dataRicevutaA={}, dataRichiestaDa={}, dataRichiestaA={}], "
-                        + "page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
+                        + "dataRicevutaA={}, dataRichiestaDa={}, dataRichiestaA={}, idA2A={}, idPendenza={}, "
+                        + "identificativoDebitore={}, idUnitaOperativa={}, idTipoPendenza={}, direzione={}, "
+                        + "divisione={}, tassonomia={}], page={}, limit={}, sort={}, total={}, cursor={}, operatore={}",
                 query.iuv(), query.idDominio(), query.idRicevuta(),
                 query.dataRicevutaDa(), query.dataRicevutaA(), query.dataRichiestaDa(), query.dataRichiestaA(),
+                query.idA2A(), query.idPendenza(), query.identificativoDebitore(), query.idUnitaOperativa(),
+                query.idTipoPendenza(), query.direzione(), query.divisione(), query.tassonomia(),
                 query.page(), query.limit(), query.sort(), query.total(),
                 query.cursor() != null, operatore.principal());
+
+        List<String> idTipoPendenza = ListQueryValidator.normalizeCsvList(
+                query.idTipoPendenza(), "idTipoPendenza", MAX_ID_TIPO_PENDENZA);
+        List<String> direzione = ListQueryValidator.normalizeCsvList(
+                query.direzione(), "direzione", MAX_DIREZIONE_DIVISIONE);
+        List<String> divisione = ListQueryValidator.normalizeCsvList(
+                query.divisione(), "divisione", MAX_DIREZIONE_DIVISIONE);
 
         Specification<Rpt> spec = Specification.allOf(
                 Stream.of(
@@ -83,6 +109,14 @@ public class RicevutaSearchService {
                         RptSpecifications.dataRicevutaA(query.dataRicevutaA()),
                         RptSpecifications.dataRichiestaDa(query.dataRichiestaDa()),
                         RptSpecifications.dataRichiestaA(query.dataRichiestaA()),
+                        RptSpecifications.idA2AExact(query.idA2A()),
+                        RptSpecifications.idPendenzaExact(query.idPendenza()),
+                        RptSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
+                        RptSpecifications.idUnitaOperativaExact(query.idUnitaOperativa()),
+                        RptSpecifications.idTipoPendenzaIn(idTipoPendenza),
+                        RptSpecifications.direzioneIn(direzione),
+                        RptSpecifications.divisioneIn(divisione),
+                        RptSpecifications.tassonomiaExact(query.tassonomia()),
                         RptSpecifications.visibiliPerOperatore(operatore))
                 .filter(Objects::nonNull)
                 .toList());
@@ -96,6 +130,19 @@ public class RicevutaSearchService {
         response.setResults(summaries);
         log.debug("listRicevute risultati={} nextCursor={} pagination={}",
                 summaries.size(), response.getNextCursor() != null, response.getPagination() != null);
+
+        if (query.identificativoDebitore() != null && !query.identificativoDebitore().isBlank()) {
+            Map<String, Object> dettaglio = new HashMap<>();
+            dettaglio.put("identificativoDebitore", query.identificativoDebitore());
+            Map<String, Object> altriFiltri = new HashMap<>();
+            if (query.idDominio() != null) altriFiltri.put("idDominio", query.idDominio());
+            if (query.idPendenza() != null) altriFiltri.put("idPendenza", query.idPendenza());
+            if (query.idA2A() != null) altriFiltri.put("idA2A", query.idA2A());
+            dettaglio.put("altriFiltri", altriFiltri);
+            dettaglio.put("totaleRisultati", summaries.size());
+            auditService.registra(PendenzaService.AZIONE_AUDIT_RICERCA, 0L, dettaglio, operatore, request);
+        }
+
         return response;
     }
 

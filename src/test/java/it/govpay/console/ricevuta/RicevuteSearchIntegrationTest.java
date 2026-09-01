@@ -1,10 +1,13 @@
 package it.govpay.console.ricevuta;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,15 +30,18 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
+import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.ApplicazioneRepository;
 import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.RptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
+import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.VersamentoRepository;
@@ -65,6 +71,8 @@ class RicevuteSearchIntegrationTest {
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
     @Autowired private RptRepository rptRepository;
+    @Autowired private UnitaOperativaRepository unitaOperativaRepository;
+    @Autowired private GpAuditRepository gpAuditRepository;
 
     private Dominio domA;
     private Dominio domB;
@@ -190,6 +198,170 @@ class RicevuteSearchIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA3")));
+    }
+
+    // ----- filtri via versamento (issue #68 §A) -------------------------------
+
+    @Test
+    void filterByIdA2A() throws Exception {
+        String p = utenteDominiStar("u-a2a");
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A + "&idA2A=" + app.getCodApplicazione())
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)));
+
+        mvc.perform(get("/ricevute?idA2A=APP-BOGUS").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    /** {@code idPendenza} e' a match esatto (issue #68), non parziale come su {@code /pendenze}. */
+    @Test
+    void filterByIdPendenzaEsatto() throws Exception {
+        String p = utenteDominiStar("u-idpend");
+        mvc.perform(get("/ricevute?idPendenza=PEND-AAAAAAAAAA1").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")));
+
+        // prefisso, non l'identificativo esatto: nessun match (a differenza di /pendenze, partial)
+        mvc.perform(get("/ricevute?idPendenza=PEND-AAAAAAAAAA").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    /** Riusa il predicato e l'azione di audit di {@code /pendenze} (issue #68 §A): non un audit distinto. */
+    @Test
+    void filterByIdentificativoDebitoreWritesAudit() throws Exception {
+        String p = utenteDominiStar("u-debaudit");
+        long auditBefore = gpAuditRepository.count();
+
+        mvc.perform(get("/ricevute?identificativoDebitore=RSSMRA80A01H501U")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(5)));
+
+        assertThat(gpAuditRepository.count()).isEqualTo(auditBefore + 1);
+    }
+
+    @Test
+    void filtersWithoutDebitoreDoNotWriteAudit() throws Exception {
+        String p = utenteDominiStar("u-nodebaudit");
+        long auditBefore = gpAuditRepository.count();
+
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A).with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk());
+
+        assertThat(gpAuditRepository.count()).isEqualTo(auditBefore);
+    }
+
+    @Test
+    void filterByIdUnitaOperativa() throws Exception {
+        String p = utenteDominiStar("u-uo");
+        UnitaOperativa uo = new UnitaOperativa();
+        uo.setCodUo("UO-RIC-1");
+        uo.setUoDenominazione("Ufficio Ricevute");
+        uo.setDominio(domA);
+        unitaOperativaRepository.save(uo);
+
+        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        v.setUnitaOperativa(uo);
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/ricevute?idUnitaOperativa=UO-RIC-1").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")));
+    }
+
+    @Test
+    void filterByIdTipoPendenzaMultiploUnisceIRisultati() throws Exception {
+        String p = utenteDominiStar("u-tipopend");
+        // dominio A: tvA "TARI" (3 RT), dominio B: tvB "IMU" (2 RT).
+        mvc.perform(get("/ricevute?idTipoPendenza=TARI").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(3)));
+
+        mvc.perform(get("/ricevute?idTipoPendenza=TARI,IMU").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(5)));
+    }
+
+    @Test
+    void idTipoPendenzaVuotoOSoloSeparatoriReturns400() throws Exception {
+        String p = utenteDominiStar("u-tipopend400");
+        mvc.perform(get("/ricevute?idTipoPendenza=").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("idTipoPendenza")));
+
+        mvc.perform(get("/ricevute?idTipoPendenza=,,").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("idTipoPendenza")));
+    }
+
+    /** {@code direzione}/{@code divisione}: stessa cardinalita' lista/OR di {@code /pendenze} dopo il retrofit. */
+    @Test
+    void filterByDirezioneEDivisioneMultiplo() throws Exception {
+        String p = utenteDominiStar("u-dirdiv");
+        Versamento v1 = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        v1.setDirezione("DIR-1");
+        v1.setDivisione("DIV-1");
+        versamentoRepository.save(v1);
+        Versamento v2 = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA2").orElseThrow();
+        v2.setDirezione("DIR-2");
+        v2.setDivisione("DIV-2");
+        versamentoRepository.save(v2);
+
+        mvc.perform(get("/ricevute?direzione=DIR-1,DIR-2").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].iuv", containsInAnyOrder("AAAAAAAAAA1", "AAAAAAAAAA2")));
+
+        mvc.perform(get("/ricevute?divisione=DIV-1,DIV-2").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].iuv", containsInAnyOrder("AAAAAAAAAA1", "AAAAAAAAAA2")));
+    }
+
+    @Test
+    void filterByTassonomia() throws Exception {
+        String p = utenteDominiStar("u-tassonomia");
+        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        v.setTassonomia("TAX-001");
+        versamentoRepository.save(v);
+
+        mvc.perform(get("/ricevute?tassonomia=TAX-001").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].iuv", is("AAAAAAAAAA1")));
+
+        mvc.perform(get("/ricevute?tassonomia=TAX-BOGUS").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    /** Combinazione realistica: piu' filtri via {@code versamento} insieme, tutti in AND. */
+    @Test
+    void combinazioneRealisticaFiltriViaVersamento() throws Exception {
+        String p = utenteDominiStar("u-combo");
+        mvc.perform(get("/ricevute?idDominio=" + DOM_A
+                        + "&idA2A=" + app.getCodApplicazione()
+                        + "&idTipoPendenza=TARI"
+                        + "&dataRicevutaDa=2026-06-19")
+                        .with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].iuv",
+                        containsInAnyOrder("AAAAAAAAAA2", "AAAAAAAAAA3")));
+    }
+
+    /** ACL sempre in AND (issue #68): un match esplicito su un'altra pendenza non amplia la visibilita'. */
+    @Test
+    void filtroIdPendenzaNonAmpliaVisibilitaAcl() throws Exception {
+        String p = utenteSoloDominio("u-aclpend", domA);
+        // BBBBBBBBBB1 e' sul dominio B, non visibile a questo operatore.
+        mvc.perform(get("/ricevute?idPendenza=PEND-BBBBBBBBBB1").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(0)));
     }
 
     @Test

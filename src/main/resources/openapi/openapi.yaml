@@ -328,9 +328,12 @@ paths:
       description: |
         Consultazione read-only delle ricevute telematiche emesse da pagoPA.
         Restituisce solo metadati tecnico-finanziari (`RicevutaSummary`): nessun
-        dato personale, quindi la lista non genera audit GDPR.
+        dato personale in risposta. La ricerca per `identificativoDebitore`
+        genera comunque un audit dedicato (vedi sotto): non e' l'esposizione
+        del dato a richiedere l'audit, ma l'atto di cercare per una persona
+        specifica.
 
-        Filtri supportati in Fase 1:
+        Filtri supportati:
         - `iuv` — match esatto;
         - `idDominio` — match esatto, 11 cifre;
         - `idRicevuta` — match esatto (era `ccp` in V1);
@@ -338,16 +341,27 @@ paths:
           ricezione della ricevuta (era `dataDa`/`dataA`, rinominato per non
           collidere con `data_pagamento`, un concetto diverso su `pagamenti`);
         - `dataRichiestaDa` / `dataRichiestaA` — intervallo (incluso) sulla data
-          della richiesta di pagamento (RPT), indipendente dal precedente.
+          della richiesta di pagamento (RPT), indipendente dal precedente;
+        - `idA2A` — match esatto sul gestionale proprietario della pendenza associata;
+        - `idPendenza` — match esatto sull'identificativo pendenza associato;
+        - `identificativoDebitore` — match esatto sul CF/PIVA del debitore (vedi audit sotto);
+        - `idUnitaOperativa` — match esatto;
+        - `idTipoPendenza` — elenco CSV di codici tipologia, semantica OR, max 50 elementi;
+        - `direzione`, `divisione` — elenco CSV, semantica OR, max 50 elementi;
+        - `tassonomia` — match esatto.
 
-        Tutti i filtri sono opzionali e in AND. Un sottoinsieme dei filtri V1 di
-        `/rpp` non e' ancora implementato in questa fase (`idA2A`, `idPendenza`,
-        `identificativoDebitore`, `idUnitaOperativa`, `idTipoPendenza`,
-        `direzione`, `divisione`, `tassonomia`, `anagraficaDebitore`): ritornano
-        400 problem+json. `esitoRpp`, `idPagamentoRpp` e
-        `retrocompatibilitaMessaggiPagoPAV1` di V1 non sono filtri rimandati ma
-        esclusi per scelta di progetto: non compaiono in questo elenco perche'
-        non verranno mai aggiunti (vedi issue #68).
+        Tutti i filtri sono opzionali e in AND. `esitoRpp`, `idPagamentoRpp` e
+        `retrocompatibilitaMessaggiPagoPAV1` di V1 e `anagraficaDebitore` non
+        sono filtri rimandati ma esclusi/non ancora implementati per scelta di
+        progetto (vedi issue #68): `esitoRpp`/`idPagamentoRpp`/
+        `retrocompatibilitaMessaggiPagoPAV1` non verranno mai aggiunti;
+        `anagraficaDebitore` e' previsto in una fase successiva (audit e
+        vincoli di riservatezza dedicati). Tutti ritornano 400 problem+json.
+
+        Quando `identificativoDebitore` e' valorizzato la richiesta viene
+        registrata in `gp_audit` (azione `PENDENZE_RICERCA_PER_DEBITORE`,
+        condivisa con `/pendenze`: stessa colonna, stesso evento da tracciare,
+        non un audit distinto per endpoint).
 
         ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
@@ -371,6 +385,14 @@ paths:
         - $ref: '#/components/parameters/DataRicevutaA'
         - $ref: '#/components/parameters/DataRichiestaDa'
         - $ref: '#/components/parameters/DataRichiestaA'
+        - $ref: '#/components/parameters/RicevutaIdA2AFilter'
+        - $ref: '#/components/parameters/RicevutaIdPendenzaFilter'
+        - $ref: '#/components/parameters/IdentificativoDebitore'
+        - $ref: '#/components/parameters/RicevutaIdUnitaOperativaFilter'
+        - $ref: '#/components/parameters/RicevutaIdTipoPendenzaFilter'
+        - $ref: '#/components/parameters/DirezioneFilter'
+        - $ref: '#/components/parameters/DivisioneFilter'
+        - $ref: '#/components/parameters/TassonomiaFilter'
       responses:
         '200':
           description: Lista paginata di ricevute.
@@ -12589,6 +12611,56 @@ components:
       schema:
         type: string
         format: date
+
+    RicevutaIdA2AFilter:
+      name: idA2A
+      in: query
+      required: false
+      description: Identificativo del gestionale proprietario (A2A) della pendenza associata alla ricevuta, match esatto.
+      schema:
+        type: string
+
+    RicevutaIdPendenzaFilter:
+      name: idPendenza
+      in: query
+      required: false
+      description: Identificativo della pendenza associata alla ricevuta, match esatto (in V1 il filtro equivalente su `/rpp` era anch'esso a match esatto).
+      schema:
+        type: string
+
+    RicevutaIdUnitaOperativaFilter:
+      name: idUnitaOperativa
+      in: query
+      required: false
+      description: Identificativo dell'unita' operativa associata alla pendenza della ricevuta, match esatto.
+      schema:
+        type: string
+
+    RicevutaIdTipoPendenzaFilter:
+      name: idTipoPendenza
+      in: query
+      required: false
+      description: |
+        Elenco (CSV) di codici tipologia pendenza, semantica OR fra i valori
+        (in AND con gli altri filtri): `?idTipoPendenza=a,b` restituisce le
+        ricevute delle pendenze di tipo `a` **o** `b`. Un valore singolo e'
+        trattato come lista di un elemento. Un codice non esistente non e' un
+        errore: la lista si restringe e basta. Massimo 50 elementi. Lista
+        vuota o composta solo da separatori (`?idTipoPendenza=`,
+        `?idTipoPendenza=,,`) → 400 problem+json.
+      schema:
+        type: array
+        items:
+          type: string
+      explode: false
+
+    TassonomiaFilter:
+      name: tassonomia
+      in: query
+      required: false
+      description: Tassonomia della pendenza associata alla ricevuta, match esatto.
+      schema:
+        type: string
 
     IdFlusso:
       name: idFlusso
