@@ -146,6 +146,13 @@ tags:
       servizio ACL `Configurazione e manutenzione` (lettura per le GET,
       scrittura per le PUT/PATCH). La chiave segreta reCAPTCHA e' su un
       endpoint dedicato, mai restituita dalle GET.
+  - name: Metriche
+    description: |
+      KPI di conformità agli SLA di tempo di risposta pagoPA (issue #36),
+      calcolati interrogando Prometheus (non i timer Micrometer in-process:
+      solo Prometheus storicizza dati su un periodo storico arbitrario).
+      Accesso riservato al servizio ACL `Configurazione e manutenzione`
+      (lettura).
 
 paths:
 
@@ -6942,6 +6949,54 @@ paths:
         '403':
           $ref: '#/components/responses/Problem403'
 
+  /metriche/sla:
+    get:
+      tags:
+        - Metriche
+      operationId: getMetricheSla
+      summary: KPI di conformità SLA sui 4 metodi PA pagoPA, su un periodo.
+      description: |
+        Interroga Prometheus (`increase()` sul periodo richiesto, non
+        `rate()`: quest'ultima serve solo a dashboard live su finestre corte)
+        per calcolare, per ciascuno dei 4 metodi PA (`paDemandPaymentNotice`,
+        `paGetPayment`, `paSendRT`, `paVerifyPaymentNotice`), la percentuale
+        di risposte entro la soglia SLA (2s, 98° percentile) nel periodo
+        `dataDa`/`dataA` (entrambi obbligatori: non esiste un periodo di
+        default sensato per un KPI di conformità).
+
+        `stato` per ciascun KPI: `OK` se `conformitaOsservata >= 98`,
+        `WARNING` se fra 95 e 98 **oppure se non ci sono dati nel periodo**
+        (a regime l'assenza di dati non è normale, va segnalata come
+        anomalia, non trattata come "tutto ok"), `KO` se sotto 95.
+        `conformitaOsservata` è `null` quando `totale=0`.
+
+        `dataDa` successivo a `dataA` → 400 problem+json.
+
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      parameters:
+        - $ref: '#/components/parameters/SlaDataDa'
+        - $ref: '#/components/parameters/SlaDataA'
+      responses:
+        '200':
+          description: KPI di conformità SLA per il periodo richiesto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlaResponse'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '502':
+          description: Prometheus irraggiungibile o risposta non valida (rete, HTTP, circuito aperto, formato inatteso).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   schemas:
 
@@ -10808,6 +10863,96 @@ components:
         secretKey:
           type: string
 
+    SlaResponse:
+      type: object
+      required:
+        - periodo
+        - kpi
+      properties:
+        periodo:
+          $ref: '#/components/schemas/SlaPeriodo'
+        kpi:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlaKpi'
+
+    SlaPeriodo:
+      type: object
+      required:
+        - da
+        - a
+      properties:
+        da:
+          type: string
+          format: date
+        a:
+          type: string
+          format: date
+
+    SlaKpi:
+      type: object
+      description: |
+        Un KPI di conformità per uno dei 4 metodi PA pagoPA, calcolato su
+        `periodo`. `conformitaOsservata` è `null` quando `totale=0` (nessun
+        dato nel periodo): in quel caso `stato` è comunque `WARNING`, non
+        `OK` — a regime l'assenza di dati non è normale.
+      required:
+        - codice
+        - metodo
+        - sogliaSecondi
+        - sogliaPercentile
+        - totale
+        - sopraSoglia
+        - stato
+      properties:
+        codice:
+          $ref: '#/components/schemas/SlaKpiCodice'
+        metodo:
+          type: string
+          description: Nome del metodo PA pagoPA strumentato in govpay-core.
+          example: paDemandPaymentNotice
+        sogliaSecondi:
+          type: number
+          format: double
+          example: 2.0
+        sogliaPercentile:
+          type: integer
+          example: 98
+        conformitaOsservata:
+          type: number
+          format: double
+          nullable: true
+          description: Percentuale di risposte entro `sogliaSecondi` nel periodo. `null` se `totale=0`.
+        totale:
+          type: integer
+          format: int64
+          description: Numero totale di invocazioni osservate nel periodo.
+        sopraSoglia:
+          type: integer
+          format: int64
+          description: |
+            Numero di invocazioni oltre `sogliaSecondi` (violazioni SLA), non
+            entro: `sopraSoglia = totale - entroSoglia`. Coerente con
+            `conformitaOsservata`, che è la percentuale di invocazioni **entro**
+            soglia.
+        stato:
+          $ref: '#/components/schemas/SlaStato'
+
+    SlaKpiCodice:
+      type: string
+      enum:
+        - TDP
+        - TGP
+        - TSRT
+        - TVP
+
+    SlaStato:
+      type: string
+      enum:
+        - OK
+        - WARNING
+        - KO
+
     AreaImpostazioni:
       type: object
       description: |
@@ -12616,6 +12761,24 @@ components:
       in: query
       required: false
       description: Limite superiore (incluso) sulla data della richiesta di pagamento. Vedi `dataRichiestaDa`.
+      schema:
+        type: string
+        format: date
+
+    SlaDataDa:
+      name: dataDa
+      in: query
+      required: true
+      description: Inizio (incluso) del periodo su cui calcolare la conformità SLA. Obbligatorio.
+      schema:
+        type: string
+        format: date
+
+    SlaDataA:
+      name: dataA
+      in: query
+      required: true
+      description: Fine (inclusa) del periodo su cui calcolare la conformità SLA. Obbligatorio.
       schema:
         type: string
         format: date

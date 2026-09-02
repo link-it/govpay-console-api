@@ -7,7 +7,6 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
@@ -18,8 +17,6 @@ import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import it.govpay.stampe.client.model.PaymentNotice;
 import it.govpay.stampe.client.model.Receipt;
 
@@ -32,17 +29,20 @@ import it.govpay.stampe.client.model.Receipt;
  *       l'{@link OutputStream} fornito (no buffer in memoria);</li>
  *   <li>cattura {@link RestClientException} → {@link StampeUnavailableException}
  *       (→ 502);</li>
- *   <li>protegge la chiamata con retry + circuit breaker (Resilience4j,
- *       instance {@code stampe}, configurata in {@code application.properties}).
- *       Quando il circuito e' aperto {@link CallNotPermittedException} viene
- *       mappata anch'essa su {@link StampeUnavailableException}.</li>
+ *   <li>protegge la chiamata con circuit breaker (Resilience4j, instance
+ *       {@code stampe}, configurata in {@code application.properties}) —
+ *       <b>senza retry</b>, deliberatamente: vedi Javadoc di
+ *       {@link StampeRawClient}. Quando il circuito e' aperto
+ *       {@link CallNotPermittedException} viene mappata anch'essa su
+ *       {@link StampeUnavailableException}.</li>
  * </ul>
  *
  * <p>Bypassa il client generato dall'OpenAPI Generator (che ritorna
- * {@code byte[]} bufferizzato) e usa direttamente
- * {@link RestTemplate#execute(URI, HttpMethod,
+ * {@code byte[]} bufferizzato) e usa direttamente {@link StampeRawClient}
+ * (che a sua volta chiama
+ * {@link RestTemplate#execute(URI, org.springframework.http.HttpMethod,
  * org.springframework.web.client.RequestCallback,
- * org.springframework.web.client.ResponseExtractor)} per fare copy-through
+ * org.springframework.web.client.ResponseExtractor)}) per fare copy-through
  * input → output.
  */
 @Service
@@ -54,26 +54,22 @@ public class StampeClient {
     private static final String PAYMENT_NOTICE_PATH = "/standard";
     private static final String RECEIPT_PATH = "/receipt";
 
-    private final RestTemplate restTemplate;
+    private final StampeRawClient rawClient;
     private final ObjectMapper objectMapper;
     private final String baseUrl;
 
-    public StampeClient(RestTemplate stampeRestTemplate,
+    public StampeClient(StampeRawClient rawClient,
                         ObjectMapper objectMapper,
                         @Value("${app.stampe.base-url:}") String baseUrl) {
-        this.restTemplate = stampeRestTemplate;
+        this.rawClient = rawClient;
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
     }
 
-    @CircuitBreaker(name = "stampe")
-    @Retry(name = "stampe")
     public void streamPaymentNotice(PaymentNotice payload, OutputStream output) {
         streamToOutput(PAYMENT_NOTICE_PATH, payload, output);
     }
 
-    @CircuitBreaker(name = "stampe")
-    @Retry(name = "stampe")
     public void streamReceipt(Receipt payload, OutputStream output) {
         streamToOutput(RECEIPT_PATH, payload, output);
     }
@@ -84,7 +80,7 @@ public class StampeClient {
         }
         URI url = URI.create(baseUrl + path);
         try {
-            restTemplate.execute(url, HttpMethod.POST,
+            rawClient.execute(url,
                     request -> {
                         request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
                         request.getHeaders().setAccept(List.of(MediaType.APPLICATION_PDF));

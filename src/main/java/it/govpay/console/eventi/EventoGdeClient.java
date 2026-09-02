@@ -9,8 +9,6 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import it.govpay.common.client.model.Connettore;
 import it.govpay.common.configurazione.service.ConfigurazioneService;
 import it.govpay.console.web.NotFoundException;
@@ -25,6 +23,10 @@ import it.govpay.gde.client.beans.ListaEventi;
  * Stesso pattern di errore di {@code StampeClient}/{@code OperazioneBatchClient}:
  * 503 se il connettore non e' configurato/abilitato, 502 se la chiamata fallisce
  * o il circuito e' aperto.
+ *
+ * <p>La chiamata HTTP vera e propria (con {@code @CircuitBreaker}/{@code @Retry})
+ * e' delegata a {@link GdeRawClient}: qui si intercetta l'esito finale,
+ * incluso il circuito aperto — vedi Javadoc di {@link GdeRawClient}.
  */
 @Service
 public class EventoGdeClient {
@@ -32,13 +34,13 @@ public class EventoGdeClient {
     private static final Logger log = LoggerFactory.getLogger(EventoGdeClient.class);
 
     private final ConfigurazioneService configurazioneService;
+    private final GdeRawClient rawClient;
 
-    public EventoGdeClient(ConfigurazioneService configurazioneService) {
+    public EventoGdeClient(ConfigurazioneService configurazioneService, GdeRawClient rawClient) {
         this.configurazioneService = configurazioneService;
+        this.rawClient = rawClient;
     }
 
-    @CircuitBreaker(name = "gde")
-    @Retry(name = "gde")
     public ListaEventi findEventi(EventoGdeQuery query) {
         if (!configurazioneService.isServizioGDEAbilitato()) {
             throw new GdeNonConfiguratoException();
@@ -48,7 +50,7 @@ public class EventoGdeClient {
 
         String uri = buildUri(connettore.getUrl(), query);
         try {
-            return restTemplate.getForObject(uri, ListaEventi.class);
+            return rawClient.get(restTemplate, uri, ListaEventi.class);
         } catch (CallNotPermittedException e) {
             log.warn("Circuit breaker aperto sul client GDE: {}", e.getMessage());
             throw new GdeNonRaggiungibileException(
@@ -59,8 +61,6 @@ public class EventoGdeClient {
         }
     }
 
-    @CircuitBreaker(name = "gde")
-    @Retry(name = "gde")
     public Evento getEventoById(Long id) {
         if (!configurazioneService.isServizioGDEAbilitato()) {
             throw new GdeNonConfiguratoException();
@@ -70,7 +70,7 @@ public class EventoGdeClient {
 
         String uri = connettore.getUrl() + "/eventi/" + id;
         try {
-            return restTemplate.getForObject(uri, Evento.class);
+            return rawClient.get(restTemplate, uri, Evento.class);
         } catch (CallNotPermittedException e) {
             log.warn("Circuit breaker aperto sul client GDE: {}", e.getMessage());
             throw new GdeNonRaggiungibileException(
