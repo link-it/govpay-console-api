@@ -48,7 +48,7 @@ class EventoGdeClientTest {
         when(configurazioneService.getServizioGDE()).thenReturn(Connettore.builder().url(BASE_URL).build());
         when(configurazioneService.getRestTemplateGDE()).thenReturn(restTemplate);
 
-        client = new EventoGdeClient(configurazioneService);
+        client = new EventoGdeClient(configurazioneService, new GdeRawClient());
     }
 
     @Test

@@ -8,12 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import it.govpay.common.batch.dto.BatchInfo;
 import it.govpay.common.batch.dto.BatchStatusInfo;
 import it.govpay.common.batch.dto.ExecutionsPage;
@@ -28,26 +25,27 @@ import it.govpay.console.web.NotFoundException;
  * info descrittiva, ultima/prossima esecuzione, avvio manuale, storico
  * esecuzioni, cancellazione. Deserializza direttamente nei DTO di
  * govpay-common (gia' sul classpath), senza duplicarli.
+ *
+ * <p>La chiamata HTTP vera e propria (con {@code @CircuitBreaker}/{@code @Retry})
+ * e' delegata a {@link OperazioneBatchRawClient}: qui si intercetta l'esito
+ * finale, incluso il circuito aperto — vedi Javadoc di
+ * {@link OperazioneBatchRawClient}.
  */
 @Service
 public class OperazioneBatchClient {
 
     private static final Logger log = LoggerFactory.getLogger(OperazioneBatchClient.class);
 
-    private final RestTemplate restTemplate;
+    private final OperazioneBatchRawClient rawClient;
 
-    public OperazioneBatchClient(RestTemplate operazioniTriggerRestTemplate) {
-        this.restTemplate = operazioniTriggerRestTemplate;
+    public OperazioneBatchClient(OperazioneBatchRawClient rawClient) {
+        this.rawClient = rawClient;
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public BatchInfo info(String url) {
         return get(url + "/info", BatchInfo.class, url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public LastExecutionInfo lastExecution(String url) {
         return get(url + "/lastExecution", LastExecutionInfo.class, url);
     }
@@ -58,29 +56,21 @@ public class OperazioneBatchClient {
      * esecuzione in corso — l'unico modo per rilevare "e' gia' in esecuzione"
      * o per recuperare l'id di un'esecuzione appena avviata.
      */
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public BatchStatusInfo status(String url) {
         return get(url + "/status", BatchStatusInfo.class, url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public NextExecutionInfo nextExecution(String url) {
         return get(url + "/nextExecution", NextExecutionInfo.class, url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public void run(String url, boolean force) {
         String uri = UriComponentsBuilder.fromUriString(url + "/run")
                 .queryParam("force", force)
                 .toUriString();
-        call(() -> restTemplate.getForEntity(uri, Void.class), url);
+        call(() -> rawClient.run(uri), url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public ExecutionsPage listExecutions(String url, String statoCsv, OffsetDateTime dataInizioMin,
             OffsetDateTime dataInizioMax, int page, int limit, boolean total) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(url + "/executions")
@@ -99,20 +89,16 @@ public class OperazioneBatchClient {
         return get(builder.toUriString(), ExecutionsPage.class, url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public LastExecutionInfo getExecution(String url, long executionId) {
         return get(url + "/executions/" + executionId, LastExecutionInfo.class, url);
     }
 
-    @CircuitBreaker(name = "operazioni-trigger")
-    @Retry(name = "operazioni-trigger")
     public void stopExecution(String url, long executionId) {
-        call(() -> restTemplate.delete(url + "/executions/" + executionId), url);
+        call(() -> rawClient.delete(url + "/executions/" + executionId), url);
     }
 
     private <T> T get(String uri, Class<T> type, String url) {
-        return call(() -> restTemplate.getForObject(uri, type), url);
+        return call(() -> rawClient.get(uri, type), url);
     }
 
     private <T> T call(Supplier<T> action, String url) {

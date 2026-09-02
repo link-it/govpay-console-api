@@ -39,7 +39,7 @@ class OperazioneBatchClientTest {
     void setup() {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
-        client = new OperazioneBatchClient(restTemplate);
+        client = new OperazioneBatchClient(new OperazioneBatchRawClient(restTemplate));
     }
 
     @Test

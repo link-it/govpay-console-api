@@ -35,6 +35,7 @@ import it.govpay.console.eventi.GdeNonConfiguratoException;
 import it.govpay.console.eventi.GdeNonRaggiungibileException;
 import it.govpay.console.operazioni.OperazioneTriggerNonConfiguratoException;
 import it.govpay.console.operazioni.OperazioneTriggerNonRaggiungibileException;
+import it.govpay.console.sla.PrometheusNonRaggiungibileException;
 import it.govpay.console.model.Problem;
 import it.govpay.console.model.ProblemErrorsInner;
 import jakarta.persistence.OptimisticLockException;
@@ -223,6 +224,12 @@ public class ProblemExceptionHandler {
     public ResponseEntity<Problem> handleGdeNonConfigurato(GdeNonConfiguratoException ex,
                                                             HttpServletRequest request) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(PrometheusNonRaggiungibileException.class)
+    public ResponseEntity<Problem> handlePrometheusNonRaggiungibile(PrometheusNonRaggiungibileException ex,
+                                                                     HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
     }
 
     @ExceptionHandler(Exception.class)
