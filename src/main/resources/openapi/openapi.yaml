@@ -435,6 +435,101 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /ricevute/recuperi:
+    post:
+      tags:
+        - Ricevute
+      operationId: recuperaRicevuta
+      summary: Recupero puntuale di una RT mancante, su richiesta dell'operatore.
+      description: |
+        Per i pagamenti composti solo da marche da bollo telematiche non viene
+        mai generato un FdR, quindi la scansione automatica di recupero RT
+        (`govpay-rt-batch`) non li intercetta mai. Questo endpoint copre il
+        caso: valida la tripla `(idDominio, iuv, idRicevuta)`, la scrive nella
+        tabella di appoggio `rt_recuperi` e innesca il `/run` già esposto dal
+        batch (nessun client verso BizEvents/pagoPA qui: quel lavoro resta
+        interamente nel batch).
+
+        **Non è un caricamento**: nessun file, il body è solo la tripla.
+
+        Dopo l'insert la richiesta attende brevemente (poll interno) che il
+        batch elabori la riga:
+        - riga scomparsa (recupero riuscito) → **201** con la `Ricevuta` e
+          `Location` sul path canonico;
+        - riga marcata `NON_DISPONIBILE` (pagoPA non ha ancora la ricevuta) →
+          **404** `ricevuta-non-disponibile`;
+        - riga ancora non elaborata allo scadere dell'attesa, o marcata con un
+          esito diverso → **202**, con `Location` sul path canonico: il `/run`
+          è comunque già partito, la ricevuta sarà disponibile su quell'URL a
+          esecuzione del batch terminata.
+
+        Pre-flight sincrono prima di scrivere la riga: nessun RPT per la
+        tripla → **404** `pagamento-non-trovato`; RT già acquisita per quel
+        pagamento → **409** `ricevuta-gia-acquisita`, senza disturbare il
+        batch. Una richiesta ripetuta su una tripla **ancora pendente**
+        inserisce una nuova riga indipendente (nessuna deduplica: `api-pagopa`
+        risponde comunque `PAA_RECEIPT_DUPLICATA` se una delle due arriva a
+        buon fine per prima); solo una riga già **marcata** viene riattivata,
+        per non restare marcata per sempre a ogni tentativo dell'operatore.
+
+        ACL: richiede il diritto di **scrittura** sul servizio "Pagamenti"
+        (stesso servizio del caricamento). Ogni esito, incluso il rifiuto in
+        pre-flight, viene tracciato in `gp_audit` (azione `RICEVUTA_RECUPERA`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecuperoRicevutaRequest'
+      responses:
+        '201':
+          description: RT recuperata e acquisita.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ricevuta'
+        '202':
+          description: |
+            Richiesta presa in carico: il batch non ha ancora chiuso
+            l'elaborazione entro l'attesa, oppure l'ha chiusa con un esito che
+            richiede una verifica successiva sul path canonico.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '404':
+          description: Pagamento non trovato, oppure RT non disponibile su pagoPA.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          $ref: '#/components/responses/Problem409'
+        '503':
+          description: |
+            Operazione `RECUPERO_RT` non censita nel catalogo operazioni
+            (deployment senza `govpay-rt-batch`): errore di configurazione, non
+            temporaneo. Un `/run` momentaneamente irraggiungibile **non**
+            produce questo errore: la riga resta comunque scritta e la
+            risposta è **202** (verrà raccolta alla prossima esecuzione
+            schedulata).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /ricevute/{idDominio}/{iuv}/{idRicevuta}:
     get:
       tags:
@@ -7512,6 +7607,34 @@ components:
           type: string
         ragioneSociale:
           type: string
+
+    RecuperoRicevutaRequest:
+      type: object
+      description: |
+        Richiesta di recupero puntuale di una RT mancante (issue #59 §H): la
+        tripla identifica il pagamento e la ricevuta attesa. Non è un
+        caricamento: nessun file, solo la tripla che innesca il recupero da
+        pagoPA lato batch.
+      required:
+        - idDominio
+        - iuv
+        - idRicevuta
+      properties:
+        idDominio:
+          type: string
+          pattern: '^[0-9]{11}$'
+          description: Codice fiscale dell'ente creditore (11 cifre).
+        iuv:
+          type: string
+          description: Identificativo Univoco Versamento del pagamento.
+        idRicevuta:
+          type: string
+          description: |
+            Identificativo della ricevuta attesa. Coincide con lo `iur`
+            (Identificativo Univoco Ricevuta) usato da BizEvents e dal
+            `receiptId` pagoPA: stesso valore, nome diverso perché la console
+            lo espone come `idRicevuta` (coerente col path
+            `/ricevute/{idDominio}/{iuv}/{idRicevuta}`), non è una conversione.
 
     Ricevuta:
       description: |

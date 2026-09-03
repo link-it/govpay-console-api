@@ -78,3 +78,34 @@ begin
    END IF;
 end;
 /
+
+-- Tabella di appoggio per il recupero puntuale di una RT su richiesta
+-- dell'operatore (POST /ricevute/recuperi): console-api scrive la tripla,
+-- govpay-rt-batch la elabora e la elimina (o la marca su esito negativo).
+CREATE SEQUENCE seq_rt_recuperi MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 INCREMENT BY 1 CACHE 2 NOCYCLE;
+
+CREATE TABLE rt_recuperi
+(
+	cod_dominio VARCHAR2(35 CHAR) NOT NULL,
+	iuv VARCHAR2(35 CHAR) NOT NULL,
+	iur VARCHAR2(35 CHAR) NOT NULL,
+	data_richiesta TIMESTAMP NOT NULL,
+	id_operatore NUMBER,
+	esito VARCHAR2(35 CHAR),
+	data_ultimo_tentativo TIMESTAMP,
+	-- fk/pk columns
+	id NUMBER NOT NULL,
+	-- fk/pk keys constraints
+	CONSTRAINT pk_rt_recuperi PRIMARY KEY (id)
+);
+
+CREATE TRIGGER trg_rt_recuperi
+BEFORE
+insert on rt_recuperi
+for each row
+begin
+   IF (:new.id IS NULL) THEN
+      SELECT seq_rt_recuperi.nextval INTO :new.id FROM dual;
+   END IF;
+end;
+/

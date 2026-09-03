@@ -14,7 +14,9 @@ import java.util.Map;
 
 import it.govpay.console.api.RicevuteApi;
 import it.govpay.console.model.ListRicevute200Response;
+import it.govpay.console.model.RecuperoRicevutaRequest;
 import it.govpay.console.model.Ricevuta;
+import it.govpay.console.ricevuta.recupero.RecuperoRicevutaService;
 import it.govpay.console.web.ListQueryValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,15 +37,18 @@ public class RicevuteController implements RicevuteApi {
 
     private final RicevutaSearchService searchService;
     private final RicevutaService ricevutaService;
+    private final RecuperoRicevutaService recuperoRicevutaService;
     private final HttpServletRequest currentRequest;
     private final HttpServletResponse currentResponse;
 
     public RicevuteController(RicevutaSearchService searchService,
                               RicevutaService ricevutaService,
+                              RecuperoRicevutaService recuperoRicevutaService,
                               HttpServletRequest currentRequest,
                               HttpServletResponse currentResponse) {
         this.searchService = searchService;
         this.ricevutaService = ricevutaService;
+        this.recuperoRicevutaService = recuperoRicevutaService;
         this.currentRequest = currentRequest;
         this.currentResponse = currentResponse;
     }
@@ -125,5 +130,10 @@ public class RicevuteController implements RicevuteApi {
         ResponseEntity<Map<String, Object>> response =
                 ricevutaService.getRt(idDominio, iuv, idRicevuta, currentRequest, currentResponse);
         return response != null ? response : ResponseEntity.ok().build();
+    }
+
+    @Override
+    public ResponseEntity<Ricevuta> recuperaRicevuta(RecuperoRicevutaRequest recuperoRicevutaRequest) {
+        return recuperoRicevutaService.recupera(recuperoRicevutaRequest, currentRequest);
     }
 }
