@@ -96,4 +96,32 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
         List<Rpt> hits = findByKey(idDominio, iuv, idRicevuta, PageRequest.of(0, 1));
         return hits.isEmpty() ? Optional.empty() : Optional.of(hits.get(0));
     }
+
+    /**
+     * RPT identificata da {@code (idDominio, iuv)}, **senza** richiedere che la
+     * RT sia già acquisita: usata dal pre-flight del recupero puntuale
+     * ({@code POST /ricevute/recuperi}, issue #59 §H), che cerca il pagamento
+     * proprio perché la RT manca. A differenza di {@link #findByKey}, non
+     * filtra su {@code xml_rt}/{@code data_msg_ricevuta}: chi chiama decide se
+     * la loro presenza è un 409 (RT già acquisita) o un via libera.
+     *
+     * <p>L'EntityGraph carica le stesse associazioni di {@link #findByKey}, che
+     * servono al check ACL ({@code VersamentoVisibilita.isVisibile}).
+     */
+    @EntityGraph(attributePaths = {"versamento", "versamento.applicazione", "versamento.dominio",
+            "versamento.unitaOperativa", "versamento.tipoVersamento"})
+    @Query("""
+            select r from Rpt r
+             where r.codDominio = :idDominio
+               and r.iuv = :iuv
+             order by r.dataMsgRichiesta desc
+            """)
+    List<Rpt> findByDominioAndIuv(@Param("idDominio") String idDominio,
+                                  @Param("iuv") String iuv,
+                                  Pageable pageable);
+
+    default Optional<Rpt> findByDominioAndIuv(String idDominio, String iuv) {
+        List<Rpt> hits = findByDominioAndIuv(idDominio, iuv, PageRequest.of(0, 1));
+        return hits.isEmpty() ? Optional.empty() : Optional.of(hits.get(0));
+    }
 }

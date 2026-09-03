@@ -56,3 +56,23 @@ CREATE TABLE pagopa_iban_cache
 	CONSTRAINT pk_pagopa_iban_cache PRIMARY KEY (id),
 	CONSTRAINT uq_pagopa_iban_cache_dominio_iban UNIQUE (cod_dominio, iban)
 );
+
+-- Tabella di appoggio per il recupero puntuale di una RT su richiesta
+-- dell'operatore (POST /ricevute/recuperi): console-api scrive la tripla,
+-- govpay-rt-batch la elabora e la elimina (o la marca su esito negativo).
+CREATE SEQUENCE seq_rt_recuperi start 1 increment 1 maxvalue 9223372036854775807 minvalue 1 cache 1 NO CYCLE;
+
+CREATE TABLE rt_recuperi
+(
+	cod_dominio VARCHAR(35) NOT NULL,
+	iuv VARCHAR(35) NOT NULL,
+	iur VARCHAR(35) NOT NULL,
+	data_richiesta TIMESTAMP NOT NULL,
+	id_operatore BIGINT,
+	esito VARCHAR(35),
+	data_ultimo_tentativo TIMESTAMP,
+	-- fk/pk columns
+	id BIGINT DEFAULT nextval('seq_rt_recuperi') NOT NULL,
+	-- fk/pk keys constraints
+	CONSTRAINT pk_rt_recuperi PRIMARY KEY (id)
+);

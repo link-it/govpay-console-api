@@ -52,3 +52,21 @@ CREATE TABLE pagopa_iban_cache
 	CONSTRAINT pk_pagopa_iban_cache PRIMARY KEY (id),
 	CONSTRAINT uq_pagopa_iban_cache_dominio_iban UNIQUE (cod_dominio, iban)
 )ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
+
+-- Tabella di appoggio per il recupero puntuale di una RT su richiesta
+-- dell'operatore (POST /ricevute/recuperi): console-api scrive la tripla,
+-- govpay-rt-batch la elabora e la elimina (o la marca su esito negativo).
+CREATE TABLE rt_recuperi
+(
+	cod_dominio VARCHAR(35) NOT NULL COMMENT 'Codice del dominio (EC)',
+	iuv VARCHAR(35) NOT NULL COMMENT 'IUV del pagamento',
+	iur VARCHAR(35) NOT NULL COMMENT 'Identificativo Univoco Ricevuta (= idRicevuta lato API)',
+	data_richiesta DATETIME(3) NOT NULL COMMENT 'Timestamp di richiesta (orologio del DB)',
+	id_operatore BIGINT COMMENT 'operatori.id di chi ha richiesto il recupero',
+	esito VARCHAR(35) COMMENT 'NULL = da elaborare; valorizzato dal batch su chiusura non a successo',
+	data_ultimo_tentativo DATETIME(3) COMMENT 'Timestamp scritto dal batch insieme a esito',
+	-- fk/pk columns
+	id BIGINT AUTO_INCREMENT COMMENT 'Identificativo fisico',
+	-- fk/pk keys constraints
+	CONSTRAINT pk_rt_recuperi PRIMARY KEY (id)
+)ENGINE INNODB CHARACTER SET latin1 COLLATE latin1_general_cs;
