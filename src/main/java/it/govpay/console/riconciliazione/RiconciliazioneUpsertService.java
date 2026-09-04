@@ -48,7 +48,7 @@ import jakarta.persistence.PersistenceContext;
 
 /**
  * Logica transazionale di {@code PUT /riconciliazioni/{idDominio}/{id}}:
- * pre-flight (§6 issue), upsert idempotente, hook di attivazione batch
+ * pre-flight, upsert idempotente, hook di attivazione batch
  * post-commit. Separata da {@link RiconciliazioneWriteService} (non
  * transazionale) perché la gestione della race di concorrenza richiede che
  * il retry avvenga **dopo** un rollback reale — la self-invocation di

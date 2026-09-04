@@ -31,10 +31,10 @@ import it.govpay.console.web.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * Entry point di {@code POST /ricevute/recuperi} (issue #59 §H): pre-flight +
- * upsert della tripla in {@code rt_recuperi} (delegati a
- * {@link RtRecuperoUpsertService}, transazionale), poi trigger del {@code /run}
- * già esposto da {@code govpay-rt-batch} e attesa breve sull'esito.
+ * Entry point di {@code POST /ricevute/recuperi}: pre-flight + upsert
+ * della tripla in {@code rt_recuperi} (delegati a {@link RtRecuperoUpsertService},
+ * transazionale), poi trigger del {@code /run} già esposto da
+ * {@code govpay-rt-batch} e attesa breve sull'esito.
  *
  * <p>Nessun client verso BizEvents/pagoPA qui: quel lavoro resta interamente
  * nel batch (altro repo, {@code govpay-rt-batch#17}), che elabora la riga e la
@@ -116,7 +116,7 @@ public class RecuperoRicevutaService {
             // esecuzione (409 da /run, ConflictException): il batch e' comunque
             // attivo, non serve un secondo trigger, la riga verra' raccolta da
             // questa o dalla prossima passata. In entrambi i casi non e' un
-            // errore per l'operatore (issue #59 §H): si prosegue col poll.
+            // errore per l'operatore: si prosegue col poll.
             log.info("Trigger '{}' non ha avviato una nuova esecuzione ({}), la richiesta resta in coda: {}",
                     ID_OPERAZIONE_RECUPERO_RT, e.getClass().getSimpleName(), e.getMessage());
         }

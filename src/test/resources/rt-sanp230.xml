@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Formato storico SANP 2.3.0 (ctRicevutaTelematica): non supportato dal
+  caricamento da cruscotto (issue #59 par. 3) - nessun entry point SOAP su
+  api-pagopa per questo formato. Usata solo per verificare il 422
+  formato-rt-non-supportato: contenuto ridotto al minimo per il
+  riconoscimento della radice, non uno RT SANP 230 completa e valida.
+-->
+<RT xmlns="http://www.digitpa.gov.it/schemas/2011/Pagamenti/">
+  <versioneOggetto>6.2</versioneOggetto>
+  <dominio>
+    <identificativoDominio>12345678901</identificativoDominio>
+  </dominio>
+  <identificativoMessaggioRicevuta>RT900000004</identificativoMessaggioRicevuta>
+</RT>

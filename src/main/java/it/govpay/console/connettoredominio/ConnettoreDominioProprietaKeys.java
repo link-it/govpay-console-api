@@ -53,7 +53,7 @@ public final class ConnettoreDominioProprietaKeys {
     public static final String OAUTH2_CLIENT_ID = ConnettoreProprietaKeys.OAUTH2_CLIENT_ID;
     public static final String OAUTH2_SCOPE = ConnettoreProprietaKeys.OAUTH2_SCOPE;
     public static final String OAUTH2_URL_TOKEN_ENDPOINT = ConnettoreProprietaKeys.OAUTH2_URL_TOKEN_ENDPOINT;
-    /** Riusata per il canale SEND (issue #22 + govpay-core #721); nessun altro canale dominio la espone. */
+    /** Riusata per il canale SEND; nessun altro canale dominio la espone. */
     public static final String ABILITA_GDE = ConnettoreProprietaKeys.ABILITA_GDE;
 
     private static final Set<String> NOTIFICA_CONFIG_KEYS = Set.of(

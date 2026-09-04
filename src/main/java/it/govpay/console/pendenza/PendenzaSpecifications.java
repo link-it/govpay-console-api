@@ -75,18 +75,10 @@ public final class PendenzaSpecifications {
 
     /**
      * Semantica OR fra i valori: {@code versamenti.direzione IN (...)}. Cardinalita'
-     * allineata a {@code /ricevute} (issue #68): stessa colonna, stesso predicato
-     * condiviso via {@link VersamentoPredicates}, deliberatamente piu' larga del
-     * match esatto originario di questa issue (#66) — V1 stesso trattava
-     * {@code direzione}/{@code divisione} in modo incoerente fra {@code /pendenze}
-     * (match esatto) e {@code /rpp} (lista): qui si sceglie la lista per entrambe le
-     * risorse V2, non la replica letterale di una delle due.
+     * allineata a {@code /ricevute}: stessa colonna, stesso predicato
+     * condiviso via {@link VersamentoPredicates}.
      *
-     * <p>Verifica indici (issue #66, non applicata: lo schema di {@code versamenti}
-     * e' condiviso col core, la migrazione va concordata a parte). Sul DDL V1
-     * reale, {@code direzione}/{@code divisione} non hanno alcun indice: se
-     * usati in isolamento (senza {@code idDominio}, gia' indicizzato) il filtro
-     * fa scan completa. Proposta se l'uso reale risultera' selettivo:
+     * <p>Verifica indici. Proposta se l'uso reale risultera' selettivo:
      * {@code CREATE INDEX idx_vrs_direzione ON versamenti (direzione);}
      * {@code CREATE INDEX idx_vrs_divisione ON versamenti (divisione);}
      */
@@ -106,10 +98,7 @@ public final class PendenzaSpecifications {
     }
 
     /**
-     * Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
-     * {@code id_applicazione} non ha un indice con se stesso come colonna leading
-     * (solo 2a colonna in {@code idx_vrs_id_pendenza(cod_versamento_ente, id_applicazione)}):
-     * un {@code idA2A} senza {@code idDominio} fa scan. Proposta:
+     * Verifica indici
      * {@code CREATE INDEX idx_vrs_id_applicazione ON versamenti (id_applicazione);}
      */
     public static Specification<Versamento> idA2AExact(String value) {
@@ -122,10 +111,7 @@ public final class PendenzaSpecifications {
     /**
      * Semantica OR fra i valori: {@code versamenti.id_tipo_versamento IN (...)}.
      *
-     * <p>Verifica indici (issue #66, non applicata: vedi nota su {@link #direzioneIn}).
-     * {@code id_tipo_versamento} non ha un indice con se stesso come colonna leading
-     * (solo 2a colonna in {@code idx_vrs_auth(id_dominio, id_tipo_versamento, id_uo)}):
-     * un {@code idTipoPendenza} senza {@code idDominio} fa scan. Proposta:
+     * <p>Verifica indici
      * {@code CREATE INDEX idx_vrs_id_tipo_versamento ON versamenti (id_tipo_versamento);}
      */
     public static Specification<Versamento> idTipoPendenzaIn(List<String> values) {

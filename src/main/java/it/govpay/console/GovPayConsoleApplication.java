@@ -33,7 +33,7 @@ import it.govpay.common.repository.StazioneRepository;
  * Repository scan esteso a {@code it.govpay.common.repository} ma con
  * {@code excludeFilters}: molte tabelle sono modellate in common in sola
  * lettura (per costruire RestTemplate/leggere configurazione) E in
- * console-api in CRUD completo (issue #6/#7/#8/#24) con la propria entity
+ * console-api in CRUD completo con la propria entity
  * slim — i repository di common per quelle tabelle avrebbero lo stesso nome
  * bean di default delle controparti CRUD di console. Restano attivi solo
  * {@code ConnettoreEntityRepository} e {@code ConfigurazioneRepository}

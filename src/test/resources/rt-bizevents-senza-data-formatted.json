@@ -1,0 +1,29 @@
+{
+  "receiptId": "RT900000006",
+  "noticeNumber": "311000000000000006",
+  "fiscalCode": "12345678901",
+  "outcome": "OK",
+  "creditorReferenceId": "IUV900000006",
+  "paymentAmount": 10.00,
+  "description": "Pagamento TARI 2026",
+  "companyName": "Comune di Prova",
+  "debtor": {
+    "entityUniqueIdentifierType": "F",
+    "entityUniqueIdentifierValue": "RSSMRA80A01H501U",
+    "fullName": "Mario Rossi"
+  },
+  "transferList": [
+    {
+      "idTransfer": "1",
+      "fiscalCodePA": "12345678901",
+      "iban": "IT60X0542811101000000123456",
+      "remittanceInformation": "TARI 2026 saldo",
+      "transferAmount": 10.00,
+      "transferCategory": "9/0101108TS/"
+    }
+  ],
+  "idPSP": "PSP_FIXTURE",
+  "pspCompanyName": "PSP di Prova SpA",
+  "idChannel": "CHANNEL_FIXTURE",
+  "paymentDateTime": "2026-09-01"
+}

@@ -13,8 +13,8 @@ import it.govpay.console.security.OperatoreCorrente;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * Entry point per la scrittura di righe in {@code gp_audit}. In scope H della
- * issue #9 la persistence e' delegata ad {@link AuditWriter} asincrono:
+ * Entry point per la scrittura di righe in {@code gp_audit}.
+ * La persistence e' delegata ad {@link AuditWriter} asincrono:
  * questo service estrae IP e idOperatore (operazioni che richiedono la
  * request del thread chiamante) e poi delega al writer.
  *

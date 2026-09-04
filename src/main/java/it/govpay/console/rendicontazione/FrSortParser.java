@@ -12,9 +12,9 @@ import org.springframework.data.domain.Sort;
  * {@code field[,field]*} con prefisso {@code -} (DESC) o {@code +}/assente (ASC).
  *
  * <p>Il default (nessun {@code ?sort=}) applica l'ordinamento a 3 chiavi
- * documentato dalla issue ({@code dataOraFlusso DESC, idFlusso ASC, revisione
- * DESC}) per determinismo in modalità offset; {@code idFlusso} non è però
- * esplicitamente selezionabile dal client (non è nella whitelist pubblica).
+ * ({@code dataOraFlusso DESC, idFlusso ASC, revisione DESC}) per determinismo
+ * in modalità offset; {@code idFlusso} non è però esplicitamente
+ * selezionabile dal client (non è nella whitelist pubblica).
  */
 public final class FrSortParser {
 

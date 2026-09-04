@@ -33,7 +33,7 @@ import it.govpay.stampe.client.model.PaymentNotice;
  *       applichiamo solo l'override esplicito utente.</li>
  * </ul>
  *
- * <p><b>Non in scope (issue successiva)</b>: endpoint
+ * <p><b>Non in scope</b>: endpoint
  * {@code GET /documenti/{...}/avviso} per il PDF aggregato dell'intero
  * documento multi-rata.
  */

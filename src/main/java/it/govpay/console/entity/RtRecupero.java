@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 
 /**
  * Tabella di appoggio per il recupero puntuale di una RT su richiesta
- * dell'operatore ({@code POST /ricevute/recuperi}, issue #59 §H).
+ * dell'operatore ({@code POST /ricevute/recuperi}).
  * {@code console-api} scrive la tripla {@code (codDominio, iuv, iur)} e
  * innesca il {@code /run} di {@code govpay-rt-batch}, che elabora la riga e la
  * elimina (successo) o la marca con {@code esito} (es. {@code NON_DISPONIBILE}
@@ -20,8 +20,8 @@ import jakarta.persistence.Table;
  * la tabella e' un canale di comunicazione fra i due progetti, non una vista sul
  * dominio pagamenti.
  *
- * <p><b>Nessun vincolo unique sulla tripla</b> — deliberato (issue #59 §10 /
- * #17 §A): richieste ripetute su una tripla ancora pendente restano
+ * <p><b>Nessun vincolo unique sulla tripla</b> — deliberato:
+ * richieste ripetute su una tripla ancora pendente restano
  * indipendenti, ognuna la propria riga, nessuna deduplica. Solo una riga già
  * <b>marcata</b> ({@code esito} valorizzato) viene riattivata dal servizio
  * applicativo invece di accumularsi a ogni tentativo.

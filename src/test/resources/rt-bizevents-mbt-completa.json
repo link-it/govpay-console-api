@@ -1,0 +1,30 @@
+{
+  "receiptId": "RT900000010",
+  "noticeNumber": "311000000000000010",
+  "fiscalCode": "12345678901",
+  "outcome": "OK",
+  "creditorReferenceId": "IUV900000010",
+  "paymentAmount": 16.00,
+  "description": "Marca da bollo telematica",
+  "companyName": "Comune di Prova",
+  "debtor": {
+    "entityUniqueIdentifierType": "F",
+    "entityUniqueIdentifierValue": "RSSMRA80A01H501U",
+    "fullName": "Mario Rossi"
+  },
+  "transferList": [
+    {
+      "idTransfer": "1",
+      "fiscalCodePA": "12345678901",
+      "iban": null,
+      "mbdAttachment": "TUJEQVRUQUNITUVOVCBESSBQUk9WQQ==",
+      "remittanceInformation": "Marca da bollo",
+      "transferAmount": 16.00,
+      "transferCategory": "9/9/"
+    }
+  ],
+  "idPSP": "PSP_FIXTURE",
+  "pspCompanyName": "PSP di Prova SpA",
+  "idChannel": "CHANNEL_FIXTURE",
+  "paymentDateTimeFormatted": "2026-09-01T10:00:00.000+02:00"
+}

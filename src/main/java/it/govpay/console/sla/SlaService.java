@@ -15,7 +15,7 @@ import it.govpay.console.model.SlaStato;
 import it.govpay.console.web.BadRequestException;
 
 /**
- * Calcola i 4 KPI di conformità SLA pagoPA (issue #36) interrogando
+ * Calcola i 4 KPI di conformità SLA pagoPA interrogando
  * Prometheus con una singola instant query per serie, valutata a
  * {@code time=dataA} con range pari alla durata dell'intero periodo — non
  * {@code rate(...[5m])} (quello serve a dashboard live su finestre corte,

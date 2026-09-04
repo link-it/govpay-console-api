@@ -217,7 +217,7 @@ public class PendenzaService {
      * {@code ?cursor=} senza valore), il filtro keyset viene omesso e si
      * usano solo l'ordinamento e il limit.
      *
-     * <p>Verifica indici (issue #66, non applicata: lo schema di {@code versamenti}
+     * <p>Verifica indici (non applicata: lo schema di {@code versamenti}
      * e' condiviso col core, la migrazione va concordata a parte). Sul DDL V1
      * reale esiste solo {@code idx_vrs_data_creaz(data_creazione DESC)}, a singola
      * colonna: non copre il tiebreak su {@code id} di questa query. Proposta:

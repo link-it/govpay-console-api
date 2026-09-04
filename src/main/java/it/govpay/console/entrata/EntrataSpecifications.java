@@ -34,9 +34,8 @@ public final class EntrataSpecifications {
      * dominio sia visibile all'operatore prima di applicare questo predicato:
      * qui si assume gia' verificato.
      *
-     * <p>Verifica indici (issue #67, non applicata: stessa analisi di
-     * {@code TipoPendenzaSpecifications.nonAssociatiADominio} — {@code tributi}
-     * e {@code domini} sono anagrafica di configurazione, non transazionale).
+     * <p>Verifica indici (stessa analisi di {@code TipoPendenzaSpecifications.nonAssociatiADominio} —
+     * {@code tributi} e {@code domini} sono anagrafica di configurazione, non transazionale).
      * Il filtro su {@code codDominio} risolve {@code domini.id} via l'indice
      * unico su {@code cod_dominio}, poi la join di ritorno su {@code tributi}
      * usa {@code id_dominio} come colonna leading dell'indice unico

@@ -21,7 +21,7 @@ import jakarta.persistence.PersistenceContext;
 
 /**
  * Logica transazionale di {@code POST /ricevute/recuperi}: ACL, pre-flight
- * (issue #59 §H) e upsert della riga in {@code rt_recuperi}. Separata da
+ * e upsert della riga in {@code rt_recuperi}. Separata da
  * {@link RecuperoRicevutaService} (non transazionale) perché la riga va
  * **committata** prima di innescare il {@code /run} del batch (fatto dal
  * chiamante, dopo che questo metodo ritorna): la self-invocation di

@@ -161,9 +161,8 @@ public class ConnettoreDominioMapper {
                     F_EMAIL_ALLEGATO,
                     F_DOWNLOAD_BASE_URL,
                     new FieldSpec("url", URL, Kind.STRING));
-            // SEND (issue #22 + govpay-core #721): solo url+abilitaGDE+auth, niente
-            // 'abilitato' (V1 ConnettoreSendConverter lo forza sempre a true — non
-            // e' un flag esposto) ne' i campi da export-tracciato degli altri canali.
+            // SEND: solo url+abilitaGDE+auth, niente 'abilitato'
+            // ne' i campi da export-tracciato degli altri canali.
             case SEND -> List.of(
                     new FieldSpec("url", URL, Kind.STRING),
                     new FieldSpec("abilitaGDE", ABILITA_GDE, Kind.BOOL));
