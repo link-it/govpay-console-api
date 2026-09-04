@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
-import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,13 +53,15 @@ import it.govpay.console.repository.VersamentoRepository;
  * dall'elaborazione del batch {@code RECUPERO_RT} (issue #59 §H): riga
  * scomparsa → 201, marcata {@code NON_DISPONIBILE} → 404, marcata con un
  * esito sconosciuto → 202. {@code govpay-rt-batch} non esiste ancora in
- * questo repo, quindi la sua elaborazione e' simulata in un thread separato,
- * innescato dall'invocazione mockata di {@code OperazioneBatchClient.run()}.
+ * questo repo, quindi la sua elaborazione e' simulata **sincronamente**
+ * dentro l'invocazione mockata di {@code OperazioneBatchClient.run()} (vedi
+ * {@link #simulaBatch}): nessuna race col poll successivo, deterministico.
  *
- * <p>Volutamente **non** {@code @Transactional}: il thread che simula il
- * batch deve vedere davvero la riga scritta dalla richiesta (connessione/
- * transazione diversa), cosa che il rollback di fine metodo di un test
- * {@code @Transactional} impedirebbe. Cleanup manuale in {@code @AfterEach}.
+ * <p>Non {@code @Transactional}: la classe usa {@code @MockitoBean} e
+ * cleanup manuale in {@code @AfterEach} per coerenza con le fixture delle
+ * altre classi di test di questo package, non per necessita' di
+ * visibilita' cross-thread (la simulazione e' sincrona, stesso thread/
+ * transazione della richiesta).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -234,10 +235,22 @@ class RecuperoRicevutaEsitoIntegrationTest {
         void elabora(String idDominio, String iuv, String iur);
     }
 
-    /** Innesca l'azione appena il controller chiama {@code /run}, su un thread separato (connessione diversa). */
+    /**
+     * Simula l'elaborazione del batch eseguendola **sincronamente** dentro la
+     * chiamata mockata a {@code /run} — non su un thread separato. La riga e'
+     * gia' committata a quel punto (il servizio committa prima di chiamare
+     * {@code /run}, issue #59 §10), quindi la simulazione la vede e la
+     * modifica senza bisogno di alcuna race col poll successivo: il primo
+     * controllo del poll la trova gia' nello stato atteso, deterministico.
+     *
+     * <p>Una versione precedente usava {@code CompletableFuture.runAsync},
+     * corretta in locale ma intermittente in CI (più lenta/contesa): il poll
+     * timeout di test (50ms) a volte scadeva prima che il thread asincrono
+     * completasse. Sincrono elimina la race invece di allargare la finestra.
+     */
     private void simulaBatch(AzioneBatch azione) {
         doAnswer(invocation -> {
-            CompletableFuture.runAsync(() -> azione.elabora(DOM, ultimoIuvRichiesto, ultimoIurRichiesto));
+            azione.elabora(DOM, ultimoIuvRichiesto, ultimoIurRichiesto);
             return null;
         }).when(operazioneBatchClient).run(anyString(), anyBoolean());
     }
