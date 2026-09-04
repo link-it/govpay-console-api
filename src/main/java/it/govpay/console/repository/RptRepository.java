@@ -17,9 +17,8 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
 
     /**
      * "RT principale" per una pendenza: l'ultima RT con esito {@code Eseguito} o
-     * {@code Parzialmente eseguito} (coerente con scope C della issue #9: il
-     * link {@code _links.ricevuta} appare solo quando la pendenza e' in stato
-     * {@code PAGATA | PAGATA_PARZIALE | RICONCILIATA}). Ordina per
+     * {@code Parzialmente eseguito} (il link {@code _links.ricevuta} appare solo quando
+     * la pendenza e' in stato {@code PAGATA | PAGATA_PARZIALE | RICONCILIATA}). Ordina per
      * {@code data_msg_ricevuta DESC} e prende la prima.
      *
      * <p>L'EntityGraph carica {@code versamento.dominio} e
@@ -100,7 +99,7 @@ public interface RptRepository extends JpaRepository<Rpt, Long>, JpaSpecificatio
     /**
      * RPT identificata da {@code (idDominio, iuv)}, **senza** richiedere che la
      * RT sia già acquisita: usata dal pre-flight del recupero puntuale
-     * ({@code POST /ricevute/recuperi}, issue #59 §H), che cerca il pagamento
+     * ({@code POST /ricevute/recuperi}), che cerca il pagamento
      * proprio perché la RT manca. A differenza di {@link #findByKey}, non
      * filtra su {@code xml_rt}/{@code data_msg_ricevuta}: chi chiama decide se
      * la loro presenza è un 409 (RT già acquisita) o un via libera.

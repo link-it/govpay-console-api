@@ -1,0 +1,40 @@
+{
+  "receiptId": "RT900000005",
+  "noticeNumber": "311000000000000005",
+  "fiscalCode": "12345678901",
+  "outcome": "OK",
+  "creditorReferenceId": "IUV900000005",
+  "paymentAmount": 10.00,
+  "description": "Pagamento TARI 2026",
+  "companyName": "Comune di Prova",
+  "officeName": "Ufficio Tributi",
+  "debtor": {
+    "entityUniqueIdentifierType": "F",
+    "entityUniqueIdentifierValue": "RSSMRA80A01H501U",
+    "fullName": "Mario Rossi",
+    "streetName": "Via Roma 1",
+    "postalCode": "00100",
+    "city": "Roma",
+    "stateProvinceRegion": "RM",
+    "country": "IT"
+  },
+  "transferList": [
+    {
+      "idTransfer": "1",
+      "fiscalCodePA": "12345678901",
+      "iban": "IT60X0542811101000000123456",
+      "remittanceInformation": "TARI 2026 saldo",
+      "transferAmount": 10.00,
+      "transferCategory": "9/0101108TS/"
+    }
+  ],
+  "idPSP": "PSP_FIXTURE",
+  "pspCompanyName": "PSP di Prova SpA",
+  "idChannel": "CHANNEL_FIXTURE",
+  "channelDescription": "App IO",
+  "paymentMethod": "AD",
+  "paymentDateTime": "2026-09-01",
+  "paymentDateTimeFormatted": "2026-09-01T10:00:00.000+02:00",
+  "applicationDate": "2026-09-01",
+  "transferDate": "2026-09-01"
+}

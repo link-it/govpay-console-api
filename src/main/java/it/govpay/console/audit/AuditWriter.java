@@ -15,7 +15,7 @@ import it.govpay.console.repository.GpAuditRepository;
 
 /**
  * Persiste asincronamente una riga di {@code gp_audit}. Estratto da
- * {@link AuditService} in scope H della issue #9 per:
+ * {@link AuditService} per:
  * <ul>
  *   <li>far girare il {@code save} in un thread separato senza bloccare la
  *       response dell'endpoint chiamante;</li>

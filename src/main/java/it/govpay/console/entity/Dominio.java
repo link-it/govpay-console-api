@@ -93,8 +93,7 @@ public class Dominio {
     private String codConnettoreHyperSicApk;
 
     /**
-     * Riferimento al connettore verso il servizio SEND (issue #22, integrazione
-     * govpay-core #721: attualizzazione importo con le spese di notifica).
+     * Riferimento al connettore verso il servizio SEND.
      * Colonna gia' presente sui DB aggiornati alla versione di govpay-core con
      * quell'integrazione.
      */

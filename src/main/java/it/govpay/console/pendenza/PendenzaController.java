@@ -81,7 +81,7 @@ public class PendenzaController implements PendenzeApi {
                                                                 List<String> idTipoPendenza) {
         ListQueryValidator.rejectUnsupported(currentRequest, LIST_PENDENZE_QUERY_PARAMS);
         // cursor mode attivo se ?cursor=... e' presente nella query string,
-        // anche con valore vuoto ("prima pagina cursor-mode", scope G issue #9).
+        // anche con valore vuoto ("prima pagina cursor-mode").
         boolean cursorMode = ListQueryValidator.isCursorMode(currentRequest);
         if (cursorMode) {
             ListQueryValidator.rejectCursorIncompatible(currentRequest,

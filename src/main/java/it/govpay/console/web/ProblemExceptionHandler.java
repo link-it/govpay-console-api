@@ -3,7 +3,9 @@ package it.govpay.console.web;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -24,9 +26,12 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.util.UrlPathHelper;
 
+import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.AvvisoMbtException;
 import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
@@ -35,6 +40,10 @@ import it.govpay.console.eventi.GdeNonConfiguratoException;
 import it.govpay.console.eventi.GdeNonRaggiungibileException;
 import it.govpay.console.operazioni.OperazioneTriggerNonConfiguratoException;
 import it.govpay.console.operazioni.OperazioneTriggerNonRaggiungibileException;
+import it.govpay.console.ricevuta.upload.PaForNodeTimeoutException;
+import it.govpay.console.ricevuta.upload.PaForNodeUnavailableException;
+import it.govpay.console.security.CurrentOperatorService;
+import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.sla.PrometheusNonRaggiungibileException;
 import it.govpay.console.model.Problem;
 import it.govpay.console.model.ProblemErrorsInner;
@@ -48,6 +57,21 @@ public class ProblemExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(ProblemExceptionHandler.class);
 
     private static final MediaType PROBLEM_JSON = MediaType.valueOf("application/problem+json");
+
+    /**
+     * {@code POST /ricevute}: unico endpoint per cui questo handler scrive
+     * audit direttamente (vedi {@link #auditRicevutaCaricaSeApplicabile}).
+     */
+    private static final String PATH_RICEVUTE = "/ricevute";
+    private static final String AZIONE_RICEVUTA_CARICA = "RICEVUTA_CARICA";
+
+    private final AuditService auditService;
+    private final CurrentOperatorService currentOperatorService;
+
+    public ProblemExceptionHandler(AuditService auditService, CurrentOperatorService currentOperatorService) {
+        this.auditService = auditService;
+        this.currentOperatorService = currentOperatorService;
+    }
 
     private static final String DETAIL_500 = "Errore interno del server.";
 
@@ -175,6 +199,19 @@ public class ProblemExceptionHandler {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null, ex);
     }
 
+    /**
+     * Rifiutato da Spring durante il parsing del multipart, prima ancora di
+     * raggiungere il controller (oltre {@code spring.servlet.multipart.max-file-size}):
+     * senza questo handler cadrebbe sul generico 500.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Problem> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex,
+                                                                HttpServletRequest request) {
+        auditRicevutaCaricaSeApplicabile(request, "413");
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "Il file caricato supera la dimensione massima consentita.",
+                request, null, ex);
+    }
+
     @ExceptionHandler(UnsupportedMediaTypeException.class)
     public ResponseEntity<Problem> handleUnsupportedMediaType(UnsupportedMediaTypeException ex,
                                                               HttpServletRequest request) {
@@ -184,10 +221,62 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<Problem> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex,
                                                                HttpServletRequest request) {
+        auditRicevutaCaricaSeApplicabile(request, "415");
         String detail = "Content-Type non supportato"
                 + (ex.getContentType() != null ? " (" + ex.getContentType() + ")" : "")
                 + ": tipi ammessi " + ex.getSupportedMediaTypes() + ".";
         return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE, detail, request, null, ex);
+    }
+
+    /**
+     * Per {@code POST /ricevute}, {@link MaxUploadSizeExceededException} e
+     * {@link HttpMediaTypeNotSupportedException} sono rifiutate da Spring
+     * (rispettivamente in fase di parsing multipart e di content
+     * negotiation sul {@code consumes} del controller) <b>prima</b> che
+     * {@code RicevutaUploadService.upload(...)} venga mai invocato: il suo
+     * blocco try/audit — che per ogni altro fallimento scrive
+     * {@code RICEVUTA_CARICA} in {@code gp_audit} — non entra mai in gioco.
+     * Verificato: non esiste un modo per allargare il {@code consumes}
+     * generato dall'OpenAPI Generator (es. una voce che accetta qualsiasi
+     * content-type nello spec) che faccia poi effettivamente raggiungere il
+     * controller — la generazione la scarta comunque. Senza questo handler quei due
+     * fallimenti (413/415 pre-controller) sfuggirebbero quindi
+     * sistematicamente al requisito "audit anche sui fallimenti".
+     *
+     * <p>Nessun dato sulla RT e' disponibile a questo punto (il body non e'
+     * mai stato letto/riconosciuto): il dettaglio scritto ha
+     * idDominio/iuv/idRicevuta/nomeFile/formato tutti nulli, solo l'esito
+     * HTTP e' noto.
+     */
+    private void auditRicevutaCaricaSeApplicabile(HttpServletRequest request, String esito) {
+        // UrlPathHelper.getPathWithinApplication(), non getRequestURI(): quest'ultimo
+        // include l'eventuale context path del deployment (es. server.servlet.context-path
+        // in prod, non configurato oggi ma potrebbe esserlo), e un confronto diretto su
+        // getRequestURI() smetterebbe silenziosamente di far scattare l'audit non appena
+        // un context path venisse aggiunto. getServletPath() da solo NON basta: verificato
+        // che in MockMvc (e potenzialmente a seconda della registrazione della
+        // DispatcherServlet) il path puo' finire tutto in getPathInfo() con
+        // getServletPath() vuoto — getPathWithinApplication() ricompone i due
+        // correttamente in entrambi i casi, coerente col valore letterale "/ricevute"
+        // del @RequestMapping generato (RicevuteApi.PATH_UPLOAD_RICEVUTA).
+        String pathWithinApplication = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
+        if (!"POST".equals(request.getMethod()) || !PATH_RICEVUTE.equals(pathWithinApplication)) {
+            return;
+        }
+        try {
+            OperatoreCorrente operatore = currentOperatorService.get();
+            Map<String, Object> dettaglio = new HashMap<>();
+            dettaglio.put("idDominio", null);
+            dettaglio.put("iuv", null);
+            dettaglio.put("idRicevuta", null);
+            dettaglio.put("nomeFile", null);
+            dettaglio.put("dimensione", null);
+            dettaglio.put("formato", null);
+            dettaglio.put("esito", esito);
+            auditService.registra(AZIONE_RICEVUTA_CARICA, 0L, dettaglio, operatore, request);
+        } catch (RuntimeException e) {
+            log.warn("Audit '{}' (esito={}) non registrato: {}", AZIONE_RICEVUTA_CARICA, esito, e.toString());
+        }
     }
 
     @ExceptionHandler(StampeUnavailableException.class)
@@ -230,6 +319,18 @@ public class ProblemExceptionHandler {
     public ResponseEntity<Problem> handlePrometheusNonRaggiungibile(PrometheusNonRaggiungibileException ex,
                                                                      HttpServletRequest request) {
         return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(PaForNodeUnavailableException.class)
+    public ResponseEntity<Problem> handlePaForNodeUnavailable(PaForNodeUnavailableException ex,
+                                                                HttpServletRequest request) {
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, null, ex);
+    }
+
+    @ExceptionHandler(PaForNodeTimeoutException.class)
+    public ResponseEntity<Problem> handlePaForNodeTimeout(PaForNodeTimeoutException ex,
+                                                            HttpServletRequest request) {
+        return build(HttpStatus.GATEWAY_TIMEOUT, ex.getMessage(), request, null, ex);
     }
 
     @ExceptionHandler(Exception.class)

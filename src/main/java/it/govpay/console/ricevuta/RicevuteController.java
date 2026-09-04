@@ -7,6 +7,7 @@ import java.util.Set;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.concurrent.TimeUnit;
 
@@ -17,6 +18,7 @@ import it.govpay.console.model.ListRicevute200Response;
 import it.govpay.console.model.RecuperoRicevutaRequest;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.ricevuta.recupero.RecuperoRicevutaService;
+import it.govpay.console.ricevuta.upload.RicevutaUploadService;
 import it.govpay.console.web.ListQueryValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,17 +40,20 @@ public class RicevuteController implements RicevuteApi {
     private final RicevutaSearchService searchService;
     private final RicevutaService ricevutaService;
     private final RecuperoRicevutaService recuperoRicevutaService;
+    private final RicevutaUploadService uploadService;
     private final HttpServletRequest currentRequest;
     private final HttpServletResponse currentResponse;
 
     public RicevuteController(RicevutaSearchService searchService,
                               RicevutaService ricevutaService,
                               RecuperoRicevutaService recuperoRicevutaService,
+                              RicevutaUploadService uploadService,
                               HttpServletRequest currentRequest,
                               HttpServletResponse currentResponse) {
         this.searchService = searchService;
         this.ricevutaService = ricevutaService;
         this.recuperoRicevutaService = recuperoRicevutaService;
+        this.uploadService = uploadService;
         this.currentRequest = currentRequest;
         this.currentResponse = currentResponse;
     }
@@ -135,5 +140,10 @@ public class RicevuteController implements RicevuteApi {
     @Override
     public ResponseEntity<Ricevuta> recuperaRicevuta(RecuperoRicevutaRequest recuperoRicevutaRequest) {
         return recuperoRicevutaService.recupera(recuperoRicevutaRequest, currentRequest);
+    }
+
+    @Override
+    public ResponseEntity<Ricevuta> uploadRicevuta(MultipartFile file) {
+        return uploadService.upload(currentRequest, file);
     }
 }

@@ -22,9 +22,8 @@ public enum ConnettoreDominioCanale {
     HYPER_SIC_APKAPPA("HYPER_SIC_APKAPPA", false, Dominio::getCodConnettoreHyperSicApk, Dominio::setCodConnettoreHyperSicApk),
     MAGGIOLI_JPPA("MAGGIOLI_JPPA", true, null, null),
     /**
-     * Connettore verso il servizio SEND (issue #22, integrazione govpay-core
-     * #721): attualizzazione dell'importo con le spese di notifica. A
-     * differenza degli altri 5 canali (tutti {@code DOM_<codDominio>_<TIPO>})
+     * Connettore verso il servizio SEND: attualizzazione dell'importo con le spese di notifica.
+     * A differenza degli altri 5 canali (tutti {@code DOM_<codDominio>_<TIPO>})
      * il {@code cod_connettore} di SEND e' {@code <codDominio>_SEND} — verificato
      * su {@code DominiBD.getIDConnettoreSend} lato govpay-core, format diverso
      * gia' fissato li' e non modificabile da qui.

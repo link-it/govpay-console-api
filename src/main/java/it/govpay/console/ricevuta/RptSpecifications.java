@@ -16,7 +16,7 @@ import it.govpay.console.security.VersamentoVisibilita;
 /**
  * Predicati di ricerca per la collection {@code GET /ricevute} (entità
  * {@link Rpt}). I filtri su colonne di {@code rpt} sono locali a questa
- * classe; quelli raggiungibili via {@code versamento} (issue #68 §A) delegano
+ * classe; quelli raggiungibili via {@code versamento} delegano
  * a {@link VersamentoPredicates} quando la semantica coincide con quella di
  * {@code /pendenze} — non tutti: {@code idPendenza} resta locale perché qui è
  * a match esatto, mentre su {@code /pendenze} è a match parziale (stessa
@@ -24,7 +24,7 @@ import it.govpay.console.security.VersamentoVisibilita;
  * visibilità ACL viene spinta nella query navigando il {@code versamento}
  * associato.
  *
- * <p><b>Verifica indici (issue #68 §A)</b>, confermata con
+ * <p><b>Verifica indici</b>, confermata con
  * {@code EXPLAIN (ANALYZE, BUFFERS)} su dataset sintetico (50.000
  * {@code versamenti}/{@code rpt}, schema V1 reale incluso ogni indice
  * esistente): {@code idPendenzaExact} e {@code identificativoDebitoreExact}
@@ -33,8 +33,8 @@ import it.govpay.console.security.VersamentoVisibilita;
  * {@code idTipoPendenzaIn}, {@code direzioneIn}, {@code divisioneIn} e
  * {@code tassonomiaExact} producono una {@code Seq Scan} su {@code versamenti}
  * (nessun indice leading su queste colonne) — confermando le lacune già
- * proposte-non-applicate nei Javadoc di {@code PendenzaSpecifications} (issue
- * #66) — ma restano comunque sotto i 7ms a questo volume, e nella
+ * proposte-non-applicate nei Javadoc di {@code PendenzaSpecifications} 
+ * — ma restano comunque sotto i 7ms a questo volume, e nella
  * combinazione realistica con {@code idDominio} (quasi sempre presente
  * nell'uso reale) tutte usano {@code idx_vrs_auth} invece della scan. Nessun
  * nuovo indice applicato.
@@ -118,10 +118,10 @@ public final class RptSpecifications {
 
     /**
      * Match esatto su {@code versamento.codVersamentoEnte}. Non delega a
-     * {@code PendenzaSpecifications.idPendenzaPartial}: qui la issue #68 vuole
+     * {@code PendenzaSpecifications.idPendenzaPartial}: qui si vuole
      * match esatto (fedele a V1, dove sia {@code /pendenze} sia {@code /rpp}
      * usano {@code equals}), mentre {@code /pendenze} in V2 usa un match
-     * parziale per UX di ricerca — scelta di #76, non toccata qui.
+     * parziale per UX di ricerca, non toccata qui.
      */
     public static Specification<Rpt> idPendenzaExact(String value) {
         if (value == null || value.isBlank()) {
@@ -178,7 +178,7 @@ public final class RptSpecifications {
      * → {@code ilike '%value%'} su {@code debitore_anagrafica}). Non condivisa con
      * {@code VersamentoPredicates}: nessuna risorsa esistente ha un filtro
      * equivalente da riusare. Il chiamante valida la lunghezza minima del
-     * termine (issue #68 §C, anti-enumerazione) prima di applicare il predicato:
+     * termine (anti-enumerazione) prima di applicare il predicato:
      * qui si assume già verificata.
      *
      * <p>{@code %} e {@code _} nel termine cercato sono escaped prima di essere
@@ -186,7 +186,7 @@ public final class RptSpecifications {
      * escaping sarebbero wildcard SQL, non caratteri letterali, e un termine
      * come {@code ___} (3 caratteri, supera la soglia minima) matcherebbe
      * quasi tutto l'archivio invece di essere un contains letterale su
-     * "___" — esattamente la ricerca-per-persona che l'issue vuole mirata.
+     * "___" — esattamente la ricerca-per-persona che si vuole mirata.
      */
     public static Specification<Rpt> anagraficaDebitorePartial(String value) {
         if (value == null || value.isBlank()) {

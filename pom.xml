@@ -199,6 +199,17 @@
             <artifactId>jackson-module-jakarta-xmlbind-annotations</artifactId>
         </dependency>
 
+        <!-- Client SOAP verso api-pagopa/paForNode per il caricamento ricevuta
+             (issue #59 §B): stessa versione gia' in uso in govpay-rt-batch,
+             dove pero' arriva solo transitivamente via spring-ws-test (test
+             scope); qui dichiarata esplicitamente in compile scope, non
+             affidata a quella fragilita'. -->
+        <dependency>
+            <groupId>org.springframework.ws</groupId>
+            <artifactId>spring-ws-core</artifactId>
+            <version>5.0.2</version>
+        </dependency>
+
         <!-- Spring Security Test -->
         <dependency>
             <groupId>org.springframework.security</groupId>
@@ -439,6 +450,28 @@
                             </configOptions>
                         </configuration>
                     </execution>
+                    <!-- Generazione modello BizEvents (JSON ricevuta pagoPA, issue #59 par. D) -->
+                    <execution>
+                        <id>generate-pafornode-bizevents-client</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <inputSpec>${project.basedir}/src/main/resources/openapi/bizEvents.yaml</inputSpec>
+                            <generatorName>java</generatorName>
+                            <apiPackage>it.govpay.console.ricevuta.upload.bizevents.api</apiPackage>
+                            <modelPackage>it.govpay.console.ricevuta.upload.bizevents.model</modelPackage>
+                            <invokerPackage>it.govpay.console.ricevuta.upload.bizevents</invokerPackage>
+                            <output>${project.build.directory}/generated-sources/bizevents-client</output>
+                            <configOptions>
+                                <library>resttemplate</library>
+                                <useJakartaEe>true</useJakartaEe>
+                                <openApiNullable>true</openApiNullable>
+                                <serializableModel>true</serializableModel>
+                                <dateLibrary>java8</dateLibrary>
+                            </configOptions>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
@@ -497,6 +530,7 @@
                             <sources>
                                 <source>${project.build.directory}/generated-sources/openapi/src/main/java</source>
                                 <source>${project.build.directory}/generated-sources/govpay-stampe-client/src/main/java</source>
+                                <source>${project.build.directory}/generated-sources/bizevents-client/src/main/java</source>
                             </sources>
                         </configuration>
                     </execution>

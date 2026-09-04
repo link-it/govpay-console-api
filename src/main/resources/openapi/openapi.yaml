@@ -435,6 +435,147 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+    post:
+      tags:
+        - Ricevute
+      operationId: uploadRicevuta
+      summary: Carica una RT (XML o JSON pagoPA) da cruscotto.
+      description: |
+        Acquisisce una ricevuta telematica fornita come file — perche' non e'
+        arrivata dal Nodo, e' arrivata malformata, o e' stata recuperata per
+        altre vie. `console-api` normalizza/riconosce il formato e inoltra a
+        `api-pagopa` (endpoint interno) con un client SOAP modellato su quello
+        di `govpay-rt-batch`: nessuna logica di acquisizione duplicata da
+        `govpay-core`, che resta l'unico a validare/registrare la RT.
+
+        **Quattro content-type**, il formato reale e' riconosciuto dal
+        contenuto e non dal `Content-Type` dichiarato (i client sbagliano):
+        - `application/xml` — RT XML nuda o in busta SOAP (canonico).
+        - `text/xml` — alias per compatibilita' con i client V1.
+        - `application/json` — RT nello schema `CtReceiptModelResponse` di
+          `bizEvents.yaml` (Biz Events Service pagoPA), lo stesso usato da
+          `govpay-rt-batch`.
+        - `multipart/form-data` — campo `file`; il `filename` del part e'
+          opzionale e usato solo per audit, mai per il riconoscimento del
+          formato.
+
+        **Formati XML supportati**: radice `paSendRTV2Request` (pagoPA v2.2)
+        o `paSendRTReq` (pagoPA v2, instrada su `paSendRT`). Il formato
+        storico SANP 2.3.0 (radice `RT`) **non e' supportato**: e' una
+        funzione di riparazione dati di V1 (sovrascrive una RT gia' accettata
+        senza controllo di duplicazione), non un caricamento, e non ha un
+        entry point SOAP su `api-pagopa` — risponde **422**
+        `formato-rt-non-supportato`.
+
+        Il documento XML viene validato contro `paForNode.xsd` prima
+        dell'invio — un documento non conforme (es. la `<xsd:choice>`
+        `IBAN`/`MBDAttachment` violata) risponde **422** senza contattare
+        `api-pagopa` — ma viene comunque **inoltrato cosi' com'e'** (sbustato
+        dal SOAP se necessario), senza remarshal: l'oggetto ottenuto dalla
+        validazione e' scartato, `govpay-core` rimarshalla comunque prima di
+        salvare, quindi preservare i byte lungo la tratta non cambia cosa
+        finisce a database.
+
+        Il ramo **JSON** converte invece in `PaSendRTV2Request` (riusando il
+        converter di `govpay-rt-batch`) e segue poi lo stesso percorso di
+        invio: produce sempre `paSendRTV2`, mai `paSendRT` (lo schema
+        BizEvents porta `mbdAttachment`, che in v2 non ha dove andare). Il
+        JSON viene validato prima della conversione (13 campi obbligatori,
+        `paymentDateTimeFormatted` — senza il quale `core` daterebbe
+        silenziosamente la riscossione al momento del caricamento — e
+        `outcome` fra i valori ammessi). Una voce di marca da bollo priva sia
+        di `iban` sia di `mbdAttachment` e' respinta con **422**
+        `mbd-attachment-mancante`: e' un bug noto di pagoPA
+        ([link-it/govpay#843](https://github.com/link-it/govpay/issues/843)),
+        non ancora risolto — finche' resta aperto, le RT di sole marche da
+        bollo non sono caricabili da JSON.
+
+        **Idempotenza**: se la tupla `(idDominio, iuv, idRicevuta)` ha gia'
+        una RT acquisita, risponde **409** senza contattare `api-pagopa`. Su
+        timeout o errore di trasporto verso `api-pagopa`, prima di rispondere
+        502/504 la tupla viene riletta: se nel frattempo l'acquisizione e'
+        andata a buon fine risponde comunque **201**.
+
+        ACL: richiede il diritto di **scrittura** sul servizio "Pagamenti"; il
+        dominio della RT deve essere visibile all'operatore (403 altrimenti).
+        Ogni esito — incluso ogni fallimento — viene tracciato in `gp_audit`
+        (azione `RICEVUTA_CARICA`): un tentativo di caricare la RT di un
+        dominio altrui e' un evento di sicurezza, non solo un errore utente.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RicevutaUploadMultipart'
+          application/xml:
+            schema:
+              type: string
+              format: binary
+          text/xml:
+            schema:
+              type: string
+              format: binary
+          application/json:
+            schema:
+              type: object
+              description: |
+                RT nello schema `CtReceiptModelResponse` di `bizEvents.yaml`
+                (Biz Events Service pagoPA, versione 0.1.89). Non riportato
+                inline: e' il modello generato da uno spec esterno, non uno
+                schema proprio di questa API.
+      responses:
+        '201':
+          description: Ricevuta acquisita.
+          headers:
+            Location:
+              description: URI canonico della ricevuta appena acquisita.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ricevuta'
+        '400':
+          description: |
+            XML/JSON malformato, body vuoto, multipart senza campo `file`;
+            oppure (ramo JSON) campi obbligatori mancanti,
+            `paymentDateTimeFormatted` assente, dominio non censito, dominio
+            senza stazione.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '409':
+          description: RT gia' acquisita per la tupla `(idDominio, iuv, idRicevuta)`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/Problem413'
+        '415':
+          $ref: '#/components/responses/Problem415'
+        '422':
+          description: |
+            `formato-rt-non-supportato` (SANP 2.3.0, radice XML non
+            riconosciuta, JSON non conforme al model atteso),
+            `rt-non-valida` (fault applicativo o di protocollo restituito da
+            `api-pagopa`), oppure `mbd-attachment-mancante` (marca da bollo
+            senza allegato, ramo JSON, bug pagoPA aperto).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          $ref: '#/components/responses/Problem502'
+        '504':
+          $ref: '#/components/responses/Problem504'
+
   /ricevute/recuperi:
     post:
       tags:
@@ -11950,6 +12091,27 @@ components:
             Contenuto del tracciato (JSON o CSV). Il sotto-formato e' desunto
             dall'estensione del filename o da `?formato=`.
 
+    RicevutaUploadMultipart:
+      type: object
+      description: |
+        Body multipart per il caricamento di una RT (`POST /ricevute` con
+        `Content-Type: multipart/form-data`). `file` non e' `required` nello
+        schema per lo stesso motivo di `TracciatoPendenzeMultipart` (vedi la
+        sua descrizione): l'unico `requestBody` dell'operazione copre 4
+        content-type eterogenei e openapi-generator (spring) genera un
+        binding `@RequestPart` reale solo per il campo multipart — marcarlo
+        `required` li' romperebbe anche le richieste `application/xml`/
+        `application/json`. La validazione resta enforced lato service
+        (`RicevutaUploadService`).
+      properties:
+        file:
+          type: string
+          format: binary
+          description: |
+            Contenuto della RT (XML o JSON pagoPA). Il formato e' riconosciuto
+            dal contenuto, non dal `Content-Type` del part. Il `filename` del
+            part e' opzionale e usato solo per audit.
+
     NuovaPendenzaTracciato:
       type: object
       description: Nuova pendenza da inserire, in una riga `inserimenti` di un tracciato di caricamento.
@@ -12667,6 +12829,18 @@ components:
             $ref: '#/components/schemas/Problem'
     Problem415:
       description: Tipo di contenuto non supportato.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem502:
+      description: Servizio esterno irraggiungibile o risposta non valida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Problem504:
+      description: Timeout verso un servizio esterno.
       content:
         application/problem+json:
           schema:

@@ -120,8 +120,7 @@ public final class TipoPendenzaDominioSpecifications {
     /**
      * ACL sul tipo versamento associato. V1 ({@code DominiController.findTipiPendenza})
      * la applica solo con {@code associati=true} esplicito, qui invece e' sempre
-     * in AND — hardening deliberato coerente con l'acceptance criterion di
-     * issue #67 ("ACL sempre in AND"), non una replica letterale del default V1.
+     * in AND — hardening deliberato sempre in AND"), non una replica letterale del default V1.
      */
     public static Specification<TipoVersamentoDominio> visibiliPerOperatore(OperatoreCorrente operatore) {
         return (root, q, cb) -> TipoVersamentoVisibilita.predicate(cb, root.get("tipoVersamento").get("id"), operatore);

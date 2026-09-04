@@ -14,14 +14,14 @@ public interface RtRecuperoRepository extends JpaRepository<RtRecupero, Long> {
 
     /**
      * Tutte le righe sulla tripla, marcate o pendenti: può restituirne più di
-     * una (nessuna deduplica sulle righe pendenti, issue #59 §10 / #17 §A).
+     * una (nessuna deduplica sulle righe pendenti).
      * Non va usata per decidere il riuso — vedi
      * {@link #findFirstByCodDominioAndIuvAndIurAndEsitoIsNotNull}.
      */
     List<RtRecupero> findByCodDominioAndIuvAndIur(String codDominio, String iuv, String iur);
 
     /**
-     * Solo le righe **marcate** (issue #59 §10 / #17 §A): quelle vanno
+     * Solo le righe **marcate**: quelle vanno
      * riattivate quando l'operatore ripete la tripla, invece di accumularsi
      * a ogni tentativo. Le righe ancora pendenti ({@code esito IS NULL}) sono
      * volutamente escluse: la richiesta ripetuta su una tripla non ancora
@@ -39,7 +39,7 @@ public interface RtRecuperoRepository extends JpaRepository<RtRecupero, Long> {
      * valori scritti con l'orologio sbagliato confonderebbero ordinamento e diagnostica).
      * Usata sia dopo l'insert di una riga nuova (che nasce con un placeholder
      * solo per soddisfare il {@code NOT NULL}) sia per il "sovrascrivi" di una
-     * riga già marcata quando l'operatore ripete la stessa tripla (issue #59 §10):
+     * riga già marcata quando l'operatore ripete la stessa tripla:
      * in entrambi i casi il record deve ripartire da {@code esito IS NULL}.
      */
     @Modifying

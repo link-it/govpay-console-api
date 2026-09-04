@@ -3,8 +3,8 @@ package it.govpay.console.sla;
 import it.govpay.console.model.SlaKpiCodice;
 
 /**
- * Catalogo statico dei 4 metodi PA pagoPA con SLA di tempo di risposta
- * (issue #36): soglia 2s al 98° percentile per tutti e quattro, per contratto
+ * Catalogo statico dei 4 metodi PA pagoPA con SLA di tempo di risposta:
+ * soglia 2s al 98° percentile per tutti e quattro, per contratto
  * pagoPA — non una scelta di questo progetto.
  */
 public enum SlaMetodoDefinizione {
