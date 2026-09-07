@@ -1,7 +1,7 @@
 package it.govpay.console.ricevuta.upload;
 
 import java.io.ByteArrayInputStream;
-import java.net.URL;
+import java.io.InputStream;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParserFactory;
@@ -39,6 +39,7 @@ public class RicevutaXmlValidator {
 
     private static final String CONTEXT_PATH = "it.gov.pagopa.pagopa_api.pa.pafornode";
     private static final String XSD_CLASSPATH = "xsd/pagopa/paForNode.xsd";
+    private static final String XSD_COMMON_CLASSPATH = "xsd/pagopa/sac-common-types-1.0.xsd";
 
     private final JAXBContext jaxbContext;
     private final Schema schema;
@@ -52,24 +53,46 @@ public class RicevutaXmlValidator {
         this.schema = loadSchema();
     }
 
+    /**
+     * Carica lo schema passando <b>entrambi</b> i documenti come sorgenti dal
+     * classpath: {@code paForNode.xsd} importa {@code sac-common-types-1.0.xsd} con
+     * uno {@code schemaLocation} relativo, e precaricando il namespace importato
+     * l'import viene soddisfatto dalla grammatica gia' in memoria invece che da una
+     * risoluzione per URL.
+     * <p>
+     * E' quello che rende il caricamento <b>indipendente dal packaging</b>, ed e' la
+     * ragione della correzione: passando un solo {@code StreamSource} sul systemId
+     * della risorsa, il protocollo dell'URL deve essere fra quelli ammessi da
+     * {@code accessExternalSchema}. Con il classpath esploso e' {@code file:} e
+     * funziona; dentro il fat jar e' {@code jar:nested:} e l'avvio fallisce con
+     * "'nested' access is not allowed". Precaricando, nessun accesso esterno serve
+     * piu': {@code accessExternalSchema} resta a {@code ""}, cioe' piu' restrittivo
+     * di prima e non meno.
+     */
     private static Schema loadSchema() {
-        URL xsdUrl = Thread.currentThread().getContextClassLoader().getResource(XSD_CLASSPATH);
-        if (xsdUrl == null) {
-            throw new IllegalStateException("XSD non trovato sul classpath: " + XSD_CLASSPATH);
-        }
-        try {
+        try (InputStream common = risorsa(XSD_COMMON_CLASSPATH);
+             InputStream paForNode = risorsa(XSD_CLASSPATH)) {
             SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
             schemaFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-            // "file": paForNode.xsd importa sac-common-types-1.0.xsd con schemaLocation
-            // relativo, risolto sullo stesso classpath/filesystem locale — un file
-            // nostro e fidato, non input esterno. "" (nessun accesso) romperebbe
-            // quella risoluzione.
-            schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "file");
-            return schemaFactory.newSchema(new StreamSource(xsdUrl.toExternalForm()));
+            schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            return schemaFactory.newSchema(new Source[] {
+                    new StreamSource(common), new StreamSource(paForNode) });
         } catch (Exception e) {
             throw new IllegalStateException("Impossibile caricare lo schema XSD " + XSD_CLASSPATH, e);
         }
+    }
+
+    private static InputStream risorsa(String percorso) {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        InputStream in = cl != null ? cl.getResourceAsStream(percorso) : null;
+        if (in == null) {
+            in = RicevutaXmlValidator.class.getClassLoader().getResourceAsStream(percorso);
+        }
+        if (in == null) {
+            throw new IllegalStateException("XSD non trovato sul classpath: " + percorso);
+        }
+        return in;
     }
 
     /** {@code formato} deve essere {@link RicevutaFormato#V2_2} o {@link RicevutaFormato#V2}. */
