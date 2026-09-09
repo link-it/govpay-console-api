@@ -148,11 +148,23 @@ tags:
       endpoint dedicato, mai restituita dalle GET.
   - name: Metriche
     description: |
-      KPI di conformità agli SLA di tempo di risposta pagoPA (issue #36),
-      calcolati interrogando Prometheus (non i timer Micrometer in-process:
-      solo Prometheus storicizza dati su un periodo storico arbitrario).
-      Accesso riservato al servizio ACL `Configurazione e manutenzione`
-      (lettura).
+      KPI di conformità ai Livelli di Servizio Enti Creditori pagoPA (SANP,
+      appendice "Livelli di Servizio Enti Creditori": soglia 2s al 98°
+      percentile, base mensile — issue #36): il tempo di risposta di
+      **GovPay, in qualità di nodo dei pagamenti dell'ente creditore**, alle
+      invocazioni ricevute dal Nodo dei Pagamenti pagoPA sui 4 metodi PA
+      (`paDemandPaymentNotice`, `paGetPayment`, `paSendRT`,
+      `paVerifyPaymentNotice`). Non è il tempo di risposta di GovPay verso i
+      PSP, né un SLA di disponibilità della piattaforma GovPay verso gli
+      enti creditori che la usano: è l'obbligo contrattuale che **ciascun
+      ente creditore** ha verso pagoPA, che GovPay assolve per suo conto e
+      qui si limita a misurare ed esporre in forma aggregata su tutti i
+      domini (drill-down per singolo ente fuori scope per ora).
+
+      KPI calcolati interrogando Prometheus (non i timer Micrometer
+      in-process: solo Prometheus storicizza dati su un periodo storico
+      arbitrario). Accesso riservato al servizio ACL `Configurazione e
+      manutenzione` (lettura).
 
 paths:
 
@@ -7192,13 +7204,28 @@ paths:
       operationId: getMetricheSla
       summary: KPI di conformità SLA sui 4 metodi PA pagoPA, su un periodo.
       description: |
-        Interroga Prometheus (`increase()` sul periodo richiesto, non
-        `rate()`: quest'ultima serve solo a dashboard live su finestre corte)
-        per calcolare, per ciascuno dei 4 metodi PA (`paDemandPaymentNotice`,
-        `paGetPayment`, `paSendRT`, `paVerifyPaymentNotice`), la percentuale
-        di risposte entro la soglia SLA (2s, 98° percentile) nel periodo
-        `dataDa`/`dataA` (entrambi obbligatori: non esiste un periodo di
-        default sensato per un KPI di conformità).
+        Interroga esclusivamente il Prometheus **federato**
+        (`govpay-prometheus-federato`, non il primario) per calcolare, per
+        ciascuno dei 4 metodi PA (`paDemandPaymentNotice`, `paGetPayment`,
+        `paSendRT`, `paVerifyPaymentNotice`), la percentuale di risposte
+        entro la soglia SLA (2s, 98° percentile) nel periodo `dataDa`/`dataA`
+        (entrambi obbligatori: non esiste un periodo di default sensato per
+        un KPI di conformità). KPI aggregato su tutti i domini (nessun
+        drill-down per dominio o serie storica, per ora fuori scope).
+
+        Il federato è l'unica fonte, non solo quella per le finestre datate:
+        niente routing sul primario, quindi niente eccezione per le
+        richieste recenti. Richiede una recording rule sul federato che
+        preservi `metodo × esito` (bassa cardinalità, sufficiente qui
+        perché il KPI aggrega già tutti i domini) e che calcoli un
+        incremento cumulabile nel periodo (non un semplice `rate()`
+        istantaneo: serve poter sommare invocazioni ed esiti su `dataDa`/
+        `dataA`, non leggere un tasso puntuale) — condizione necessaria
+        perché questo endpoint funzioni anche per il periodo corrente, non
+        solo per mesi già conclusi. Un `dataDa`/`dataA` oltre la retention
+        del federato (180gg) non è un errore dedicato: ricade nella stessa
+        convenzione `stato: WARNING` per assenza di dati già descritta
+        sotto.
 
         `stato` per ciascun KPI: `OK` se `conformitaOsservata >= 98`,
         `WARNING` se fra 95 e 98 **oppure se non ci sono dati nel periodo**
