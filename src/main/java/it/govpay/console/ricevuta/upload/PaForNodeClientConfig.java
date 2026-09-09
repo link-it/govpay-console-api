@@ -1,6 +1,8 @@
 package it.govpay.console.ricevuta.upload;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -51,9 +53,12 @@ public class PaForNodeClientConfig {
         client.setDefaultUri(url);
         client.setMarshaller(paForNodeMarshaller);
         client.setUnmarshaller(paForNodeMarshaller);
+        List<ClientInterceptor> interceptors = new ArrayList<>();
         if (StringUtils.hasText(username)) {
-            client.setInterceptors(new ClientInterceptor[] { new AuthorizationHeaderInserter(username, password) });
+            interceptors.add(new AuthorizationHeaderInserter(username, password));
         }
+        interceptors.add(new OnBehalfOfHeaderInserter());
+        client.setInterceptors(interceptors.toArray(new ClientInterceptor[0]));
         HttpUrlConnectionMessageSender messageSender = new HttpUrlConnectionMessageSender();
         messageSender.setConnectionTimeout(Duration.ofMillis(connectTimeoutMs));
         messageSender.setReadTimeout(Duration.ofMillis(readTimeoutMs));
