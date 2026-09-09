@@ -158,6 +158,11 @@ public class RicevutaUploadService {
                         + "' non e' autorizzato sul dominio '" + idDominio + "'.");
             }
 
+            // Rifiuta subito una ri-sottomissione di una ricevuta gia' acquisita, senza
+            // contattare api-pagopa. Non e' ridondante con la gestione di
+            // PAA_RECEIPT_DUPLICATA in PaForNodeClient: quella copre il retry dello
+            // stesso tentativo dopo una risposta persa, questo un nuovo caricamento
+            // a distanza di tempo.
             if (rptRepository.findByKey(idDominio, iuv, idRicevuta).isPresent()) {
                 throw new ConflictException("Ricevuta gia' acquisita: idDominio=" + idDominio
                         + ", iuv=" + iuv + ", idRicevuta=" + idRicevuta + ".");
