@@ -448,6 +448,19 @@ jobs:
         cp artifacts/govpay-console-api.war artifacts/govpay-console-api-${{ github.ref_name }}.war
         cp artifacts/govpay-console-api.jar artifacts/govpay-console-api-${{ github.ref_name }}.jar
 
+    # Asset sql.zip, come i batch GovPay. Lo raccoglie
+    # govpay/src/main/resources/db/collect-release-sql.sh per comporre lo SQL
+    # complessivo del rilascio, e si aspetta uno zip con dentro sql/<dialetto>/:
+    # qui la radice e' src/main/resources/db, non src/main/resources come nei
+    # batch, quindi si entra in db prima di zippare.
+    - name: Zip SQL files
+      run: |
+        mkdir -p target
+        cd src/main/resources/db
+        zip -r ../../../../target/sql.zip sql
+        cd ../../../../
+        unzip -l target/sql.zip | head -5
+
     - name: Assemble reports ZIP
       run: |
         mkdir -p reports/owasp reports/jacoco reports/osv reports/sbom
@@ -472,6 +485,7 @@ jobs:
         files: |
           artifacts/govpay-console-api-${{ github.ref_name }}.war
           artifacts/govpay-console-api-${{ github.ref_name }}.jar
+          target/sql.zip
           release-reports-${{ github.ref_name }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

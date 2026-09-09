@@ -1,11 +1,16 @@
 -- Schema target di govpay-console-api per PostgreSQL.
 --
 -- Tabelle proprie di console-api. Le modifiche alle tabelle ereditate da
--- govpay-core sono nello script `upgrade-v1-to-v2.sql`.
+-- govpay-core NON sono dichiarate qui: finche' la migrazione al nuovo modello
+-- non e' completata, le strutture del core stanno solo nel core, nel govpay.xsd
+-- e nelle sue patch. Lo script upgrade-v1-to-v2.sql e' stato eliminato per
+-- questo motivo: le sue istruzioni sono confluite in govpay-core, patch 3.10.0.
 --
 -- Per applicare il bring-up completo di un DB da zero per console-api:
---   1) applicare lo schema di govpay-core V1
---   2) applicare `upgrade-v1-to-v2.sql` di questo progetto
+--   1) applicare lo schema di govpay-core
+--   2) applicare le patch di govpay-core fino alla release in esercizio,
+--      inclusa la 3.10.0, che porta ip_richiedente su gp_audit, la rimozione
+--      del connettore FTP e gli indici per la cursor pagination
 --   3) applicare questo file
 
 -- Cache locale dell'anagrafica Enti Creditori sincronizzata da pagoPA

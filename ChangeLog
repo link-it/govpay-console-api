@@ -1,3 +1,40 @@
+2026-09-09  Giuliano Pintori <pintori@link.it>
+
+	* [DB]
+	Rimosse dallo schema le modifiche alle tabelle del core. Gli script
+	upgrade-v1-to-v2.sql dei cinque dialetti contenevano solo istruzioni su
+	tabelle di govpay-core (ip_richiedente su gp_audit, eliminazione del
+	connettore FTP da connettori e intermediari, e due indici per la cursor
+	pagination su versamenti e rpt), quindi nulla di proprio: sono stati
+	eliminati. Finche' la migrazione al nuovo modello non e' completata, le
+	strutture del core sono dichiarate solo nel core, nel govpay.xsd e nelle
+	sue patch.
+	Le tre istruzioni sull'audit e sul connettore FTP erano duplicate in
+	govpay-core patch 3.10.0, e ALTER TABLE gp_audit ADD ip_richiedente non
+	e' idempotente da nessuna delle due parti: chi la applicava per secondo
+	falliva. I due indici invece nel core non c'erano: sono stati aggiunti
+	la', nel govpay.xsd e nelle patch 3.10.0 dei cinque dialetti, prima di
+	togliere le istruzioni da qui, per non perdere gli indici da cui dipende
+	la paginazione keyset.
+	Aggiornata di conseguenza la procedura di bring-up nell'intestazione dei
+	cinque console-api-schema.sql: il passo 2 non rimanda piu' allo script
+	eliminato ma alle patch di govpay-core.
+	Verificato che nessun file SQL tracciato del progetto contenga piu' DDL o
+	DML su strutture del core, e che lo schema dichiari soltanto le proprie
+	tabelle: pagopa_ec_cache, pagopa_iban_cache e rt_recuperi.
+
+	* [Build]
+	Aggiunto l'asset sql.zip al rilascio, come nei batch GovPay. Il nuovo
+	step "Zip SQL files" del job release zippa src/main/resources/db/sql
+	producendo un archivio con dentro sql/<dialetto>/, ed e' allegato alla
+	GitHub Release. Serve al raccoglitore
+	govpay/src/main/resources/db/collect-release-sql.sh, che compone lo SQL
+	complessivo di un rilascio scaricando questo asset dai componenti: senza,
+	le tabelle di questo progetto mancherebbero dallo script complessivo.
+	A differenza dei batch la radice e' src/main/resources/db e non
+	src/main/resources, quindi lo step entra in db prima di zippare, per
+	ottenere la stessa struttura interna che il raccoglitore si aspetta.
+
 2026-09-03  Giuliano Pintori <pintori@link.it>
 
 	* [Build]
