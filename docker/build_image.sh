@@ -83,6 +83,10 @@ if [ -n "${LOCALFILE}" ]
 then
   DOCKERFILE="govpay-console-api/Dockerfile.daFile"
   cp -f "${LOCALFILE}" buildcontext/
+  # Lo SQL nel contesto, per la COPY sql /opt/sql del Dockerfile.daFile. Qui la
+  # radice e' db/sql e non sql come nei batch, ma nel contesto la directory si
+  # chiama comunque sql, quindi la COPY e' identica alla loro.
+  cp -fr ../src/main/resources/db/sql buildcontext/
 else
   DOCKERFILE="govpay-console-api/Dockerfile.github"
 fi

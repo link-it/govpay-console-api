@@ -31,6 +31,14 @@ WORKDIR ${GOVPAY_CONSOLE_API_HOME}
 # Copy Console JAR from local build context
 COPY *.jar /opt/govpay-console-api/govpay-console-api.jar
 
+# Copy SQL scripts (buildcontext/)
+# Stessa convenzione dei batch GovPay: lo SQL del componente e' dentro
+# l'immagine in /opt/sql/<dialetto>/, cosi' che il raccoglitore
+# govpay/src/main/resources/db/collect-release-sql.sh possa leggerlo
+# dall'immagine con la sorgente image:, oltre che dall'asset sql.zip del
+# rilascio. La directory era gia' creata e chownata sopra, ma vuota.
+COPY sql /opt/sql
+
 
 # Copy entrypoint and initialization scripts
 COPY commons/entrypoint.sh /usr/local/bin/

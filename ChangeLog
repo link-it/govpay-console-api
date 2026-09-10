@@ -1,3 +1,30 @@
+2026-09-10  Giuliano Pintori <pintori@link.it>
+
+	* [Build]
+	Lo SQL del progetto e' ora incluso nell'immagine docker, come nei batch
+	GovPay. build_image.sh copia src/main/resources/db/sql nel contesto di
+	build e Dockerfile.daFile lo installa con COPY sql /opt/sql. La directory
+	/opt/sql era gia' creata e chownata dal Dockerfile ma restava vuota,
+	perche' nel contesto lo SQL non c'era: mancavano entrambi i pezzi, non
+	solo la COPY.
+	Serve al raccoglitore govpay/src/main/resources/db/collect-release-sql.sh,
+	che compone lo SQL complessivo di un rilascio e sa leggerlo da tre
+	sorgenti: l'asset sql.zip di un rilascio, l'immagine docker, o l'archivio
+	di un branch. L'immagine e' la sorgente da preferire in sviluppo, quando i
+	rilasci dei componenti non esistono ancora, perche' lo SQL e' quello che
+	accompagna il binario in esecuzione e la versione e' esplicita nel tag.
+	Come nei batch la COPY e' solo in Dockerfile.daFile e non in
+	Dockerfile.github, dove il contesto non contiene lo SQL.
+	Verificato costruendo l'immagine: /opt/sql contiene console-api-schema.sql
+	per i cinque dialetti, e il raccoglitore ne estrae le tre tabelle
+	pagopa_ec_cache, pagopa_iban_cache e rt_recuperi.
+	Lo SQL va messo nel contesto di build in due punti, perche' i percorsi sono
+	due: docker/build_image.sh per il build manuale, e lo step "Prepare build
+	context" del job docker-dev del workflow, che prepara il contesto per conto
+	proprio e non passa da quello script. Nel workflow si usa la stessa guardia
+	gia' presente in govpay-aca-batch. Il job docker di produzione non ne ha
+	bisogno: usa Dockerfile.github, che non ha quella COPY.
+
 2026-09-09  Giuliano Pintori <pintori@link.it>
 
 	* [DB]
