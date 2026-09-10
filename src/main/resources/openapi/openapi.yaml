@@ -7210,8 +7210,10 @@ paths:
         `paSendRT`, `paVerifyPaymentNotice`), la percentuale di risposte
         entro la soglia SLA (2s, 98° percentile) nel periodo `dataDa`/`dataA`
         (entrambi obbligatori: non esiste un periodo di default sensato per
-        un KPI di conformità). KPI aggregato su tutti i domini (nessun
-        drill-down per dominio o serie storica, per ora fuori scope).
+        un KPI di conformità). KPI aggregato su tutti i domini — per
+        l'andamento nel tempo di un singolo metodo vedi `GET
+        /metriche/sla/{codice}` (il breakdown per dominio resta fuori
+        scope per ora).
 
         Il federato è l'unica fonte, non solo quella per le finestre datate:
         niente routing sul primario, quindi niente eccezione per le
@@ -7247,6 +7249,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SlaResponse'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          $ref: '#/components/responses/Problem403'
+        '502':
+          description: Prometheus irraggiungibile o risposta non valida (rete, HTTP, circuito aperto, formato inatteso).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /metriche/sla/{codice}:
+    get:
+      tags:
+        - Metriche
+      operationId: getMetricheSlaSerieStorica
+      summary: Andamento storico della conformità SLA per un singolo metodo PA, a granularità configurabile.
+      description: |
+        Serie storica di `conformitaOsservata` per il metodo `codice`, un
+        punto ogni `granularitaMinuti` minuti, nel periodo `dataDa`/`dataA`
+        (stessa semantica di `GET /metriche/sla`: entrambi obbligatori,
+        `dataDa` successivo a `dataA` → 400). Come `GET /metriche/sla`,
+        interroga esclusivamente il Prometheus federato — stessa recording
+        rule `metodo × esito`, stessa retention di 180gg. Aggrega tutti i
+        domini (nessun drill-down per singolo ente, per ora fuori scope).
+
+        `granularitaMinuti` è un numero di minuti libero, non un insieme
+        fisso di valori: la risoluzione effettivamente disponibile dipende
+        da come la recording rule sul federato è configurata in questa
+        installazione — un dettaglio operativo che varia da cliente a
+        cliente e non deve essere cablato nel contratto API. La richiesta è
+        validata con due vincoli indipendenti, **prima** di interrogare il
+        federato:
+
+        - `granularitaMinuti` inferiore al minimo configurato per questa
+          installazione (`govpay.metriche.sla.granularitaMinutiMinima`) →
+          `400` (`errors[0].field: "granularitaMinuti"`): sotto quella
+          soglia il federato non ha davvero una risoluzione più fine da
+          offrire (i punti aggiuntivi sarebbero solo l'ultimo valore
+          ripetuto), quindi è preferibile un rifiuto esplicito a punti
+          silenziosamente stale.
+        - `numeroPunti = periodoSecondi / (granularitaMinuti * 60)` superiore
+          a **500** (`MAX_PUNTI`) → `400` (`errors[0].field:
+          "granularitaMinuti"`, `detail` con il conteggio richiesto e il
+          massimo consentito). Esempio: un mese intero (~31 giorni) con
+          `granularitaMinuti=5` genera ~8928 punti e viene rifiutato; lo
+          stesso periodo con `granularitaMinuti=1440` (un giorno) genera ~31
+          punti e viene accettato.
+
+        Ogni bucket del periodo compare in `serieStorica`, anche quando non
+        ci sono invocazioni (`totale: 0`, `conformitaOsservata: null`): la
+        cadenza regolare dei punti è necessaria per il rendering a
+        intervalli costanti lato frontend.
+
+        Richiede il diritto di lettura sul servizio ACL `Configurazione e
+        manutenzione`.
+      parameters:
+        - name: codice
+          in: path
+          required: true
+          description: Codice del metodo PA pagoPA di cui recuperare la serie storica.
+          schema:
+            $ref: '#/components/schemas/SlaKpiCodice'
+        - $ref: '#/components/parameters/SlaDataDa'
+        - $ref: '#/components/parameters/SlaDataA'
+        - $ref: '#/components/parameters/SlaGranularitaMinuti'
+      responses:
+        '200':
+          description: Serie storica di conformità SLA per il metodo e il periodo richiesti.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlaSerieStoricaResponse'
         '400':
           $ref: '#/components/responses/Problem400'
         '401':
@@ -11244,6 +11321,78 @@ components:
         - WARNING
         - KO
 
+    SlaSerieStoricaResponse:
+      type: object
+      required:
+        - periodo
+        - codice
+        - metodo
+        - granularitaMinuti
+        - sogliaSecondi
+        - sogliaPercentile
+        - serieStorica
+      properties:
+        periodo:
+          $ref: '#/components/schemas/SlaPeriodo'
+        codice:
+          $ref: '#/components/schemas/SlaKpiCodice'
+        metodo:
+          type: string
+          description: Nome del metodo PA pagoPA strumentato in govpay-core.
+          example: paDemandPaymentNotice
+        granularitaMinuti:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Eco del `granularitaMinuti` richiesto (ampiezza del bucket, in minuti, di ogni punto di `serieStorica`).
+          example: 5
+        sogliaSecondi:
+          type: number
+          format: double
+          example: 2.0
+        sogliaPercentile:
+          type: integer
+          example: 98
+        serieStorica:
+          type: array
+          description: |
+            Punti ordinati cronologicamente, uno per bucket di ampiezza
+            `granularitaMinuti`, senza buchi: un bucket senza invocazioni
+            compare comunque nell'array (vedi `SlaPunto`).
+          items:
+            $ref: '#/components/schemas/SlaPunto'
+
+    SlaPunto:
+      type: object
+      description: |
+        Un bucket temporale della serie storica. `conformitaOsservata` è
+        `null` quando `totale=0` (nessuna invocazione nel bucket), stessa
+        convenzione di `SlaKpi.conformitaOsservata`.
+      required:
+        - data
+        - totale
+        - conformitaOsservata
+      properties:
+        data:
+          type: string
+          format: date-time
+          description: |
+            Istante di inizio del bucket, ISO 8601 con timezone esplicito
+            (es. `2026-08-01T00:00:00Z`) anche per granularità corrispondenti
+            a un giorno intero: necessario per un parsing coerente lato
+            client quando i punti vengono passati a un asse temporale (es.
+            `xAxis.type: 'time'` in Apache ECharts), a differenza di una
+            stringa data-only priva di `T`/timezone.
+        totale:
+          type: integer
+          format: int64
+          description: Numero di invocazioni osservate nel bucket.
+        conformitaOsservata:
+          type: number
+          format: double
+          nullable: true
+          description: Percentuale di invocazioni entro `sogliaSecondi` nel bucket. `null` se `totale=0`.
+
     AreaImpostazioni:
       type: object
       description: |
@@ -13106,6 +13255,24 @@ components:
       schema:
         type: string
         format: date
+
+    SlaGranularitaMinuti:
+      name: granularitaMinuti
+      in: query
+      required: true
+      description: |
+        Ampiezza del bucket temporale della serie storica, in minuti. Non è
+        un insieme fisso di valori: la risoluzione minima effettivamente
+        disponibile dipende dalla recording rule sul federato configurata
+        per questa installazione, ed è validata a runtime (non nel
+        contratto API — vedi la descrizione dell'operazione
+        `getMetricheSlaSerieStorica` per i vincoli su valore minimo e su
+        `MAX_PUNTI`).
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        example: 5
 
     RicevutaIdA2AFilter:
       name: idA2A
