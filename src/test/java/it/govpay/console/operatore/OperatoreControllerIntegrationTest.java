@@ -69,6 +69,7 @@ class OperatoreControllerIntegrationTest {
     void setup() {
         // Operatore autenticato (compare anch'esso nelle liste /operatori).
         newUtenzaOperatore(PRINCIPAL, "Operatore Uno", true, encoder.encode(PASSWORD));
+        grantScrittura("Anagrafica Ruoli");
 
         newDominio("12345678901", "Comune Alfa");
         newTipoVersamento("TARI", "Tassa Rifiuti");
@@ -109,6 +110,29 @@ class OperatoreControllerIntegrationTest {
         t.setCodTipoVersamento(cod);
         t.setDescrizione(descrizione);
         tipoVersamentoRepository.save(t);
+    }
+
+    /** Utenza autenticabile ma senza alcuna ACL su "Anagrafica Ruoli" (test di 403). */
+    private void newUtenzaSenzaDiritti(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
+    }
+
+    private void newUtenzaConSoloLettura(String principal, String servizio) {
+        newUtenzaSenzaDiritti(principal);
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio(servizio);
+        acl.setDiritti("R");
+        aclRepository.save(acl);
     }
 
     private void newRuoloCatalogo(String ruolo) {
@@ -448,13 +472,65 @@ class OperatoreControllerIntegrationTest {
 
     @Test
     void putPasswordWithoutDirittoReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
         String body = """
                 {"nuovaPassword":"NuovaPassword01"}""";
-        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic(PRINCIPAL, PASSWORD))
+        mvc.perform(put("/operatori/op-alfa/password").with(httpBasic("senza-diritto", PASSWORD))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentType("application/problem+json"))
                 .andExpect(jsonPath("$.detail", containsString("Anagrafica Ruoli")));
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void listWithoutDirittoAnagraficaRuoliReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/operatori").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Ruoli")));
+    }
+
+    @Test
+    void createWithoutDirittoAnagraficaRuoliReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        String body = """
+                {"principal":"op-negato","nome":"Negato","abilitato":true}""";
+        mvc.perform(post("/operatori").with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Ruoli")));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        newUtenzaConSoloLettura("solo-lettura", "Anagrafica Ruoli");
+
+        mvc.perform(get("/operatori").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"principal":"op-negato2","nome":"Negato","abilitato":true}""";
+        mvc.perform(post("/operatori").with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un principal inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto-404");
+        mvc.perform(get("/operatori/non-esiste").with(httpBasic("senza-diritto-404", PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

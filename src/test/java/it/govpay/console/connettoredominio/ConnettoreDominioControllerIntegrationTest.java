@@ -24,11 +24,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.ConnettoreProprieta;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.JppaConfig;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ConnettoreProprietaRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
@@ -62,6 +64,8 @@ class ConnettoreDominioControllerIntegrationTest {
     private JppaConfigRepository jppaConfigRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     @BeforeEach
     void setup() {
@@ -79,6 +83,7 @@ class ConnettoreDominioControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         Dominio d = new Dominio();
         d.setCodDominio(ID_DOMINIO);
@@ -97,6 +102,88 @@ class ConnettoreDominioControllerIntegrationTest {
         mvc.perform(get("/domini/" + ID_DOMINIO + "/connettori/mypivot"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType("application/problem+json"));
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void getSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/connettori/mypivot").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Creditore")));
+    }
+
+    @Test
+    void putSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        // putCredenziali (non replace): non richiede l'header If-Match, che altrimenti
+        // Spring intercetterebbe come MissingRequestHeaderException (428) PRIMA che la
+        // richiesta arrivi al service - mascherando il controllo ACL sotto test.
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/connettori/govpay/credenziali")
+                        .with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"x\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Creditore")));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        newUtenzaConSoloLettura("solo-lettura");
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/connettori/mypivot").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/connettori/govpay/credenziali")
+                        .with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"x\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getDominioInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/domini/99999999999/connettori/mypivot").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritti(principal);
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Creditore");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    /** Utenza autenticabile ma senza alcuna ACL su "Anagrafica Creditore" (test di 403). */
+    private void newUtenzaSenzaDiritti(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
     }
 
     @Test

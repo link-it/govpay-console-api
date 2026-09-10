@@ -24,6 +24,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListTipiPendenzaDominio200Response;
 import it.govpay.console.model.Pagination;
@@ -33,6 +34,7 @@ import it.govpay.console.model.TipoPendenzaDominioReplace;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -75,6 +77,7 @@ public class TipoPendenzaDominioService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -86,7 +89,8 @@ public class TipoPendenzaDominioService {
                                       RepresentationValidator representationValidator,
                                       CurrentOperatorService currentOperatorService,
                                       AuditService auditService,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper,
+                                      AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.tipoVersamentoRepository = tipoVersamentoRepository;
@@ -95,10 +99,12 @@ public class TipoPendenzaDominioService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListTipiPendenzaDominio200Response list(String idDominio, TipoPendenzaDominioListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listTipiPendenzaDominio dominio={} filtri[idTipoPendenza={}, descrizione={}, abilitato={}, "
@@ -153,6 +159,7 @@ public class TipoPendenzaDominioService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<TipoPendenzaDominio> get(String idDominio, String idTipoPendenza) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         return ok(load(idDominio, idTipoPendenza));
     }
 
@@ -160,6 +167,7 @@ public class TipoPendenzaDominioService {
     public ResponseEntity<TipoPendenzaDominio> create(String idDominio,
                                                       TipoPendenzaDominioCreate body,
                                                       HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         TipoVersamento tipoVersamento = tipoVersamentoRepository.findByCodTipoVersamento(body.getIdTipoPendenza())
                 .orElseThrow(() -> new UnprocessableEntityException(
@@ -198,6 +206,7 @@ public class TipoPendenzaDominioService {
     public ResponseEntity<TipoPendenzaDominio> replace(String idDominio, String idTipoPendenza,
                                                        TipoPendenzaDominioReplace body, String ifMatch,
                                                        HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoVersamentoDominio entity = load(idDominio, idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 
@@ -215,6 +224,7 @@ public class TipoPendenzaDominioService {
     public ResponseEntity<TipoPendenzaDominio> patch(String idDominio, String idTipoPendenza,
                                                      List<JsonPatchOperation> operations, String ifMatch,
                                                      HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoVersamentoDominio entity = load(idDominio, idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 

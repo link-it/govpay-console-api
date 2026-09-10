@@ -73,6 +73,7 @@ class RuoloControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(operatore.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         // Catalogo ruoli: righe ACL con id_utenza IS NULL.
         newAclRuolo("AMMINISTRATORE", "Anagrafica Ruoli", "R");
@@ -364,5 +365,107 @@ class RuoloControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void grantLettura(String principal) {
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Ruoli");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void senzaDirittoLetturaReturns403() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto");
+        utenza.setPrincipalOriginale("senza-diritto");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        mvc.perform(get("/ruoli").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void senzaDirittoScritturaReturns403() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto");
+        utenza.setPrincipalOriginale("senza-diritto");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        String body = """
+                {"idRuolo":"NUOVO","acl":[{"servizio":"Pendenze","autorizzazioni":["R","W"]}]}""";
+        mvc.perform(post("/ruoli").with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("solo-lettura");
+        utenza.setPrincipalOriginale("solo-lettura");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+        grantLettura("solo-lettura");
+
+        mvc.perform(get("/ruoli").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"idRuolo":"NUOVO2","acl":[{"servizio":"Pendenze","autorizzazioni":["R","W"]}]}""";
+        mvc.perform(post("/ruoli").with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto-404");
+        utenza.setPrincipalOriginale("senza-diritto-404");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        mvc.perform(get("/ruoli/BOGUS").with(httpBasic("senza-diritto-404", PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 }

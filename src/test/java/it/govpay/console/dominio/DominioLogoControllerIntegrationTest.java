@@ -30,9 +30,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -63,6 +65,8 @@ class DominioLogoControllerIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     @BeforeEach
     void setup() {
@@ -80,6 +84,7 @@ class DominioLogoControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         Dominio d = new Dominio();
         d.setCodDominio(ID_DOMINIO);
@@ -273,7 +278,88 @@ class DominioLogoControllerIntegrationTest {
         Assertions.assertThat(countAudit(DominioLogoService.AZIONE_AUDIT_MODIFICA)).isEqualTo(before + 1);
     }
 
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void getSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Creditore")));
+    }
+
+    @Test
+    void putSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/logo").with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(IMAGE_PNG).content(image("png")))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Creditore")));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(IMAGE_PNG).content(image("png")))
+                .andExpect(status().isOk());
+
+        newUtenzaConSoloLettura("solo-lettura");
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+        mvc.perform(put("/domini/" + ID_DOMINIO + "/logo").with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(IMAGE_PNG).content(image("png")))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getDominioInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/domini/99999999999/logo").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
     // --- helpers ---
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritti(principal);
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Creditore");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    /** Utenza autenticabile ma senza alcuna ACL su "Anagrafica Creditore" (test di 403). */
+    private void newUtenzaSenzaDiritti(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
+    }
 
     private static byte[] image(String format) throws IOException {
         BufferedImage img = new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB);

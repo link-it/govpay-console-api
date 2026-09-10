@@ -119,6 +119,7 @@ public class OperatoreService {
 
     @Transactional(readOnly = true)
     public ListOperatori200Response list(OperatoreListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         log.debug("listOperatori filtri[principal={}, nome={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 query.principal(), query.nome(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
@@ -165,12 +166,14 @@ public class OperatoreService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Operatore> get(String principal) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         return ok(load(principal));
     }
 
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> create(OperatoreCreate body,
                                                                     HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         String principal = validatePrincipal(body.getPrincipal());
         String nome = validateNome(body.getNome());
         if (utenzaRepository.existsByPrincipalOriginale(principal)) {
@@ -214,6 +217,7 @@ public class OperatoreService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> replace(String principal, OperatoreReplace body,
                                                                      String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         Operatore op = load(principal);
         checkIfMatch(ifMatch, op);
         return doReplace(op, body, request);
@@ -222,6 +226,7 @@ public class OperatoreService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> patch(String principal, List<JsonPatchOperation> operations,
                                                                    String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         Operatore op = load(principal);
         checkIfMatch(ifMatch, op);
 

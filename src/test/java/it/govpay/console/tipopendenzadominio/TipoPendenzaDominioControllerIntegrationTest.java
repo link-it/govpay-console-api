@@ -25,12 +25,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaTipoVersamento;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -70,6 +72,8 @@ class TipoPendenzaDominioControllerIntegrationTest {
     private UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     private Dominio dominio;
     private TipoVersamento tari;
@@ -92,6 +96,7 @@ class TipoPendenzaDominioControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         dominio = saveDominio(ID_DOMINIO, "Comune Alfa");
         saveDominio(ID_DOMINIO_2, "Comune Beta");
@@ -295,6 +300,7 @@ class TipoPendenzaDominioControllerIntegrationTest {
         op.setNome("Operatore Ristretto");
         op.setIdUtenza(ristretta.getId());
         operatoreRepository.save(op);
+        grantLettura(principaleRistretto);
 
         mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principaleRistretto, PASSWORD)))
                 .andExpect(status().isNotFound());
@@ -360,6 +366,7 @@ class TipoPendenzaDominioControllerIntegrationTest {
         op.setNome("Operatore Tipi Vers Ristretto");
         op.setIdUtenza(ristretta.getId());
         operatoreRepository.save(op);
+        grantScrittura(principale);
         return principale;
     }
 
@@ -599,5 +606,100 @@ class TipoPendenzaDominioControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void grantLettura(String principal) {
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Creditore");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    private void newUtenzaSenzaDiritto(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
+
+        Operatore op = new Operatore();
+        op.setNome("Senza Diritto");
+        op.setIdUtenza(u.getId());
+        operatoreRepository.save(op);
+    }
+
+    @Test
+    void listSenzaDirittoLetturaReturns403() throws Exception {
+        String principal = "senza-diritto-lettura";
+        newUtenzaSenzaDiritto(principal);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void createSenzaDirittoScritturaReturns403() throws Exception {
+        String principal = "senza-diritto-scrittura";
+        newUtenzaSenzaDiritto(principal);
+        String body = """
+                {"idTipoPendenza":"COSAP","abilitato":true}""";
+
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritto(principal);
+        grant(principal, "R");
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: la list deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        String principal = "solo-lettura";
+        newUtenzaConSoloLettura(principal);
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"idTipoPendenza":"COSAP","abilitato":true}""";
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/tipiPendenza").with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        String principal = "senza-diritto-404";
+        newUtenzaSenzaDiritto(principal);
+
+        mvc.perform(get("/domini/99999999999/tipiPendenza").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 }

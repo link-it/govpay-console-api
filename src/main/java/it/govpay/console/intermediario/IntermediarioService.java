@@ -21,12 +21,14 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Intermediario;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.IntermediarioCreate;
 import it.govpay.console.model.IntermediarioReplace;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListIntermediari200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.repository.IntermediarioRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -65,6 +67,7 @@ public class IntermediarioService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -73,16 +76,19 @@ public class IntermediarioService {
                                 IntermediarioMapper mapper,
                                 CurrentOperatorService currentOperatorService,
                                 AuditService auditService,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListIntermediari200Response list(IntermediarioListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         log.debug("listIntermediari filtri[codIntermediario={}, denominazione={}, abilitato={}], "
                         + "page={}, limit={}, sort={}, total={}",
                 query.codIntermediario(), query.denominazione(), query.abilitato(),
@@ -130,6 +136,7 @@ public class IntermediarioService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Intermediario> get(String idIntermediario) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario entity = load(idIntermediario);
         return ok(entity);
     }
@@ -137,6 +144,7 @@ public class IntermediarioService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Intermediario> create(IntermediarioCreate body,
                                                                         HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         if (repository.existsByCodIntermediario(body.getIdIntermediario())) {
             throw new ConflictException(
                     "Esiste gia' un intermediario con idIntermediario '" + body.getIdIntermediario() + "'.");
@@ -169,6 +177,7 @@ public class IntermediarioService {
                                                                          IntermediarioReplace body,
                                                                          String ifMatch,
                                                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario entity = load(idIntermediario);
         checkIfMatch(ifMatch, entity);
 
@@ -187,6 +196,7 @@ public class IntermediarioService {
                                                                        List<JsonPatchOperation> operations,
                                                                        String ifMatch,
                                                                        HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario entity = load(idIntermediario);
         checkIfMatch(ifMatch, entity);
 

@@ -9,8 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Intermediario;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ConnettoreCredenziali;
 import it.govpay.console.repository.IntermediarioRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -33,23 +35,27 @@ public class ConnettoreService {
     private final ObjectMapper objectMapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
+    private final AclAuthorizer aclAuthorizer;
 
     public ConnettoreService(IntermediarioRepository intermediarioRepository,
                              ConnettoreStore store,
                              ConnettoreMapper mapper,
                              ObjectMapper objectMapper,
                              CurrentOperatorService currentOperatorService,
-                             AuditService auditService) {
+                             AuditService auditService,
+                             AclAuthorizer aclAuthorizer) {
         this.intermediarioRepository = intermediarioRepository;
         this.store = store;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public <T> ResponseEntity<T> get(String idIntermediario, ConnettoreCanale canale, Class<T> dtoClass) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario intermediario = loadIntermediario(idIntermediario);
         T dto = toDto(readConfig(canale.codConnettore(intermediario)), canale, dtoClass);
         return ResponseEntity.ok()
@@ -61,6 +67,7 @@ public class ConnettoreService {
     public <T> ResponseEntity<T> replace(String idIntermediario, ConnettoreCanale canale,
                                          T dto, String ifMatch, Class<T> dtoClass,
                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario intermediario = loadIntermediario(idIntermediario);
         String cod = canale.codConnettore(intermediario);
         checkIfMatch(ifMatch, toDto(readConfig(cod), canale, dtoClass));
@@ -80,6 +87,7 @@ public class ConnettoreService {
     @Transactional
     public ResponseEntity<Void> putCredenziali(String idIntermediario, ConnettoreCanale canale,
                                                ConnettoreCredenziali credenziali, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario intermediario = loadIntermediario(idIntermediario);
         String cod = ensureCodConnettore(intermediario, canale, canale.codConnettore(intermediario));
 

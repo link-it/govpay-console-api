@@ -25,11 +25,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IntermediarioRepository;
@@ -63,6 +65,8 @@ class StazioneControllerIntegrationTest {
     @Autowired
     private DominioRepository dominioRepository;
     @Autowired
+    private AclRepository aclRepository;
+    @Autowired
     private GpAuditRepository gpAuditRepository;
 
     @BeforeEach
@@ -81,6 +85,7 @@ class StazioneControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         Intermediario int1 = newIntermediario("INT-001");
         Intermediario int2 = newIntermediario("INT-002");
@@ -471,5 +476,107 @@ class StazioneControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void grantLettura(String principal) {
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica PagoPA");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void senzaDirittoLetturaReturns403() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto");
+        utenza.setPrincipalOriginale("senza-diritto");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        mvc.perform(get("/intermediari/INT-001/stazioni").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void senzaDirittoScritturaReturns403() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto");
+        utenza.setPrincipalOriginale("senza-diritto");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        String body = """
+                {"idStazione":"INT-001_07","versione":"V2","abilitato":true}""";
+        mvc.perform(post("/intermediari/INT-001/stazioni").with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("solo-lettura");
+        utenza.setPrincipalOriginale("solo-lettura");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+        grantLettura("solo-lettura");
+
+        mvc.perform(get("/intermediari/INT-001/stazioni").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"idStazione":"INT-001_08","versione":"V2","abilitato":true}""";
+        mvc.perform(post("/intermediari/INT-001/stazioni").with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal("senza-diritto-404");
+        utenza.setPrincipalOriginale("senza-diritto-404");
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        mvc.perform(get("/intermediari/INT-001/stazioni/INT-001_99").with(httpBasic("senza-diritto-404", PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 }

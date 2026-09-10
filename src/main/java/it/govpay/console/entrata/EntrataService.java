@@ -23,6 +23,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Entrata;
 import it.govpay.console.model.EntrataCreate;
 import it.govpay.console.model.EntrataReplace;
@@ -32,6 +33,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoContabilita;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoTributoRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -72,6 +74,7 @@ public class EntrataService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -81,17 +84,20 @@ public class EntrataService {
                           EntrataMapper mapper,
                           CurrentOperatorService currentOperatorService,
                           AuditService auditService,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListEntrate200Response list(EntrataListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         log.debug("listEntrate filtri[idEntrata={}, descrizione={}, nonAssociati={}], "
                         + "page={}, limit={}, sort={}, total={}",
                 query.idEntrata(), query.descrizione(), query.nonAssociati(),
@@ -143,11 +149,13 @@ public class EntrataService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<Entrata> get(String idEntrata) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         return ok(load(idEntrata));
     }
 
     @Transactional
     public ResponseEntity<Entrata> create(EntrataCreate body, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         if (repository.existsByCodTributo(body.getIdEntrata())) {
             throw new ConflictException(
                     "Esiste gia' una tipologia di entrata con idEntrata '" + body.getIdEntrata() + "'.");
@@ -174,6 +182,7 @@ public class EntrataService {
     @Transactional
     public ResponseEntity<Entrata> replace(String idEntrata, EntrataReplace body,
                                            String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoTributo entity = load(idEntrata);
         checkIfMatch(ifMatch, entity);
 
@@ -189,6 +198,7 @@ public class EntrataService {
     @Transactional
     public ResponseEntity<Entrata> patch(String idEntrata, List<JsonPatchOperation> operations,
                                          String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoTributo entity = load(idEntrata);
         checkIfMatch(ifMatch, entity);
 
