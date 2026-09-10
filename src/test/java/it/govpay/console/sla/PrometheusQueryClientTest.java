@@ -15,6 +15,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -213,6 +214,130 @@ class PrometheusQueryClientTest {
         Optional<Double> result = client.query(promql, Instant.ofEpochSecond(1000));
 
         assertThat(result).contains(7.0);
+    }
+
+    /**
+     * Verifica la navigazione della risposta di {@code /api/v1/query_range}
+     * (usata da {@link SlaService#calcolaSerieStorica}): {@code values} è un
+     * array di coppie {@code [timestamp, "string"]}, non un singolo
+     * {@code value} come l'instant query.
+     */
+    @Test
+    void queryRange_conRisultatoParsaTuttiIPunti() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(queryParam("query", encoded(PROMQL)))
+                .andExpect(queryParam("start", "1000"))
+                .andExpect(queryParam("end", "1600"))
+                .andExpect(queryParam("step", "600"))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[[1000,"1.0"],[1600,"2.5"]]}]}}""", MediaType.APPLICATION_JSON));
+
+        Map<Instant, Double> result = client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600);
+
+        assertThat(result).containsExactly(
+                Map.entry(Instant.ofEpochSecond(1000), 1.0),
+                Map.entry(Instant.ofEpochSecond(1600), 2.5));
+        server.verify();
+    }
+
+    @Test
+    void queryRange_conRisultatoVuotoRitornaMappaVuota() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[]}}""",
+                        MediaType.APPLICATION_JSON));
+
+        Map<Instant, Double> result = client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600);
+
+        assertThat(result).isEmpty();
+    }
+
+    /** {@code 0/0} lato PromQL produce {@code NaN} per quel punto: filtrato, non un'entry con valore NaN. */
+    @Test
+    void queryRange_conNaNInUnPuntoLoOmette() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[[1000,"NaN"],[1600,"3.0"]]}]}}""", MediaType.APPLICATION_JSON));
+
+        Map<Instant, Double> result = client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600);
+
+        assertThat(result).containsOnly(Map.entry(Instant.ofEpochSecond(1600), 3.0));
+    }
+
+    @Test
+    void queryRange_conValuesAssenteLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{}}]}}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
+    }
+
+    @Test
+    void queryRange_conCoppiaTroncataLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[[1000]]}]}}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
+    }
+
+    /**
+     * {@code JsonNode.asLong()} su un nodo non numerico/mancante ritorna
+     * silenziosamente 0 (epoch 1970) invece di fallire: senza un controllo
+     * esplicito il punto finirebbe sotto una chiave che nessuna istante
+     * attesa interroga, sparendo dalla serie invece di far fallire la
+     * risposta — vedi Javadoc di {@link PrometheusQueryClient#queryRange}.
+     */
+    @Test
+    void queryRange_conTimestampNonNumericoLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[["non-un-timestamp","5.0"]]}]}}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
+    }
+
+    @Test
+    void queryRange_conTimestampAssenteLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[[null,"5.0"]]}]}}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
+    }
+
+    @Test
+    void queryRange_conValoreNonNumericoLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"success","data":{"resultType":"matrix","result":[
+                        {"metric":{},"values":[[1000,"non-un-numero"]]}]}}""", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
+    }
+
+    @Test
+    void queryRange_conStatusErrorLanciaEccezione() {
+        server.expect(requestTo(startsWith("http://fake-prometheus/api/v1/query_range")))
+                .andRespond(withSuccess("""
+                        {"status":"error","errorType":"bad_data","error":"parse error"}""",
+                        MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.queryRange(PROMQL, Instant.ofEpochSecond(1000), Instant.ofEpochSecond(1600), 600))
+                .isInstanceOf(PrometheusNonRaggiungibileException.class);
     }
 
     /**

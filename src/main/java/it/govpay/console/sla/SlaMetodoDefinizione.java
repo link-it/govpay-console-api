@@ -32,4 +32,13 @@ public enum SlaMetodoDefinizione {
     public String metodo() {
         return metodo;
     }
+
+    public static SlaMetodoDefinizione porCodice(SlaKpiCodice codice) {
+        for (SlaMetodoDefinizione def : values()) {
+            if (def.codice == codice) {
+                return def;
+            }
+        }
+        throw new IllegalArgumentException("Codice SLA sconosciuto: " + codice);
+    }
 }

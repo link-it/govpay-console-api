@@ -2,6 +2,8 @@ package it.govpay.console.sla;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -86,7 +88,96 @@ public class PrometheusQueryClient {
         return parse(body);
     }
 
+    /**
+     * Esegue una range query ({@code /api/v1/query_range}): un punto ogni
+     * {@code stepSeconds} da {@code start} a {@code end} inclusi. A differenza
+     * di {@link #query}, {@code promql} qui e' tipicamente un
+     * {@code increase(...[<stepSeconds>s])} cosi' che ogni punto rappresenti
+     * l'incremento del proprio bucket, non una lettura istantanea.
+     *
+     * @return mappa timestamp→valore, un'entry per ogni punto per cui
+     *         Prometheus ha effettivamente calcolato un valore (niente
+     *         entry, non zero, per un bucket senza campioni sufficienti —
+     *         es. prima che la serie esistesse: sta al chiamante decidere se
+     *         trattarlo come zero) o {@code NaN} (division by zero lato
+     *         PromQL); vuota se la serie risultato e' vuota (nessun dato in
+     *         tutto il periodo). Ordine di inserimento cronologico.
+     * @throws PrometheusNonRaggiungibileException stessa semantica di
+     *         {@link #query}.
+     */
+    public Map<Instant, Double> queryRange(String promql, Instant start, Instant end, long stepSeconds) {
+        URI uri = UriComponentsBuilder.fromUriString(baseUrl + "/api/v1/query_range")
+                .queryParam("query", promql)
+                .queryParam("start", start.getEpochSecond())
+                .queryParam("end", end.getEpochSecond())
+                .queryParam("step", stepSeconds)
+                .build()
+                .encode()
+                .toUri();
+        String body;
+        try {
+            body = rawClient.query(uri);
+        } catch (CallNotPermittedException e) {
+            log.warn("Circuit breaker aperto su Prometheus: {}", e.getMessage());
+            throw new PrometheusNonRaggiungibileException(
+                    "Prometheus momentaneamente non disponibile (circuit open).", e);
+        } catch (RestClientException e) {
+            log.warn("Chiamata a Prometheus fallita: {}", e.getMessage());
+            throw new PrometheusNonRaggiungibileException("Chiamata a Prometheus fallita.", e);
+        }
+        return parseMatrix(body);
+    }
+
     private Optional<Double> parse(String body) {
+        JsonNode result = validaEEstraiResult(body);
+        if (result.isEmpty()) {
+            return Optional.empty();
+        }
+
+        JsonNode value = result.get(0).path("value");
+        if (!value.isArray() || value.size() < 2 || !value.get(1).isString()) {
+            throw new PrometheusNonRaggiungibileException(
+                    "Risposta Prometheus con formato 'value' inatteso.", null);
+        }
+        double parsed = parseValoreNumerico(value.get(1).asString());
+        return Double.isNaN(parsed) ? Optional.empty() : Optional.of(parsed);
+    }
+
+    private Map<Instant, Double> parseMatrix(String body) {
+        JsonNode result = validaEEstraiResult(body);
+        if (result.isEmpty()) {
+            return Map.of();
+        }
+
+        JsonNode values = result.get(0).path("values");
+        if (!values.isArray()) {
+            throw new PrometheusNonRaggiungibileException(
+                    "Risposta Prometheus priva del campo atteso 'values' (array) nel primo risultato.", null);
+        }
+        Map<Instant, Double> punti = new LinkedHashMap<>();
+        for (JsonNode coppia : values) {
+            // isNumber() sul timestamp e' necessario, non solo difensivo: JsonNode.asLong()
+            // su un nodo non numerico/mancante ritorna silenziosamente 0 (epoch 1970) invece
+            // di segnalare l'anomalia - il punto finirebbe sotto una chiave che nessuna
+            // istante attesa interroga, sparendo dalla serie invece di far fallire la risposta.
+            if (!coppia.isArray() || coppia.size() < 2 || !coppia.get(0).isNumber() || !coppia.get(1).isString()) {
+                throw new PrometheusNonRaggiungibileException(
+                        "Risposta Prometheus con formato 'values' inatteso.", null);
+            }
+            double parsed = parseValoreNumerico(coppia.get(1).asString());
+            if (!Double.isNaN(parsed)) {
+                punti.put(Instant.ofEpochSecond(coppia.get(0).asLong()), parsed);
+            }
+        }
+        return punti;
+    }
+
+    /**
+     * Valida struttura/status comuni a instant e range query, poi ritorna
+     * {@code data.result} (mai null, eventualmente vuoto: "nessun dato" e'
+     * un esito legittimo, distinto da una risposta malformata).
+     */
+    private JsonNode validaEEstraiResult(String body) {
         // Un 200/204 senza contenuto fa tornare null da getForObject: readTree(null)
         // lancerebbe IllegalArgumentException, non una JacksonException, sfuggendo
         // al catch sotto e finendo nel generic handler (500) invece del 502 dichiarato.
@@ -108,29 +199,21 @@ public class PrometheusQueryClient {
 
         // result assente/non-array = risposta malformata, non "nessun dato":
         // "nessun dato" è result presente E vuoto ([]), un caso diverso e
-        // legittimo gestito sotto.
+        // legittimo gestito dal chiamante.
         JsonNode result = root.path("data").path("result");
         if (!result.isArray()) {
             throw new PrometheusNonRaggiungibileException(
                     "Risposta Prometheus priva del campo atteso 'data.result' (array).", null);
         }
-        if (result.isEmpty()) {
-            return Optional.empty();
-        }
+        return result;
+    }
 
-        JsonNode value = result.get(0).path("value");
-        if (!value.isArray() || value.size() < 2 || !value.get(1).isString()) {
-            throw new PrometheusNonRaggiungibileException(
-                    "Risposta Prometheus con formato 'value' inatteso.", null);
-        }
-        String raw = value.get(1).asString();
-        double parsed;
+    private static double parseValoreNumerico(String raw) {
         try {
-            parsed = Double.parseDouble(raw);
+            return Double.parseDouble(raw);
         } catch (NumberFormatException e) {
             throw new PrometheusNonRaggiungibileException(
                     "Risposta Prometheus con valore non numerico: '" + raw + "'.", e);
         }
-        return Double.isNaN(parsed) ? Optional.empty() : Optional.of(parsed);
     }
 }
