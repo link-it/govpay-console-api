@@ -104,7 +104,9 @@ public class ProblemExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Problem> handleBadRequest(BadRequestException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null, ex);
+        List<ProblemErrorsInner> errors = ex.getField() == null ? null
+                : List.of(new ProblemErrorsInner().field(ex.getField()).message(ex.getMessage()));
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, errors, ex);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

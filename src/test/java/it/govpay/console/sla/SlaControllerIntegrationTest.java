@@ -2,6 +2,7 @@ package it.govpay.console.sla;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -131,6 +132,68 @@ class SlaControllerIntegrationTest {
                 .thenThrow(new PrometheusNonRaggiungibileException("boom", null));
 
         mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadGateway())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    private static final String SERIE_STORICA_BASE =
+            "/metriche/sla/TDP?dataDa=2026-07-01&dataA=2026-07-01&granularitaMinuti=360";
+
+    @Test
+    void serieStoricaSenzaAutenticazioneReturns401() throws Exception {
+        mvc.perform(get(SERIE_STORICA_BASE)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void serieStoricaSenzaDirittoReturns403() throws Exception {
+        mvc.perform(get(SERIE_STORICA_BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void serieStoricaGranularitaSottoIlMinimoReturns400ConCampo() throws Exception {
+        grantLettura();
+        mvc.perform(get("/metriche/sla/TDP?dataDa=2026-07-01&dataA=2026-07-01&granularitaMinuti=1")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.errors[0].field", is("granularitaMinuti")));
+    }
+
+    @Test
+    void serieStoricaOltreMaxPuntiReturns400ConCampo() throws Exception {
+        grantLettura();
+        mvc.perform(get("/metriche/sla/TDP?dataDa=2026-07-01&dataA=2026-07-31&granularitaMinuti=5")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.errors[0].field", is("granularitaMinuti")));
+    }
+
+    @Test
+    void serieStoricaConDirittoRestituisceLaSerie() throws Exception {
+        grantLettura();
+        when(prometheusQueryClient.queryRange(anyString(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Map.of());
+
+        mvc.perform(get(SERIE_STORICA_BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/json"))
+                .andExpect(jsonPath("$.codice", is("TDP")))
+                .andExpect(jsonPath("$.metodo", is("paDemandPaymentNotice")))
+                .andExpect(jsonPath("$.granularitaMinuti", is(360)))
+                .andExpect(jsonPath("$.serieStorica.length()", is(4)))
+                .andExpect(jsonPath("$.serieStorica[0].totale", is(0)))
+                .andExpect(jsonPath("$.serieStorica[0].conformitaOsservata", nullValue()));
+    }
+
+    @Test
+    void serieStoricaQuandoPrometheusNonRaggiungibileReturns502() throws Exception {
+        grantLettura();
+        when(prometheusQueryClient.queryRange(anyString(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenThrow(new PrometheusNonRaggiungibileException("boom", null));
+
+        mvc.perform(get(SERIE_STORICA_BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isBadGateway())
                 .andExpect(content().contentType("application/problem+json"));
     }

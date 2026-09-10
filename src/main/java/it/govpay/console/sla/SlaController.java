@@ -7,7 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import it.govpay.console.api.MetricheApi;
 import it.govpay.console.model.AclServizio;
+import it.govpay.console.model.SlaKpiCodice;
 import it.govpay.console.model.SlaResponse;
+import it.govpay.console.model.SlaSerieStoricaResponse;
 import it.govpay.console.security.AclAuthorizer;
 
 @RestController
@@ -25,5 +27,12 @@ public class SlaController implements MetricheApi {
     public ResponseEntity<SlaResponse> getMetricheSla(LocalDate dataDa, LocalDate dataA) {
         aclAuthorizer.requireLettura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         return ResponseEntity.ok(slaService.calcola(dataDa, dataA));
+    }
+
+    @Override
+    public ResponseEntity<SlaSerieStoricaResponse> getMetricheSlaSerieStorica(SlaKpiCodice codice, LocalDate dataDa,
+                                                                               LocalDate dataA, Integer granularitaMinuti) {
+        aclAuthorizer.requireLettura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
+        return ResponseEntity.ok(slaService.calcolaSerieStorica(codice, dataDa, dataA, granularitaMinuti));
     }
 }
