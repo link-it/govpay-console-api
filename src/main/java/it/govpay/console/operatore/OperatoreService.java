@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
+import it.govpay.console.common.PreferenzeCodec;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.intermediario.JsonPatchApplier;
@@ -198,6 +199,7 @@ public class OperatoreService {
         Operatore op = new Operatore();
         op.setNome(nome);
         op.setIdUtenza(savedUtenza.getId());
+        op.setPreferenze(PreferenzeCodec.serialize(body.getPreferenze(), objectMapper));
         Operatore savedOp = operatoreRepository.save(op);
 
         writer.writeChildren(savedUtenza.getId(), dom, tipi, writer.buildAclEntities(body.getAcl(), savedUtenza.getId()));
@@ -269,6 +271,7 @@ public class OperatoreService {
         utenzaRepository.save(utenza);
 
         op.setNome(nome);
+        op.setPreferenze(PreferenzeCodec.serialize(body.getPreferenze(), objectMapper));
         operatoreRepository.save(op);
 
         writer.deleteChildrenAndFlush(utenza.getId());

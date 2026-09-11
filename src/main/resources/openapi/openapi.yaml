@@ -220,6 +220,58 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+    patch:
+      tags:
+        - Profilo
+      operationId: patchProfilo
+      summary: Modifica le preferenze dell'utenza autenticata corrente (JSON Patch).
+      description: |
+        Applica una sequenza di operazioni JSON Patch (RFC 6902) al `Profilo`
+        dell'utenza autenticata. L'unico campo modificabile e' `/preferenze`:
+        qualunque altro `path` (o, per `move`/`copy`, `from`) viene rifiutato
+        con 403. Nessuna ACL da verificare: l'autenticazione stessa autorizza
+        l'operatore a modificare le proprie preferenze.
+
+        Nessun `If-Match`: a differenza di `/operatori/{principal}`, `GET
+        /profilo` non espone un ETag (solo `Cache-Control: private,
+        max-age=60`) — le scritture sono quindi last-write-wins.
+
+        Restituisce la rappresentazione aggiornata nel body, perche' il
+        `GET /profilo` e' cacheabile lato client fino a 60s e non garantisce
+        di rileggere la propria scrittura.
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: '#/components/schemas/JsonPatch'
+      responses:
+        '200':
+          description: Profilo aggiornato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profilo'
+        '400':
+          $ref: '#/components/responses/Problem400'
+        '401':
+          $ref: '#/components/responses/Problem401'
+        '403':
+          description: |
+            Il documento JSON Patch tocca un campo diverso da `/preferenze`
+            (in `path` o, per `move`/`copy`, in `from`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            L'utenza autenticata non e' associata a un operatore: non esiste
+            un posto dove salvare le preferenze.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /auth/login:
     post:
@@ -8865,6 +8917,7 @@ components:
         - principal
         - nome
         - abilitato
+        - preferenze
       properties:
         principal:
           type: string
@@ -8890,6 +8943,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Acl'
+        preferenze:
+          type: object
+          additionalProperties: true
+          description: |
+            Preferenze utente libere (es. impostazioni UI), non interpretate dal
+            server. Sempre presente: oggetto vuoto se non ancora valorizzato.
 
     OperatoreCreate:
       type: object
@@ -8928,10 +8987,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Acl'
+        preferenze:
+          type: object
+          additionalProperties: true
+          description: 'Preferenze utente libere. Se omesso, l''operatore viene creato senza preferenze.'
 
     OperatoreReplace:
       type: object
-      description: Body per la sostituzione completa di un operatore (`principal` dal path).
+      description: |
+        Body per la sostituzione completa di un operatore (`principal` dal path).
+        Come ogni PUT, i campi omessi vengono azzerati: `preferenze` non fa
+        eccezione (per una modifica parziale usare `PATCH`).
       required:
         - nome
         - abilitato
@@ -8958,6 +9024,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Acl'
+        preferenze:
+          type: object
+          additionalProperties: true
+          description: 'Preferenze utente libere. Se omesso, viene azzerato (semantica PUT).'
 
     Profilo:
       type: object
@@ -9004,6 +9074,14 @@ components:
           description: ACL appiattite dell'utenza (servizio + autorizzazioni R/W).
           items:
             $ref: '#/components/schemas/Acl'
+        preferenze:
+          type: object
+          additionalProperties: true
+          description: |
+            Preferenze utente libere, modificabili con `PATCH /profilo`. Assente
+            se l'utenza autenticata non e' associata a un operatore (es. utenze
+            di tipo diverso da OPERATORE); quando presente e' sempre valorizzato
+            (oggetto vuoto se non ancora impostato).
 
     RichiestaLogin:
       type: object

@@ -222,6 +222,14 @@ class OperatoreControllerIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** {@code preferenze} e' sempre presente, {} se mai valorizzato (issue #80). */
+    @Test
+    void getReturnsEmptyPreferenzeByDefault() throws Exception {
+        mvc.perform(get("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze", is(java.util.Map.of())));
+    }
+
     // --- Create ---
 
     @Test
@@ -305,6 +313,18 @@ class OperatoreControllerIntegrationTest {
     }
 
     @Test
+    void createWithPreferenzeRoundTrips() throws Exception {
+        String body = """
+                {"principal":"op-pref","nome":"Pref","abilitato":true,
+                 "preferenze":{"tema":"scuro","paginaIniziale":"pendenze"}}""";
+        mvc.perform(post("/operatori").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.preferenze.tema", is("scuro")))
+                .andExpect(jsonPath("$.preferenze.paginaIniziale", is("pendenze")));
+    }
+
+    @Test
     void createWritesAudit() throws Exception {
         long before = countAudit("OPERATORE_CREATE");
         String body = """
@@ -332,6 +352,40 @@ class OperatoreControllerIntegrationTest {
                 .andExpect(jsonPath("$.domini[0].idDominio", is("12345678901")))
                 .andReturn().getResponse().getHeader("ETag");
         org.assertj.core.api.Assertions.assertThat(newEtag).isNotEqualTo(etag);
+    }
+
+    @Test
+    void replaceSetsPreferenze() throws Exception {
+        String etag = currentEtag("op-alfa");
+        String body = """
+                {"nome":"Alfa","abilitato":true,"preferenze":{"tema":"scuro"}}""";
+        mvc.perform(put("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze.tema", is("scuro")));
+    }
+
+    /** Semantica PUT standard: un campo omesso viene azzerato, `preferenze` non fa eccezione. */
+    @Test
+    void replaceWithoutPreferenzeZeroesIt() throws Exception {
+        String etag = currentEtag("op-alfa");
+        String withPref = """
+                {"nome":"Alfa","abilitato":true,"preferenze":{"tema":"scuro"}}""";
+        etag = mvc.perform(put("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(MediaType.APPLICATION_JSON).content(withPref))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze.tema", is("scuro")))
+                .andReturn().getResponse().getHeader("ETag");
+
+        String withoutPref = """
+                {"nome":"Alfa","abilitato":true}""";
+        mvc.perform(put("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(MediaType.APPLICATION_JSON).content(withoutPref))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze", is(java.util.Map.of())));
     }
 
     @Test
@@ -404,6 +458,44 @@ class OperatoreControllerIntegrationTest {
                         .contentType(JSON_PATCH).content(patch))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail", containsString("principal")));
+    }
+
+    /**
+     * Prima scrittura mai avvenuta su {@code preferenze}: la normalizzazione
+     * NULL->{} nel mapper garantisce che il campo sia gia' presente nella
+     * rappresentazione corrente, quindi la guardia di {@code JsonPatchApplier}
+     * su 'replace' su campo inesistente non scatta.
+     */
+    @Test
+    void patchReplacePreferenzeOnFirstWriteSucceeds() throws Exception {
+        String etag = currentEtag("op-alfa");
+        String patch = """
+                [{"op":"replace","path":"/preferenze","value":{"tema":"scuro"}}]""";
+        mvc.perform(patch("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(patch))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze.tema", is("scuro")));
+    }
+
+    @Test
+    void patchRemovePreferenzeZeroesIt() throws Exception {
+        String etag = currentEtag("op-alfa");
+        String setPatch = """
+                [{"op":"replace","path":"/preferenze","value":{"tema":"scuro"}}]""";
+        etag = mvc.perform(patch("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(setPatch))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getHeader("ETag");
+
+        String removePatch = """
+                [{"op":"remove","path":"/preferenze"}]""";
+        mvc.perform(patch("/operatori/op-alfa").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(removePatch))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferenze", is(java.util.Map.of())));
     }
 
     @Test
