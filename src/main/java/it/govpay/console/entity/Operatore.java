@@ -29,6 +29,9 @@ public class Operatore {
     @Column(name = "id_utenza", nullable = false)
     private Long idUtenza;
 
+    @Column(name = "preferenze")
+    private String preferenze;
+
     // Relazione read-only verso la utenza (la colonna id_utenza resta gestita
     // dal campo idUtenza scrivibile): serve per filtrare/ordinare gli operatori
     // per principal/abilitato senza rompere il codice esistente che valorizza
@@ -64,5 +67,13 @@ public class Operatore {
 
     public void setIdUtenza(Long idUtenza) {
         this.idUtenza = idUtenza;
+    }
+
+    public String getPreferenze() {
+        return preferenze;
+    }
+
+    public void setPreferenze(String preferenze) {
+        this.preferenze = preferenze;
     }
 }

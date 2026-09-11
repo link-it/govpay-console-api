@@ -11,9 +11,11 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.connettore.ConnettoreStore;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.JppaConfig;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ConnettoreCredenziali;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.JppaConfigRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.IfMatchMismatchException;
@@ -45,6 +47,7 @@ public class ConnettoreDominioService {
     private final ObjectMapper objectMapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
+    private final AclAuthorizer aclAuthorizer;
 
     public ConnettoreDominioService(DominioRepository dominioRepository,
                                     JppaConfigRepository jppaConfigRepository,
@@ -52,7 +55,8 @@ public class ConnettoreDominioService {
                                     ConnettoreDominioMapper mapper,
                                     ObjectMapper objectMapper,
                                     CurrentOperatorService currentOperatorService,
-                                    AuditService auditService) {
+                                    AuditService auditService,
+                                    AclAuthorizer aclAuthorizer) {
         this.dominioRepository = dominioRepository;
         this.jppaConfigRepository = jppaConfigRepository;
         this.store = store;
@@ -60,10 +64,12 @@ public class ConnettoreDominioService {
         this.objectMapper = objectMapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public <T> ResponseEntity<T> get(String idDominio, ConnettoreDominioCanale canale, Class<T> dtoClass) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = loadDominio(idDominio);
         T dto = toDto(dominio, canale, dtoClass);
         return ResponseEntity.ok()
@@ -75,6 +81,7 @@ public class ConnettoreDominioService {
     public <T> ResponseEntity<T> replace(String idDominio, ConnettoreDominioCanale canale,
                                          T dto, String ifMatch, Class<T> dtoClass,
                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = loadDominio(idDominio);
         checkIfMatch(ifMatch, toDto(dominio, canale, dtoClass));
 
@@ -97,6 +104,7 @@ public class ConnettoreDominioService {
     @Transactional
     public ResponseEntity<Void> putCredenziali(String idDominio, ConnettoreDominioCanale canale,
                                                ConnettoreCredenziali credenziali, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = loadDominio(idDominio);
         String cod = ensureCodConnettore(dominio, canale);
 

@@ -25,11 +25,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -64,6 +66,8 @@ class EntrataControllerIntegrationTest {
     private TributoRepository tributoRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     @BeforeEach
     void setup() {
@@ -81,6 +85,7 @@ class EntrataControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         newEntrata("IMU", "Imposta municipale", "2", "3321");
         newEntrata("TARI", "Tassa rifiuti", "0", "1234");
@@ -203,6 +208,7 @@ class EntrataControllerIntegrationTest {
         op.setNome("Operatore Ristretto");
         op.setIdUtenza(ristretta.getId());
         operatoreRepository.save(op);
+        grantLettura(principaleRistretto);
 
         mvc.perform(get("/entrate").param("nonAssociati", "12345678902")
                         .with(httpBasic(principaleRistretto, PASSWORD)))
@@ -407,5 +413,100 @@ class EntrataControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void grantLettura(String principal) {
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Creditore");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    private void newUtenzaSenzaDiritto(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
+
+        Operatore op = new Operatore();
+        op.setNome("Senza Diritto");
+        op.setIdUtenza(u.getId());
+        operatoreRepository.save(op);
+    }
+
+    @Test
+    void listSenzaDirittoLetturaReturns403() throws Exception {
+        String principal = "senza-diritto-lettura";
+        newUtenzaSenzaDiritto(principal);
+
+        mvc.perform(get("/entrate").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void createSenzaDirittoScritturaReturns403() throws Exception {
+        String principal = "senza-diritto-scrittura";
+        newUtenzaSenzaDiritto(principal);
+        String body = """
+                {"idEntrata":"COSAP","descrizione":"Canone","tipoContabilita":"CAPITOLO","codiceContabilita":"5000"}""";
+
+        mvc.perform(post("/entrate").with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritto(principal);
+        grant(principal, "R");
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: la list deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        String principal = "solo-lettura";
+        newUtenzaConSoloLettura(principal);
+
+        mvc.perform(get("/entrate").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"idEntrata":"COSAP","descrizione":"Canone","tipoContabilita":"CAPITOLO","codiceContabilita":"5000"}""";
+        mvc.perform(post("/entrate").with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        String principal = "senza-diritto-404";
+        newUtenzaSenzaDiritto(principal);
+
+        mvc.perform(get("/entrate/NOPE-INESISTENTE").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 }

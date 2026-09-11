@@ -118,6 +118,7 @@ public class ApplicazioneService {
 
     @Transactional(readOnly = true)
     public ListApplicazioni200Response list(ApplicazioneListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         log.debug("listApplicazioni filtri[idA2A={}, principal={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 query.idA2A(), query.principal(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
@@ -164,12 +165,14 @@ public class ApplicazioneService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Applicazione> get(String idA2A) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         return ok(load(idA2A));
     }
 
     @Transactional
     public ResponseEntity<it.govpay.console.model.Applicazione> create(ApplicazioneCreate body,
                                                                        HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         String idA2A = body.getIdA2A();
         if (applicazioneRepository.existsByCodApplicazione(idA2A)) {
             throw new ConflictException("Esiste gia' un'applicazione con idA2A '" + idA2A + "'.");
@@ -223,6 +226,7 @@ public class ApplicazioneService {
                                                                         ApplicazioneReplace body,
                                                                         String ifMatch,
                                                                         HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         Applicazione app = load(idA2A);
         checkIfMatch(ifMatch, app);
         return doReplace(app, body, request);
@@ -233,6 +237,7 @@ public class ApplicazioneService {
                                                                       List<JsonPatchOperation> operations,
                                                                       String ifMatch,
                                                                       HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         Applicazione app = load(idA2A);
         checkIfMatch(ifMatch, app);
 

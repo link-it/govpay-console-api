@@ -25,10 +25,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
@@ -66,6 +68,8 @@ class ContoAccreditoControllerIntegrationTest {
     private IbanAccreditoRepository ibanRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     private Dominio dominio;
 
@@ -85,6 +89,7 @@ class ContoAccreditoControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         dominio = saveDominio(ID_DOMINIO, "Comune Alfa");
         saveDominio(ID_DOMINIO_2, "Comune Beta");
@@ -203,9 +208,27 @@ class ContoAccreditoControllerIntegrationTest {
         op.setNome("Operatore Ristretto");
         op.setIdUtenza(ristretta.getId());
         operatoreRepository.save(op);
+        grantLettura(principaleRistretto);
 
         mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(principaleRistretto, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void grantLettura(String principal) {
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Creditore");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
     }
 
     // --- Get detail ---
@@ -431,5 +454,101 @@ class ContoAccreditoControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    private static final String PRINCIPAL_SENZA_DIRITTO = "operatoreSenzaDiritto";
+
+    @Test
+    void listSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        creaOperatoreSenzaDiritto();
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(PRINCIPAL_SENZA_DIRITTO, PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Creditore")));
+    }
+
+    @Test
+    void createSenzaDirittoAnagraficaCreditoreReturns403() throws Exception {
+        creaOperatoreSenzaDiritto();
+        String body = """
+                {"ibanAccredito":"IT60X0542811101000000000099","descrizione":"Nuovo","abilitato":true,"postale":false}""";
+
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/contiAccredito")
+                        .with(httpBasic(PRINCIPAL_SENZA_DIRITTO, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Creditore")));
+    }
+
+    private void creaOperatoreSenzaDiritto() {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal(PRINCIPAL_SENZA_DIRITTO);
+        utenza.setPrincipalOriginale(PRINCIPAL_SENZA_DIRITTO);
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Senza Diritto");
+        op.setIdUtenza(utenza.getId());
+        operatoreRepository.save(op);
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso PRINCIPAL ha sempre RW. Qui l'operatore ha SOLO R: la list deve
+     * riuscire, la create no.
+     */
+    private static final String PRINCIPAL_SOLO_LETTURA = "operatoreSoloLettura";
+
+    @Test
+    void soloDirittoDiLetturaConsenteListENonCreate() throws Exception {
+        creaOperatoreSoloLettura();
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(PRINCIPAL_SOLO_LETTURA, PASSWORD)))
+                .andExpect(status().isOk());
+
+        String body = """
+                {"ibanAccredito":"IT60X0542811101000000000099","postale":false,"abilitato":true}""";
+        mvc.perform(post("/domini/" + ID_DOMINIO + "/contiAccredito").with(httpBasic(PRINCIPAL_SOLO_LETTURA, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Creditore")));
+    }
+
+    /** Il 403 deve precedere il 404: un id inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        creaOperatoreSenzaDiritto();
+
+        mvc.perform(get("/domini/99999999999/contiAccredito").with(httpBasic(PRINCIPAL_SENZA_DIRITTO, PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica Creditore")));
+    }
+
+    private void creaOperatoreSoloLettura() {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal(PRINCIPAL_SOLO_LETTURA);
+        utenza.setPrincipalOriginale(PRINCIPAL_SOLO_LETTURA);
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli("OPERATORE");
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(utenza);
+
+        Operatore op = new Operatore();
+        op.setNome("Operatore Solo Lettura");
+        op.setIdUtenza(utenza.getId());
+        operatoreRepository.save(op);
+        grantLettura(PRINCIPAL_SOLO_LETTURA);
     }
 }

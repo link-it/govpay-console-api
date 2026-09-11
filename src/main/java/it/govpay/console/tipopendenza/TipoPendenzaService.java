@@ -23,6 +23,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListTipiPendenza200Response;
 import it.govpay.console.model.Pagination;
@@ -31,6 +32,7 @@ import it.govpay.console.model.TipoPendenzaCreate;
 import it.govpay.console.model.TipoPendenzaReplace;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -72,6 +74,7 @@ public class TipoPendenzaService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -82,7 +85,8 @@ public class TipoPendenzaService {
                                RepresentationValidator representationValidator,
                                CurrentOperatorService currentOperatorService,
                                AuditService auditService,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.mapper = mapper;
@@ -90,10 +94,12 @@ public class TipoPendenzaService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListTipiPendenza200Response list(TipoPendenzaListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         log.debug("listTipiPendenza filtri[idTipoPendenza={}, descrizione={}, abilitato={}, form={}, "
                         + "trasformazione={}, nonAssociati={}], page={}, limit={}, sort={}, total={}",
                 query.idTipoPendenza(), query.descrizione(), query.abilitato(),
@@ -151,11 +157,13 @@ public class TipoPendenzaService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<TipoPendenza> get(String idTipoPendenza) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         return ok(load(idTipoPendenza));
     }
 
     @Transactional
     public ResponseEntity<TipoPendenza> create(TipoPendenzaCreate body, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         if (repository.existsByCodTipoVersamento(body.getIdTipoPendenza())) {
             throw new ConflictException(
                     "Esiste gia' una tipologia di pendenza con idTipoPendenza '"
@@ -185,6 +193,7 @@ public class TipoPendenzaService {
     @Transactional
     public ResponseEntity<TipoPendenza> replace(String idTipoPendenza, TipoPendenzaReplace body,
                                                 String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoVersamento entity = load(idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 
@@ -202,6 +211,7 @@ public class TipoPendenzaService {
     @Transactional
     public ResponseEntity<TipoPendenza> patch(String idTipoPendenza, List<JsonPatchOperation> operations,
                                               String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         TipoVersamento entity = load(idTipoPendenza);
         checkIfMatch(ifMatch, entity);
 

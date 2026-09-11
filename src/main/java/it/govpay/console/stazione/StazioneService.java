@@ -23,6 +23,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListStazioni200Response;
 import it.govpay.console.model.Pagination;
@@ -33,6 +34,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.StazioneRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -72,6 +74,7 @@ public class StazioneService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -82,7 +85,8 @@ public class StazioneService {
                            StazioneMapper mapper,
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.intermediarioRepository = intermediarioRepository;
         this.dominioRepository = dominioRepository;
@@ -90,10 +94,12 @@ public class StazioneService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListStazioni200Response list(String idIntermediario, StazioneListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario parent = loadIntermediario(idIntermediario);
         log.debug("listStazioni intermediario={} filtri[codStazione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 idIntermediario, query.codStazione(), query.abilitato(),
@@ -141,6 +147,7 @@ public class StazioneService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Stazione> get(String idIntermediario, String idStazione) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         Stazione entity = load(idIntermediario, idStazione);
         return ok(entity);
     }
@@ -149,6 +156,7 @@ public class StazioneService {
     public ResponseEntity<it.govpay.console.model.Stazione> create(String idIntermediario,
                                                                    StazioneCreate body,
                                                                    HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario parent = loadIntermediario(idIntermediario);
         int applicationCode = StazioneIdFormat.applicationCode(body.getIdStazione(), idIntermediario);
         if (repository.existsByCodStazione(body.getIdStazione())) {
@@ -182,6 +190,7 @@ public class StazioneService {
                                                                     StazioneReplace body,
                                                                     String ifMatch,
                                                                     HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Stazione entity = load(idIntermediario, idStazione);
         checkIfMatch(ifMatch, entity);
 
@@ -199,6 +208,7 @@ public class StazioneService {
                                                                   List<JsonPatchOperation> operations,
                                                                   String ifMatch,
                                                                   HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_PAGO_PA);
         Stazione entity = load(idIntermediario, idStazione);
         checkIfMatch(ifMatch, entity);
 

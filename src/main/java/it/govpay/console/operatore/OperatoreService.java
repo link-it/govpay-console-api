@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
+import it.govpay.console.common.PreferenzeCodec;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.intermediario.JsonPatchApplier;
@@ -119,6 +120,7 @@ public class OperatoreService {
 
     @Transactional(readOnly = true)
     public ListOperatori200Response list(OperatoreListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         log.debug("listOperatori filtri[principal={}, nome={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 query.principal(), query.nome(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
@@ -165,12 +167,14 @@ public class OperatoreService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Operatore> get(String principal) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         return ok(load(principal));
     }
 
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> create(OperatoreCreate body,
                                                                     HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         String principal = validatePrincipal(body.getPrincipal());
         String nome = validateNome(body.getNome());
         if (utenzaRepository.existsByPrincipalOriginale(principal)) {
@@ -195,6 +199,7 @@ public class OperatoreService {
         Operatore op = new Operatore();
         op.setNome(nome);
         op.setIdUtenza(savedUtenza.getId());
+        op.setPreferenze(PreferenzeCodec.serialize(body.getPreferenze(), objectMapper));
         Operatore savedOp = operatoreRepository.save(op);
 
         writer.writeChildren(savedUtenza.getId(), dom, tipi, writer.buildAclEntities(body.getAcl(), savedUtenza.getId()));
@@ -214,6 +219,7 @@ public class OperatoreService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> replace(String principal, OperatoreReplace body,
                                                                      String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         Operatore op = load(principal);
         checkIfMatch(ifMatch, op);
         return doReplace(op, body, request);
@@ -222,6 +228,7 @@ public class OperatoreService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Operatore> patch(String principal, List<JsonPatchOperation> operations,
                                                                    String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         Operatore op = load(principal);
         checkIfMatch(ifMatch, op);
 
@@ -264,6 +271,7 @@ public class OperatoreService {
         utenzaRepository.save(utenza);
 
         op.setNome(nome);
+        op.setPreferenze(PreferenzeCodec.serialize(body.getPreferenze(), objectMapper));
         operatoreRepository.save(op);
 
         writer.deleteChildrenAndFlush(utenza.getId());

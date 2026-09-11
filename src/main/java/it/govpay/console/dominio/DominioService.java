@@ -24,6 +24,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.DominioCreate;
 import it.govpay.console.model.DominioReplace;
 import it.govpay.console.model.JsonPatchOperation;
@@ -32,6 +33,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioRaggiungibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -78,6 +80,7 @@ public class DominioService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -90,7 +93,8 @@ public class DominioService {
                           RepresentationValidator representationValidator,
                           CurrentOperatorService currentOperatorService,
                           AuditService auditService,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.uoRepository = uoRepository;
         this.stazioneRepository = stazioneRepository;
@@ -100,10 +104,12 @@ public class DominioService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListDomini200Response list(DominioListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         log.debug("listDomini filtri[idDominio={}, ragioneSociale={}, abilitato={}, idStazione={}, intermediato={}], "
                         + "page={}, limit={}, sort={}, total={}",
                 query.idDominio(), query.ragioneSociale(), query.abilitato(),
@@ -156,6 +162,7 @@ public class DominioService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Dominio> get(String idDominio) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio entity = load(idDominio);
         return ok(entity, loadEc(entity));
     }
@@ -163,6 +170,7 @@ public class DominioService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Dominio> create(DominioCreate body,
                                                                   HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         if (repository.existsByCodDominio(body.getIdDominio())) {
             throw new ConflictException("Esiste gia' un dominio con idDominio '" + body.getIdDominio() + "'.");
         }
@@ -203,6 +211,7 @@ public class DominioService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Dominio> replace(String idDominio, DominioReplace body,
                                                                    String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio entity = load(idDominio);
         UnitaOperativa ec = loadOrCreateEc(entity);
         checkIfMatch(ifMatch, entity, ec);
@@ -230,6 +239,7 @@ public class DominioService {
     public ResponseEntity<it.govpay.console.model.Dominio> patch(String idDominio,
                                                                  List<JsonPatchOperation> operations,
                                                                  String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio entity = load(idDominio);
         UnitaOperativa ec = loadOrCreateEc(entity);
         checkIfMatch(ifMatch, entity, ec);

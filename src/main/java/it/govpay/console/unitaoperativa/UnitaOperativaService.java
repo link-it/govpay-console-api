@@ -23,6 +23,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListUnitaOperative200Response;
 import it.govpay.console.model.Pagination;
@@ -30,6 +31,7 @@ import it.govpay.console.model.UnitaOperativaCreate;
 import it.govpay.console.model.UnitaOperativaReplace;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioRaggiungibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -73,6 +75,7 @@ public class UnitaOperativaService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -83,7 +86,8 @@ public class UnitaOperativaService {
                                  RepresentationValidator representationValidator,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.mapper = mapper;
@@ -91,10 +95,12 @@ public class UnitaOperativaService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListUnitaOperative200Response list(String idDominio, UnitaOperativaListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("listUnitaOperative dominio={} filtri[ragioneSociale={}, abilitato={}], page={}, limit={}, sort={}, total={}",
@@ -145,6 +151,7 @@ public class UnitaOperativaService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.UnitaOperativa> get(String idDominio, String idUnitaOperativa) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         UnitaOperativa entity = load(idDominio, idUnitaOperativa);
         return ok(entity);
     }
@@ -153,6 +160,7 @@ public class UnitaOperativaService {
     public ResponseEntity<it.govpay.console.model.UnitaOperativa> create(String idDominio,
                                                                          UnitaOperativaCreate body,
                                                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         if (COD_UO_EC.equals(body.getIdUnitaOperativa())) {
             throw new UnprocessableEntityException(
@@ -192,6 +200,7 @@ public class UnitaOperativaService {
                                                                           UnitaOperativaReplace body,
                                                                           String ifMatch,
                                                                           HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         UnitaOperativa entity = load(idDominio, idUnitaOperativa);
         checkIfMatch(ifMatch, entity);
 
@@ -212,6 +221,7 @@ public class UnitaOperativaService {
                                                                         List<JsonPatchOperation> operations,
                                                                         String ifMatch,
                                                                         HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         UnitaOperativa entity = load(idDominio, idUnitaOperativa);
         checkIfMatch(ifMatch, entity);
 

@@ -10,9 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.connettore.ConnettoreStore;
 import it.govpay.console.entity.Applicazione;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ConnettoreCredenziali;
 import it.govpay.console.model.ConnettoreIntegrazioneApplicazione;
 import it.govpay.console.repository.ApplicazioneRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.model.ConnettoreIntegrazioneApplicazione.TipoAutenticazioneEnum;
@@ -43,23 +45,27 @@ public class ConnettoreIntegrazioneService {
     private final ObjectMapper objectMapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
+    private final AclAuthorizer aclAuthorizer;
 
     public ConnettoreIntegrazioneService(ApplicazioneRepository applicazioneRepository,
                                          ConnettoreStore store,
                                          ConnettoreIntegrazioneMapper mapper,
                                          ObjectMapper objectMapper,
                                          CurrentOperatorService currentOperatorService,
-                                         AuditService auditService) {
+                                         AuditService auditService,
+                                         AclAuthorizer aclAuthorizer) {
         this.applicazioneRepository = applicazioneRepository;
         this.store = store;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ResponseEntity<ConnettoreIntegrazioneApplicazione> get(String idA2A) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         Applicazione app = load(idA2A);
         ConnettoreIntegrazioneApplicazione dto = mapper.toDto(readConfig(app.getCodConnettoreIntegrazione()));
         return ResponseEntity.ok()
@@ -72,6 +78,7 @@ public class ConnettoreIntegrazioneService {
                                                                       ConnettoreIntegrazioneApplicazione body,
                                                                       String ifMatch,
                                                                       HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         Applicazione app = load(idA2A);
         checkIfMatch(ifMatch, mapper.toDto(readConfig(app.getCodConnettoreIntegrazione())));
         validate(body);
@@ -90,6 +97,7 @@ public class ConnettoreIntegrazioneService {
     @Transactional
     public ResponseEntity<Void> putCredenziali(String idA2A, ConnettoreCredenziali credenziali,
                                                HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_APPLICAZIONI);
         Applicazione app = load(idA2A);
         String cod = ensureCodConnettore(app);
         store.upsert(cod, mapper.toCredenzialiMap(credenziali), ConnettoreIntegrazioneMapper.CREDENTIAL_KEYS);

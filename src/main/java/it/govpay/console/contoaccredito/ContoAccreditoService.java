@@ -23,6 +23,7 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ContoAccreditoCreate;
 import it.govpay.console.model.ContoAccreditoReplace;
 import it.govpay.console.model.JsonPatchOperation;
@@ -30,6 +31,7 @@ import it.govpay.console.model.ListContiAccredito200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -69,6 +71,7 @@ public class ContoAccreditoService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -79,7 +82,8 @@ public class ContoAccreditoService {
                                  RepresentationValidator representationValidator,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.mapper = mapper;
@@ -87,10 +91,12 @@ public class ContoAccreditoService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListContiAccredito200Response list(String idDominio, ContoAccreditoListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         log.debug("listContiAccredito dominio={} filtri[descrizione={}, abilitato={}, iban={}], page={}, limit={}, sort={}, total={}",
                 idDominio, query.descrizione(), query.abilitato(), query.iban(),
@@ -139,6 +145,7 @@ public class ContoAccreditoService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.ContoAccredito> get(String idDominio, String ibanAccredito) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         IbanAccredito entity = load(idDominio, ibanAccredito);
         return ok(entity);
     }
@@ -147,6 +154,7 @@ public class ContoAccreditoService {
     public ResponseEntity<it.govpay.console.model.ContoAccredito> create(String idDominio,
                                                                          ContoAccreditoCreate body,
                                                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         if (repository.existsByDominio_IdAndCodIban(parent.getId(), body.getIbanAccredito())) {
             throw new ConflictException("Esiste gia' un conto di accredito '" + body.getIbanAccredito()
@@ -180,6 +188,7 @@ public class ContoAccreditoService {
                                                                           ContoAccreditoReplace body,
                                                                           String ifMatch,
                                                                           HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         IbanAccredito entity = load(idDominio, ibanAccredito);
         checkIfMatch(ifMatch, entity);
 
@@ -199,6 +208,7 @@ public class ContoAccreditoService {
                                                                         List<JsonPatchOperation> operations,
                                                                         String ifMatch,
                                                                         HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         IbanAccredito entity = load(idDominio, ibanAccredito);
         checkIfMatch(ifMatch, entity);
 

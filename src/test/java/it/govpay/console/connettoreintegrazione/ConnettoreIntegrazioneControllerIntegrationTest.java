@@ -22,10 +22,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.ConnettoreProprieta;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ApplicazioneRepository;
 import it.govpay.console.repository.ConnettoreProprietaRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -53,6 +55,8 @@ class ConnettoreIntegrazioneControllerIntegrationTest {
     private ApplicazioneRepository applicazioneRepository;
     @Autowired
     private ConnettoreProprietaRepository connettoreProprietaRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     @BeforeEach
     void setup() {
@@ -70,6 +74,7 @@ class ConnettoreIntegrazioneControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(operatore.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         Utenza u = new Utenza();
         u.setPrincipal("p-app1");
@@ -249,5 +254,84 @@ class ConnettoreIntegrazioneControllerIntegrationTest {
         return mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getHeader("ETag");
+    }
+
+    private void grantScrittura(String principal) {
+        Utenza utenza = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(utenza.getId());
+        acl.setServizio("Anagrafica Applicazioni");
+        acl.setDiritti("RW");
+        aclRepository.save(acl);
+    }
+
+    /** Utenza autenticabile ma senza alcuna ACL su "Anagrafica Applicazioni" (test di 403). */
+    private void newUtenzaSenzaDiritti(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritti(principal);
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica Applicazioni");
+        acl.setDiritti("R");
+        aclRepository.save(acl);
+    }
+
+    // --- ACL enforcement (issue #81) ---
+
+    @Test
+    void getWithoutDirittoAnagraficaApplicazioniReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get(BASE).with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Applicazioni")));
+    }
+
+    @Test
+    void putCredenzialiWithoutDirittoAnagraficaApplicazioniReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(put(BASE + "/credenziali").with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"password":"x"}"""))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Anagrafica Applicazioni")));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no.
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        newUtenzaConSoloLettura("solo-lettura");
+
+        mvc.perform(get(BASE).with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+
+        mvc.perform(put(BASE + "/credenziali").with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"password":"x"}"""))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un'applicazione inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto-404");
+        mvc.perform(get("/applicazioni/APP-999/connettore-integrazione").with(httpBasic("senza-diritto-404", PASSWORD)))
+                .andExpect(status().isForbidden());
     }
 }

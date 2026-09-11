@@ -26,6 +26,7 @@ import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.Tributo;
 import it.govpay.console.entrata.EntrataMapper;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.EntrataDominioCreate;
 import it.govpay.console.model.EntrataDominioReplace;
 import it.govpay.console.model.JsonPatchOperation;
@@ -35,6 +36,7 @@ import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.repository.TributoRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -80,6 +82,7 @@ public class EntrataDominioService {
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -93,7 +96,8 @@ public class EntrataDominioService {
                                  RepresentationValidator representationValidator,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.dominioRepository = dominioRepository;
         this.tipoTributoRepository = tipoTributoRepository;
@@ -104,10 +108,12 @@ public class EntrataDominioService {
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListEntrateDominio200Response list(String idDominio, EntrataDominioListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         log.debug("listEntrateDominio dominio={} filtri[idEntrata={}, descrizione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
                 idDominio, query.idEntrata(), query.descrizione(), query.abilitato(),
@@ -156,6 +162,7 @@ public class EntrataDominioService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.EntrataDominio> get(String idDominio, String idEntrata) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Tributo entity = load(idDominio, idEntrata);
         return ok(entity);
     }
@@ -164,6 +171,7 @@ public class EntrataDominioService {
     public ResponseEntity<it.govpay.console.model.EntrataDominio> create(String idDominio,
                                                                          EntrataDominioCreate body,
                                                                          HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio parent = loadDominio(idDominio);
         TipoTributo tipoTributo = tipoTributoRepository.findByCodTributo(body.getIdEntrata())
                 .orElseThrow(() -> new UnprocessableEntityException(
@@ -201,6 +209,7 @@ public class EntrataDominioService {
                                                                           EntrataDominioReplace body,
                                                                           String ifMatch,
                                                                           HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Tributo entity = load(idDominio, idEntrata);
         checkIfMatch(ifMatch, entity);
 
@@ -221,6 +230,7 @@ public class EntrataDominioService {
                                                                         List<JsonPatchOperation> operations,
                                                                         String ifMatch,
                                                                         HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Tributo entity = load(idDominio, idEntrata);
         checkIfMatch(ifMatch, entity);
 

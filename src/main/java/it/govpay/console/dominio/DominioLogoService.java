@@ -13,7 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.NotFoundException;
@@ -33,21 +35,25 @@ public class DominioLogoService {
     private final AuditService auditService;
     private final long maxSizeBytes;
     private final long cacheMaxAgeSeconds;
+    private final AclAuthorizer aclAuthorizer;
 
     public DominioLogoService(DominioRepository repository,
                               CurrentOperatorService currentOperatorService,
                               AuditService auditService,
                               @Value("${app.dominio.logo.max-size-bytes:262144}") long maxSizeBytes,
-                              @Value("${app.dominio.logo.cache-max-age-seconds:86400}") long cacheMaxAgeSeconds) {
+                              @Value("${app.dominio.logo.cache-max-age-seconds:86400}") long cacheMaxAgeSeconds,
+                              AclAuthorizer aclAuthorizer) {
         this.repository = repository;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.maxSizeBytes = maxSizeBytes;
         this.cacheMaxAgeSeconds = cacheMaxAgeSeconds;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public void getLogo(String idDominio, HttpServletResponse response) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = load(idDominio);
         byte[] stored = dominio.getLogo();
         if (stored == null || stored.length == 0) {
@@ -70,6 +76,7 @@ public class DominioLogoService {
 
     @Transactional
     public void putLogo(String idDominio, byte[] content, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = load(idDominio);
 
         if (content == null || content.length == 0) {
@@ -95,6 +102,7 @@ public class DominioLogoService {
 
     @Transactional
     public void deleteLogo(String idDominio, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_CREDITORE);
         Dominio dominio = load(idDominio);
         if (dominio.getLogo() != null) {
             dominio.setLogo(null);

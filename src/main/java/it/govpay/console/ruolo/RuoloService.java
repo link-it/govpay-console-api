@@ -18,12 +18,14 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.common.DirittiCodec;
 import it.govpay.console.entity.Acl;
 import it.govpay.console.intermediario.JsonPatchApplier;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListRuoli200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RuoloCreate;
 import it.govpay.console.model.RuoloReplace;
 import it.govpay.console.repository.AclRepository;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -62,6 +64,7 @@ public class RuoloService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final RepresentationValidator representationValidator;
+    private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -71,17 +74,20 @@ public class RuoloService {
                         CurrentOperatorService currentOperatorService,
                         AuditService auditService,
                         ObjectMapper objectMapper,
-                        RepresentationValidator representationValidator) {
+                        RepresentationValidator representationValidator,
+                        AclAuthorizer aclAuthorizer) {
         this.aclRepository = aclRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.representationValidator = representationValidator;
+        this.aclAuthorizer = aclAuthorizer;
     }
 
     @Transactional(readOnly = true)
     public ListRuoli200Response list(RuoloListQuery query) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         log.debug("listRuoli filtro[idRuolo={}], page={}, limit={}, sort={}, total={}",
                 query.idRuolo(), query.page(), query.limit(), query.sort(), query.total());
 
@@ -122,11 +128,13 @@ public class RuoloService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<it.govpay.console.model.Ruolo> get(String idRuolo) {
+        aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_RUOLI);
         return ok(idRuolo, load(idRuolo));
     }
 
     @Transactional
     public ResponseEntity<it.govpay.console.model.Ruolo> create(RuoloCreate body, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         String idRuolo = body.getIdRuolo();
         // `@NotNull` su `idRuolo` e' verificata dal `@Valid` del controller; la stringa
         // vuota no, perche' lo schema non porta ne' `minLength` ne' `pattern`.
@@ -154,6 +162,7 @@ public class RuoloService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Ruolo> replace(String idRuolo, RuoloReplace body,
                                                                  String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         List<Acl> current = load(idRuolo);
         checkIfMatch(ifMatch, idRuolo, current);
         return doReplace(idRuolo, body.getAcl(), request);
@@ -162,6 +171,7 @@ public class RuoloService {
     @Transactional
     public ResponseEntity<it.govpay.console.model.Ruolo> patch(String idRuolo, List<JsonPatchOperation> operations,
                                                                String ifMatch, HttpServletRequest request) {
+        aclAuthorizer.requireScrittura(AclServizio.ANAGRAFICA_RUOLI);
         List<Acl> current = load(idRuolo);
         checkIfMatch(ifMatch, idRuolo, current);
 

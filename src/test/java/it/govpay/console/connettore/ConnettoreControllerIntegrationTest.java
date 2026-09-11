@@ -21,10 +21,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.ConnettoreProprieta;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
+import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ConnettoreProprietaRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -52,6 +54,8 @@ class ConnettoreControllerIntegrationTest {
     private IntermediarioRepository intermediarioRepository;
     @Autowired
     private ConnettoreProprietaRepository connettoreRepository;
+    @Autowired
+    private AclRepository aclRepository;
 
     @BeforeEach
     void setup() {
@@ -69,6 +73,7 @@ class ConnettoreControllerIntegrationTest {
         op.setNome("Operatore Uno");
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
+        grantScrittura(PRINCIPAL);
 
         Intermediario i = new Intermediario();
         i.setCodIntermediario("INT-001");
@@ -313,5 +318,86 @@ class ConnettoreControllerIntegrationTest {
                 .filter(p -> key.equals(p.getCodProprieta()))
                 .map(ConnettoreProprieta::getValore)
                 .findFirst().orElse(null);
+    }
+
+    // --- ACL enforcement (issue #81, segnalato in review: gemello di ConnettoreDominioService) ---
+
+    @Test
+    void getSenzaDirittoAnagraficaPagoPaReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(get("/intermediari/INT-001/connettori/pagopa").with(httpBasic("senza-diritto", PASSWORD)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica PagoPA")));
+    }
+
+    @Test
+    void putCredenzialiSenzaDirittoAnagraficaPagoPaReturns403() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto");
+        mvc.perform(put("/intermediari/INT-001/connettori/pagopa/credenziali")
+                        .with(httpBasic("senza-diritto", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"subscriptionKey\":\"x\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.detail", containsString("Anagrafica PagoPA")));
+    }
+
+    /**
+     * Distingue R da W: senza questo test un requireLettura scambiato per
+     * requireScrittura (o viceversa) passerebbe comunque, perche' il principal
+     * condiviso ha sempre RW. Qui l'operatore ha SOLO R: il GET deve riuscire,
+     * la scrittura no. Usa putCredenziali (non replace) perche' replace richiede
+     * l'header If-Match, che Spring intercetterebbe prima ancora di raggiungere
+     * il service (MissingRequestHeaderException/428, non 403).
+     */
+    @Test
+    void soloDirittoDiLetturaConsenteGetENonScrittura() throws Exception {
+        newUtenzaConSoloLettura("solo-lettura");
+
+        mvc.perform(get("/intermediari/INT-001/connettori/pagopa").with(httpBasic("solo-lettura", PASSWORD)))
+                .andExpect(status().isOk());
+        mvc.perform(put("/intermediari/INT-001/connettori/pagopa/credenziali")
+                        .with(httpBasic("solo-lettura", PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"subscriptionKey\":\"x\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Il 403 deve precedere il 404: un intermediario inesistente non deve trapelare a chi non ha diritti. */
+    @Test
+    void getIntermediarioInesistenteSenzaDirittoReturns403NonRivela404() throws Exception {
+        newUtenzaSenzaDiritti("senza-diritto-404");
+        mvc.perform(get("/intermediari/INT-999/connettori/pagopa").with(httpBasic("senza-diritto-404", PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
+    private void grantScrittura(String principal) {
+        grant(principal, "RW");
+    }
+
+    private void newUtenzaConSoloLettura(String principal) {
+        newUtenzaSenzaDiritti(principal);
+        grant(principal, "R");
+    }
+
+    private void grant(String principal, String diritti) {
+        Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
+        Acl acl = new Acl();
+        acl.setIdUtenza(u.getId());
+        acl.setServizio("Anagrafica PagoPA");
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
+    }
+
+    /** Utenza autenticabile ma senza alcuna ACL su "Anagrafica PagoPA" (test di 403). */
+    private void newUtenzaSenzaDiritti(String principal) {
+        Utenza u = new Utenza();
+        u.setPrincipal(principal);
+        u.setPrincipalOriginale(principal);
+        u.setAbilitato(true);
+        u.setAutorizzazioneDominiStar(true);
+        u.setAutorizzazioneTipiVersStar(true);
+        u.setRuoli("OPERATORE");
+        u.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(u);
     }
 }
