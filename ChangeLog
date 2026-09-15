@@ -1,3 +1,32 @@
+2026-09-15  Giuliano Pintori <pintori@link.it>
+
+	* [Build]
+	Archivio SQL prodotto dal profilo maven "dist", come nei sette batch GovPay.
+	Lo sql.zip non e' piu' costruito dalla pipeline zippando src/main/resources/db/sql,
+	ma dal maven-assembly-plugin su src/assembly/sql.xml, con la configurazione
+	ereditata dal profilo "dist" di govpay-bom: un solo archivio, target/sql.zip,
+	alimenta i tre percorsi. Il job build passa -P jar,dist e lo pubblica fra gli
+	artefatti, docker-dev lo scompatta nel contesto invece di copiare l'albero
+	sorgente, il job release lo allega come asset al posto dello step "Zip SQL
+	files". Anche docker/build_image.sh lo scompatta, con avviso esplicito se manca.
+	Dockerfile.github, che non ha la COPY dello SQL, non e' toccato.
+	A differenza dei batch l'archivio non contiene sql/spring-batch: questo
+	progetto non dipende da spring-batch e non ha metadati del framework da creare.
+	Il profilo "dist" scompatta comunque gli schemi upstream in target/sql-upstream,
+	perche' quella configurazione e' comune a tutti i moduli del bom, ma l'assembly
+	non li include.
+	Aggiunto sql/VERSION, generato con filtering in fase di packaging, che registra
+	le versioni di progetto e di govpay-common a bordo dell'immagine: il
+	raccoglitore del core lo legge e lo riporta nell'intestazione dello script
+	composto. La radice resta src/main/resources/db/sql e non src/main/resources/sql
+	come nei batch, ma nell'archivio la directory si chiama comunque sql, quindi la
+	forma e' identica alla loro e la COPY del Dockerfile non cambia.
+	Verifica: mvn -P jar,dist package produce target/sql.zip con i cinque
+	console-api-schema.sql e VERSION risolto, e nessun file di spring-batch; il
+	raccoglitore del core lo legge, ne estrae rt_recuperi e riporta la riga di
+	VERSION nell'intestazione; lo scompattamento nel contesto di build produce
+	buildcontext/sql/<dialetto>/, che e' quanto si aspetta COPY sql /opt/sql.
+
 2026-09-10  Giuliano Pintori <pintori@link.it>
 
 	* [Build]

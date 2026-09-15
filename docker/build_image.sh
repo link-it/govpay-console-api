@@ -83,10 +83,17 @@ if [ -n "${LOCALFILE}" ]
 then
   DOCKERFILE="govpay-console-api/Dockerfile.daFile"
   cp -f "${LOCALFILE}" buildcontext/
-  # Lo SQL nel contesto, per la COPY sql /opt/sql del Dockerfile.daFile. Qui la
-  # radice e' db/sql e non sql come nei batch, ma nel contesto la directory si
-  # chiama comunque sql, quindi la COPY e' identica alla loro.
-  cp -fr ../src/main/resources/db/sql buildcontext/
+  # Lo SQL nel contesto, per la COPY sql /opt/sql del Dockerfile.daFile, arriva
+  # da target/sql.zip prodotto dal profilo dist: gli script dello schema per i
+  # cinque dialetti piu' il file VERSION. E' lo stesso archivio che la pipeline
+  # pubblica come asset di release. Nel contesto la directory si chiama sql,
+  # quindi la COPY e' identica a quella dei batch.
+  if [ -f ../target/sql.zip ]; then
+    unzip -q -o ../target/sql.zip -d buildcontext/
+  else
+    mkdir -p buildcontext/sql
+    echo "WARN: ../target/sql.zip non trovato: eseguire 'mvn -P jar,dist package' per generarlo."
+  fi
 else
   DOCKERFILE="govpay-console-api/Dockerfile.github"
 fi

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Archivio degli script SQL che finiscono in /opt/sql nell'immagine Docker.
+
+  A differenza dei batch GovPay qui non c'e' la parte sql/spring-batch: questo
+  progetto non dipende da spring-batch e non ha metadati del framework da creare.
+  Il profilo "dist" ereditato da govpay-bom scompatta comunque gli schemi
+  upstream in target/sql-upstream, perche' la configurazione e' comune a tutti i
+  moduli: quella directory resta semplicemente fuori da questo archivio.
+
+  Prodotto dal profilo "dist" come target/sql.zip, consumato dalla pipeline
+  (immagine di sviluppo, asset di release) e da docker/build_image.sh.
+-->
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3 https://maven.apache.org/xsd/assembly-1.1.3.xsd">
+
+    <id>sql</id>
+
+    <formats>
+        <format>zip</format>
+    </formats>
+
+    <includeBaseDirectory>false</includeBaseDirectory>
+
+    <fileSets>
+        <!-- Script dello schema del progetto. La radice e' src/main/resources/db/sql
+             e non src/main/resources/sql come nei batch, ma nell'archivio la
+             directory si chiama comunque sql: e' la forma che il raccoglitore del
+             core si aspetta, e quella che il Dockerfile installa con COPY sql /opt/sql. -->
+        <fileSet>
+            <directory>${project.basedir}/src/main/resources/db/sql</directory>
+            <outputDirectory>sql</outputDirectory>
+            <includes>
+                <include>**/*.sql</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+
+    <files>
+        <!-- Tracciabilita': quale schema c'e' dentro questa immagine -->
+        <file>
+            <source>${project.basedir}/src/assembly/VERSION</source>
+            <outputDirectory>sql</outputDirectory>
+            <destName>VERSION</destName>
+            <filtered>true</filtered>
+        </file>
+    </files>
+
+</assembly>

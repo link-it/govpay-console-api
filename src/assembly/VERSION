@@ -1,0 +1,7 @@
+# Generato in fase di packaging: identifica gli script SQL contenuti in /opt/sql.
+govpay-console-api=${project.version}
+govpay-common=${govpay-common.version}
+
+# sql/<vendor>/ contiene gli script dello schema del progetto, uno per dialetto.
+# Questo progetto non dipende da spring-batch, quindi qui non c'e' sql/spring-batch:
+# i metadati del framework li portano i batch.
