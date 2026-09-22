@@ -14,6 +14,7 @@ import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.stampe.client.model.Amount;
 import it.govpay.stampe.client.model.Creditor;
 import it.govpay.stampe.client.model.Debtor;
+import it.govpay.stampe.client.model.Iban;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.NoticeMetadataSecondLanguage;
 import it.govpay.stampe.client.model.PaymentNotice;
@@ -40,15 +41,21 @@ import it.govpay.stampe.client.model.PaymentNotice;
 @Component
 public class AvvisoPdfPayloadMapper {
 
+    /** Limiti del contratto {@code govpay-stampe.yaml} sullo schema {@code Iban}. */
+    private static final int MAX_OWNER_BUSINESS_NAME = 50;
+    private static final int MAX_POSTAL_AUTH_MESSAGE = 70;
+
     public PaymentNotice toPaymentNotice(Versamento v, LinguaSecondaria linguaSecondaria) {
+        IbanAccredito postale = ibanPostale(v);
+
         PaymentNotice notice = new PaymentNotice();
         notice.setLanguage(Languages.IT);
         notice.setCreditor(mapCreditor(v.getDominio()));
         notice.setDebtor(mapDebtor(v));
         notice.setTitle("AVVISO DI PAGAMENTO");
-        notice.setPostal(hasBollettinoPostale(v));
+        notice.setPostal(postale != null);
         notice.setFirstLogo(firstLogoOf(v.getDominio()));
-        notice.setFull(mapFullAmount(v));
+        notice.setFull(mapFullAmount(v, postale));
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
             notice.setSecondLanguage(buildSecondLanguage(secondaria));
@@ -57,22 +64,83 @@ public class AvvisoPdfPayloadMapper {
     }
 
     /**
-     * Replica {@code AvvisoPagamentoV2Utils.java:441-446}: il bollettino
-     * postale e' attivo se il primo singolo versamento ha un IBAN postale,
-     * di accredito o di appoggio.
+     * Replica {@code AvvisoPagamentoV2Utils.java:441-446}: il bollettino postale
+     * e' attivo se il primo singolo versamento ha un IBAN postale, di accredito
+     * o (in subordine) di appoggio. Restituisce l'IBAN scelto e non un semplice
+     * flag, perche' {@code govpay-stampe} lo esige: con {@code postal=true} e
+     * {@code full.iban} assente rifiuta l'avviso con 422 ("Iban obbligatorio in
+     * caso di avviso postale", {@code SemanticValidator}).
      */
-    private static Boolean hasBollettinoPostale(Versamento v) {
+    private static IbanAccredito ibanPostale(Versamento v) {
         if (v.getSingoliVersamenti() == null || v.getSingoliVersamenti().isEmpty()) {
-            return Boolean.FALSE;
+            return null;
         }
         SingoloVersamento primo = v.getSingoliVersamenti().get(0);
-        return isPostale(primo.getIbanAccredito()) || isPostale(primo.getIbanAppoggio())
-                ? Boolean.TRUE
-                : Boolean.FALSE;
+        IbanAccredito accredito = ibanAccreditoDi(primo);
+        if (isPostale(accredito)) {
+            return accredito;
+        }
+        IbanAccredito appoggio = ibanAppoggioDi(primo);
+        return isPostale(appoggio) ? appoggio : null;
+    }
+
+    /**
+     * Porto di {@code SingoloVersamento.getIbanAccredito(BDConfigWrapper)} (V1,
+     * {@code it.govpay.bd.model.SingoloVersamento}): l'IBAN di accredito sta
+     * <b>sul singolo versamento</b> quando la pendenza e' definita
+     * ({@code singoli_versamenti.id_iban_accredito} valorizzata), e <b>sul tipo
+     * entrata del dominio</b> ({@code tributi}, raggiunto via
+     * {@code id_tributo}) quando la pendenza e' a riferimento e la FK sul
+     * singolo versamento e' nulla. Senza questo fallback l'avviso postale di
+     * ogni pendenza a riferimento parte privo di IBAN.
+     */
+    private static IbanAccredito ibanAccreditoDi(SingoloVersamento sv) {
+        if (sv.getIbanAccredito() != null) {
+            return sv.getIbanAccredito();
+        }
+        return sv.getTributo() != null ? sv.getTributo().getIbanAccredito() : null;
+    }
+
+    /** Stessa eredita' definita/riferimento di {@link #ibanAccreditoDi}, sull'IBAN di appoggio. */
+    private static IbanAccredito ibanAppoggioDi(SingoloVersamento sv) {
+        if (sv.getIbanAppoggio() != null) {
+            return sv.getIbanAppoggio();
+        }
+        return sv.getTributo() != null ? sv.getTributo().getIbanAppoggio() : null;
     }
 
     private static boolean isPostale(IbanAccredito iban) {
         return iban != null && Boolean.TRUE.equals(iban.getPostale());
+    }
+
+    /**
+     * Dati del conto corrente postale. Si inviano i valori grezzi: numero di CC,
+     * datamatrix e i fallback (intestatario assente → ente creditore,
+     * autorizzazione dell'IBAN che prevale su quella del dominio) sono derivati
+     * da {@code govpay-stampe} ({@code BaseAvvisoMapper.impostaDatiPostaliNellaRata},
+     * {@code getAutorizzazionePostale}), che replica V1. Duplicarli qui vorrebbe
+     * dire farli divergere.
+     */
+    private static Iban mapIban(IbanAccredito postale) {
+        Iban iban = new Iban();
+        iban.setIbanCode(postale.getCodIban());
+        iban.setOwnerBusinessName(tronca(postale.getIntestatario(), MAX_OWNER_BUSINESS_NAME));
+        iban.setPostalAuthMessage(tronca(postale.getAutStampaPoste(), MAX_POSTAL_AUTH_MESSAGE));
+        return iban;
+    }
+
+    /**
+     * Le colonne di {@code iban_accredito}/{@code domini} sono {@code varchar(255)},
+     * i campi corrispondenti del contratto stampe hanno un {@code maxLength} piu'
+     * stretto e {@code govpay-stampe} lo valida ({@code @Size}). Sono due campi di
+     * sola resa grafica: troncarli stampa un avviso con l'intestazione accorciata,
+     * non troncarli farebbe fallire l'intero PDF con un 400.
+     */
+    private static String tronca(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
     }
 
     /**
@@ -113,6 +181,9 @@ public class AvvisoPdfPayloadMapper {
         if (dominio != null) {
             c.setFiscalCode(dominio.getCodDominio());
             c.setBusinessName(dominio.getRagioneSociale());
+            // Autorizzazione poste dell'ente: govpay-stampe la usa come fallback
+            // quando l'IBAN postale non ne porta una propria.
+            c.setPostalAuthMessage(tronca(dominio.getAutStampaPoste(), MAX_POSTAL_AUTH_MESSAGE));
         }
         return c;
     }
@@ -144,7 +215,7 @@ public class AvvisoPdfPayloadMapper {
         return d;
     }
 
-    private static Amount mapFullAmount(Versamento v) {
+    private static Amount mapFullAmount(Versamento v, IbanAccredito postale) {
         Amount amount = new Amount();
         amount.setAmount(v.getImportoTotale());
         amount.setNoticeNumber(v.getNumeroAvviso());
@@ -155,6 +226,9 @@ public class AvvisoPdfPayloadMapper {
                             + "necessari a comporre il codice QR (IUV, dominio o importo assenti).");
         }
         amount.setQrcode(qrcode);
+        if (postale != null) {
+            amount.setIban(mapIban(postale));
+        }
         if (v.getDataScadenza() != null) {
             amount.setDueDate(v.getDataScadenza().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate());
         }

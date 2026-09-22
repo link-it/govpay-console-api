@@ -16,6 +16,8 @@ import org.yaml.snakeyaml.Yaml;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import it.govpay.console.entity.Dominio;
+import it.govpay.console.entity.IbanAccredito;
+import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.Versamento;
 import it.govpay.stampe.client.model.PaymentNotice;
@@ -48,6 +50,40 @@ class StampePayloadContractTest {
         assertRequired((Map<String, Object>) payload.get("full"), resolve(schemas, "Amount"), "Amount");
         assertRequired((Map<String, Object>) payload.get("creditor"), resolve(schemas, "Creditor"), "Creditor");
         assertRequired((Map<String, Object>) payload.get("debtor"), resolve(schemas, "Debtor"), "Debtor");
+    }
+
+    /**
+     * Il vincolo "se {@code postal} allora {@code full.iban}" non e' esprimibile
+     * fra i {@code required} dello schema — {@code govpay-stampe} lo applica a
+     * runtime ({@code SemanticValidator}, 422 "Iban obbligatorio in caso di
+     * avviso postale"). Va quindi verificato a parte: e' proprio la regola che
+     * il contract-check sui soli {@code required} non copriva.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void avvisoPostaleInviaLIbanRichiestoDaStampe() throws Exception {
+        Map<String, Object> schemas = loadSchemas();
+        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(samplePostale(), null), Map.class);
+
+        assertThat(payload.get("postal")).as("il sample e' un avviso postale").isEqualTo(Boolean.TRUE);
+        Map<String, Object> full = (Map<String, Object>) payload.get("full");
+        assertThat(full.get("iban"))
+                .as("con postal=true govpay-stampe esige full.iban, altrimenti risponde 422")
+                .isNotNull();
+        assertRequired((Map<String, Object>) full.get("iban"), resolve(schemas, "Iban"), "Iban");
+    }
+
+    private static Versamento samplePostale() {
+        Versamento v = sample();
+        IbanAccredito postale = new IbanAccredito();
+        postale.setCodIban("IT60X0542811101000000123456");
+        postale.setPostale(true);
+        postale.setIntestatario("Comune di Test");
+        SingoloVersamento sv = new SingoloVersamento();
+        sv.setVersamento(v);
+        sv.setIbanAccredito(postale);
+        v.getSingoliVersamenti().add(sv);
+        return v;
     }
 
     private static Versamento sample() {
