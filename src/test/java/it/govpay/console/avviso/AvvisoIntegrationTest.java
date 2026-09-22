@@ -39,7 +39,9 @@ import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
+import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.TipoVersamento;
+import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
@@ -49,6 +51,8 @@ import it.govpay.console.repository.ApplicazioneRepository;
 import it.govpay.console.repository.DocumentoRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
+import it.govpay.console.repository.TipoTributoRepository;
+import it.govpay.console.repository.TributoRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.StazioneRepository;
@@ -105,6 +109,12 @@ class AvvisoIntegrationTest {
     private DocumentoRepository documentoRepository;
     @Autowired
     private IbanAccreditoRepository ibanAccreditoRepository;
+
+    @Autowired
+    private TributoRepository tributoRepository;
+
+    @Autowired
+    private TipoTributoRepository tipoTributoRepository;
 
     @MockitoBean
     private StampeClient stampeClient;
@@ -373,6 +383,62 @@ class AvvisoIntegrationTest {
         ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
         verify(stampeClient).streamPaymentNotice(captor.capture(), any());
         assertThat(captor.getValue().getPostal()).isTrue();
+        // Con postal=true govpay-stampe esige full.iban: senza, risponde 422.
+        assertThat(captor.getValue().getFull().getIban()).isNotNull();
+        assertThat(captor.getValue().getFull().getIban().getIbanCode())
+                .isEqualTo("IT60X0542811101000000123456");
+    }
+
+    /**
+     * Pendenza a riferimento: {@code singoli_versamenti.id_iban_accredito} e'
+     * nulla e l'IBAN postale va ereditato dal tipo entrata del dominio
+     * ({@code tributi}), come fa V1 in {@code SingoloVersamento.getIbanAccredito}.
+     * E' il caso che in esercizio produceva il 422 da govpay-stampe.
+     */
+    @Test
+    void postalIbanEreditatoDalTipoEntrataDominioPerPendenzaARiferimento() throws Exception {
+        IbanAccredito ibanPostale = new IbanAccredito();
+        ibanPostale.setPostale(true);
+        ibanPostale.setCodIban("IT60X0542811101000000999999");
+        ibanPostale.setDominio(domA);
+        ibanAccreditoRepository.save(ibanPostale);
+
+        TipoTributo tipoTributo = new TipoTributo();
+        tipoTributo.setCodTributo("TARI-RIF");
+        tipoTributoRepository.save(tipoTributo);
+
+        Tributo tributo = new Tributo();
+        tributo.setDominio(domA);
+        tributo.setTipoTributo(tipoTributo);
+        tributo.setAbilitato(true);
+        tributo.setIbanAccredito(ibanPostale);
+        tributoRepository.save(tributo);
+
+        Versamento v = newPendenzaConAvviso("PEND-RIF", "012345678901234568");
+        SingoloVersamento sv = new SingoloVersamento();
+        sv.setCodSingoloVersamentoEnte("SV-RIF");
+        sv.setStatoSingoloVersamento("NON_ESEGUITO");
+        sv.setImportoSingoloVersamento(100.0);
+        sv.setIndiceDati(1);
+        sv.setVersamento(v);
+        // Nessun iban sul singolo versamento: solo il riferimento al tipo entrata.
+        sv.setTributo(tributo);
+        v.getSingoliVersamenti().add(sv);
+        versamentoRepository.save(v);
+
+        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
+                .when(stampeClient).streamPaymentNotice(any(), any());
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-RIF/avviso")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
+        verify(stampeClient).streamPaymentNotice(captor.capture(), any());
+        assertThat(captor.getValue().getPostal()).isTrue();
+        assertThat(captor.getValue().getFull().getIban().getIbanCode())
+                .isEqualTo("IT60X0542811101000000999999");
     }
 
     /**
