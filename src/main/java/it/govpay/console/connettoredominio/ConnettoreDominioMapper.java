@@ -192,16 +192,19 @@ public class ConnettoreDominioMapper {
         }
     }
 
+    /** Un valore assente o vuoto in configurazione lascia il campo del DTO non valorizzato. */
+    private static void putInt(ObjectNode dto, String dtoField, String value) {
+        if (value != null && !value.isBlank()) {
+            dto.put(dtoField, Integer.parseInt(value.trim()));
+        }
+    }
+
     private void readField(Map<String, String> config, FieldSpec f, ObjectNode dto) {
         String value = config.get(f.key());
         switch (f.kind()) {
             case STRING -> dto.put(f.dtoField(), value);
             case BOOL -> dto.put(f.dtoField(), parseBoolean(value));
-            case INT -> {
-                if (value != null && !value.isBlank()) {
-                    dto.put(f.dtoField(), Integer.parseInt(value.trim()));
-                }
-            }
+            case INT -> putInt(dto, f.dtoField(), value);
             case CSV -> dto.set(f.dtoField(), splitCsv(value));
             case TIPO_CONNETTORE_ENUM -> dto.put(f.dtoField(), tipoConnettoreToV2(value));
             case VERSIONE_API -> dto.put(f.dtoField(), versioneApiToV2(value));

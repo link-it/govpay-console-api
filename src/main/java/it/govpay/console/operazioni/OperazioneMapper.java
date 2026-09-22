@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
@@ -85,7 +86,7 @@ public class OperazioneMapper {
         Esecuzione esecuzione = new Esecuzione(String.valueOf(execution.getExecutionId()), idOperazione,
                 toStatoEsecuzione(execution.getStatus()), toOffsetDateTime(execution.getStartTime()));
         esecuzione.dataFine(toOffsetDateTime(execution.getEndTime()));
-        esecuzione.forzata(toForzata(execution.getTriggerType()));
+        esecuzione.forzata(toForzata(execution.getTriggerType()).orElse(null));
         return esecuzione;
     }
 
@@ -102,12 +103,13 @@ public class OperazioneMapper {
         return esecuzione;
     }
 
-    /** {@code MANUAL} → true, {@code SCHEDULED} → false, assente (esecuzioni precedenti al JobParameter) → null. */
-    private static Boolean toForzata(String triggerType) {
-        if (triggerType == null) {
-            return null;
-        }
-        return "MANUAL".equals(triggerType);
+    /**
+     * {@code MANUAL} &rarr; true, {@code SCHEDULED} &rarr; false, assente
+     * (esecuzioni precedenti al JobParameter) &rarr; {@link Optional#empty()},
+     * che il chiamante traduce nel campo non valorizzato del DTO.
+     */
+    private static Optional<Boolean> toForzata(String triggerType) {
+        return Optional.ofNullable(triggerType).map("MANUAL"::equals);
     }
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {

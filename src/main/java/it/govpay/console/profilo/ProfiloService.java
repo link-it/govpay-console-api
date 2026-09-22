@@ -101,6 +101,17 @@ public class ProfiloService {
 
     @Transactional(readOnly = true)
     public Profilo build() {
+        return buildProfilo();
+    }
+
+    /**
+     * Corpo di {@link #build()} senza annotazione transazionale: {@link #patch}
+     * lo invoca direttamente per restituire il profilo aggiornato senza passare
+     * per il proxy Spring (una self-invocation di {@code build()} non
+     * attraverserebbe comunque il proxy, e la transazione di scrittura gia'
+     * aperta da {@code patch} e' quella corretta anche per la rilettura).
+     */
+    private Profilo buildProfilo() {
         OperatoreCorrente operatore = currentOperatorService.get();
         Utenza utenza = utenzaRepository.findByPrincipal(operatore.principal())
                 .orElseThrow(() -> new IllegalStateException(
@@ -170,7 +181,7 @@ public class ProfiloService {
 
         auditService.registra(AZIONE_AUDIT_PREFERENZE, op.getId(), new HashMap<>(), operatoreCorrente, request);
 
-        return build();
+        return buildProfilo();
     }
 
     private static void checkScopePreferenze(List<JsonPatchOperation> operations) {

@@ -87,7 +87,10 @@ public class RicevutaFormatDetector {
         } catch (Exception e) {
             throw new BadRequestException("XML non ben formato: " + e.getMessage());
         }
-        String rootLocalName = root != null ? root.getLocalName() : null;
+        if (root == null) {
+            throw new BadRequestException("XML non ben formato: documento privo di elemento radice.");
+        }
+        String rootLocalName = root.getLocalName();
 
         RicevutaFormato formato;
         if (ROOT_V2_2.equals(rootLocalName)) {

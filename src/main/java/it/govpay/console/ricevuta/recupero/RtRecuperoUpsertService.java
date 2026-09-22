@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta.recupero;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -79,7 +80,9 @@ public class RtRecuperoUpsertService {
         riga.setCodDominio(idDominio);
         riga.setIuv(iuv);
         riga.setIur(idRicevuta);
-        riga.setDataRichiesta(OffsetDateTime.now()); // placeholder, sovrascritto da riavviaRichiesta col clock del DB
+        // Placeholder, sovrascritto da riavviaRichiesta col clock del DB: lo ZoneOffset
+        // esplicito serve solo a non dipendere dal fuso di default della JVM.
+        riga.setDataRichiesta(OffsetDateTime.now(ZoneOffset.UTC));
         return rtRecuperoRepository.saveAndFlush(riga);
     }
 }

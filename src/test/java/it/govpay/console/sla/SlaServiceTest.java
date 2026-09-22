@@ -277,9 +277,9 @@ class SlaServiceTest {
         // [00-06, 06-12, 12-18, 18-24]. Ogni punto e' valutato alla FINE del
         // bucket (query_range + increase guardano indietro): il bucket 06-12
         // (nessun dato in mock, quindi "assente") deve comunque comparire come
-        // totale=0/conformitaOsservata=null, non essere omesso.
+        // totale=0/conformitaOsservata=null, non essere omesso: t12 (fine del bucket
+        // 06-12) non compare quindi volutamente in nessuno dei due mock.
         Instant t06 = Instant.parse("2026-07-01T06:00:00Z");
-        Instant t12 = Instant.parse("2026-07-01T12:00:00Z");
         Instant t18 = Instant.parse("2026-07-01T18:00:00Z");
         Instant t24 = Instant.parse("2026-07-02T00:00:00Z");
 

@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -166,7 +168,33 @@ public class TracciatoUploadService {
         return mapper.toDto(tracciato);
     }
 
+    /**
+     * {@code equals}/{@code hashCode}/{@code toString} generati confronterebbero
+     * {@code bytes} per riferimento: ridefiniti sul contenuto (S6218). Il
+     * {@code toString} riporta la sola dimensione, non il payload.
+     */
     private record UploadContenuto(byte[] bytes, FormatoTracciato formato, String nomeFile, String idDominioDaJson) {
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof UploadContenuto altro
+                    && Arrays.equals(bytes, altro.bytes)
+                    && formato == altro.formato
+                    && Objects.equals(nomeFile, altro.nomeFile)
+                    && Objects.equals(idDominioDaJson, altro.idDominioDaJson);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(Arrays.hashCode(bytes), formato, nomeFile, idDominioDaJson);
+        }
+
+        @Override
+        public String toString() {
+            return "UploadContenuto[bytes=" + (bytes != null ? bytes.length : 0)
+                    + " byte, formato=" + formato + ", nomeFile=" + nomeFile
+                    + ", idDominioDaJson=" + idDominioDaJson + "]";
+        }
     }
 
     private UploadContenuto resolveContenuto(HttpServletRequest request,

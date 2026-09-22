@@ -48,7 +48,7 @@ public class RecuperoRicevutaService {
     static final String ID_OPERAZIONE_RECUPERO_RT = "RECUPERO_RT";
     private static final String AZIONE_AUDIT_RECUPERA = "RICEVUTA_RECUPERA";
     private static final String ESITO_NON_DISPONIBILE = "NON_DISPONIBILE";
-    private static final String CANONICAL_PATH = "/ricevute/{idDominio}/{iuv}/{idRicevuta}";
+    private static final String SEGMENTO_RICEVUTE = "ricevute";
 
     private final RtRecuperoUpsertService upsertService;
     private final RtRecuperoRepository rtRecuperoRepository;
@@ -157,8 +157,8 @@ public class RecuperoRicevutaService {
 
     private static URI locationCanonica(String idDominio, String iuv, String idRicevuta) {
         return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path(CANONICAL_PATH)
-                .buildAndExpand(idDominio, iuv, idRicevuta)
+                .pathSegment(SEGMENTO_RICEVUTE, idDominio, iuv, idRicevuta)
+                .build()
                 .toUri();
     }
 

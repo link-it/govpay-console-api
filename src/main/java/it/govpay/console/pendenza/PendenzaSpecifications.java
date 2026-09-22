@@ -16,6 +16,9 @@ import it.govpay.console.security.VersamentoVisibilita;
 
 public final class PendenzaSpecifications {
 
+    private static final String FIELD_STATO_VERSAMENTO = "statoVersamento";
+    private static final String FIELD_DATA_SCADENZA = "dataScadenza";
+
     private PendenzaSpecifications() {
     }
 
@@ -86,7 +89,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.direzioneIn(cb, root, values);
+        return (root, q, cb) -> VersamentoPredicates.direzioneIn(root, values);
     }
 
     /** Semantica OR fra i valori: {@code versamenti.divisione IN (...)}. Vedi {@link #direzioneIn}. */
@@ -94,7 +97,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.divisioneIn(cb, root, values);
+        return (root, q, cb) -> VersamentoPredicates.divisioneIn(root, values);
     }
 
     /**
@@ -118,7 +121,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(cb, root, values);
+        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(root, values);
     }
 
     /**
@@ -146,23 +149,23 @@ public final class PendenzaSpecifications {
             return null;
         }
         return switch (stato) {
-            case PAGATA -> (root, q, cb) -> root.<String>get("statoVersamento").in(StatoVersamentoMapping.PAGATA);
+            case PAGATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA);
             case PAGATA_PARZIALE -> (root, q, cb) ->
-                    root.<String>get("statoVersamento").in(StatoVersamentoMapping.PAGATA_PARZIALE);
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA_PARZIALE);
             case RICONCILIATA -> (root, q, cb) ->
-                    root.<String>get("statoVersamento").in(StatoVersamentoMapping.RICONCILIATA);
-            case ANNULLATA -> (root, q, cb) -> root.<String>get("statoVersamento").in(StatoVersamentoMapping.ANNULLATA);
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.RICONCILIATA);
+            case ANNULLATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ANNULLATA);
             case ANOMALA -> (root, q, cb) ->
-                    cb.not(root.<String>get("statoVersamento").in(StatoVersamentoMapping.ALTRI_STATI_NOTI));
+                    cb.not(root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ALTRI_STATI_NOTI));
             case NON_PAGATA -> (root, q, cb) -> cb.and(
-                    root.<String>get("statoVersamento").in(StatoVersamentoMapping.NON_ESEGUITO),
-                    cb.or(cb.isNull(root.get("dataScadenza")), cb.greaterThanOrEqualTo(root.get("dataScadenza"), now)));
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
+                    cb.or(cb.isNull(root.get(FIELD_DATA_SCADENZA)), cb.greaterThanOrEqualTo(root.get(FIELD_DATA_SCADENZA), now)));
             case SCADUTA -> (root, q, cb) -> cb.or(
-                    root.<String>get("statoVersamento").in(StatoVersamentoMapping.SCADUTA_LETTERALE),
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.SCADUTA_LETTERALE),
                     cb.and(
-                            root.<String>get("statoVersamento").in(StatoVersamentoMapping.NON_ESEGUITO),
-                            cb.isNotNull(root.get("dataScadenza")),
-                            cb.lessThan(root.get("dataScadenza"), now)));
+                            root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
+                            cb.isNotNull(root.get(FIELD_DATA_SCADENZA)),
+                            cb.lessThan(root.get(FIELD_DATA_SCADENZA), now)));
         };
     }
 

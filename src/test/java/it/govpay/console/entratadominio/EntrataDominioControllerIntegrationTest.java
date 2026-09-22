@@ -451,10 +451,6 @@ class EntrataDominioControllerIntegrationTest {
         grant(principal, "RW");
     }
 
-    private void grantLettura(String principal) {
-        grant(principal, "R");
-    }
-
     private void grant(String principal, String diritti) {
         Utenza u = utenzaRepository.findByPrincipal(principal).orElseThrow();
         Acl acl = new Acl();

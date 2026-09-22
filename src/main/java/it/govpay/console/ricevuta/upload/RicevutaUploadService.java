@@ -2,8 +2,10 @@ package it.govpay.console.ricevuta.upload;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -55,7 +57,7 @@ public class RicevutaUploadService {
 
     public static final String AZIONE_AUDIT_CARICA = "RICEVUTA_CARICA";
 
-    private static final String CANONICAL_PATH = "/ricevute/{idDominio}/{iuv}/{idRicevuta}";
+    private static final String SEGMENTO_RICEVUTE = "ricevute";
     private static final long DEFAULT_MAX_SIZE_BYTES = 1_048_576;
 
     private final AclAuthorizer aclAuthorizer;
@@ -105,57 +107,29 @@ public class RicevutaUploadService {
         // Tutto cio' che segue e' dentro il try/audit: un rifiuto in una qualsiasi fase
         // (ACL, riconoscimento formato/conversione JSON, visibilita', duplicato, invio)
         // e' un evento di sicurezza quanto un successo (issue #59 par. F, "audit anche
-        // sui fallimenti"). idDominio/iuv/idRicevuta/formato/contenuto restano null se
-        // il fallimento avviene prima che siano determinabili (es. ACL negata).
-        String idDominio = null;
-        String iuv = null;
-        String idRicevuta = null;
-        RicevutaFormato formato = null;
-        Long idRptAudit = null;
-        UploadContenuto contenuto = null;
+        // sui fallimenti"). I campi dello stato restano null se il fallimento avviene
+        // prima che siano determinabili (es. ACL negata).
+        StatoUpload stato = new StatoUpload();
         try {
             // ACL prima di leggere/bufferizzare il body: un operatore senza il diritto
             // non deve poter forzare il server a leggere un payload arbitrario.
             aclAuthorizer.requireScrittura(AclServizio.PAGAMENTI);
 
-            contenuto = resolveContenuto(request, multipartFile);
-            validateSize(contenuto.bytes());
+            stato.contenuto = resolveContenuto(request, multipartFile);
+            validateSize(stato.contenuto.bytes());
 
-            byte[] normalizzato = normalizer.normalize(contenuto.bytes());
+            byte[] normalizzato = normalizer.normalize(stato.contenuto.bytes());
             RicevutaRiconosciuta esito = formatDetector.detect(normalizzato);
-            formato = esito.formato();
-            idDominio = esito.idDominio();
-            iuv = esito.iuv();
-            idRicevuta = esito.idRicevuta();
+            stato.formato = esito.formato();
+            stato.idDominio = esito.idDominio();
+            stato.iuv = esito.iuv();
+            stato.idRicevuta = esito.idRicevuta();
 
-            byte[] xmlDaInviare = null;
-            it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request jsonRequest = null;
-            Long idDominioTecnico;
+            Preparazione preparazione = preparaInvio(normalizzato, stato);
 
-            if (formato == RicevutaFormato.JSON_PAGOPA) {
-                RicevutaJsonConversione conversione = jsonConverter.convert(normalizzato);
-                jsonRequest = conversione.request();
-                idDominioTecnico = conversione.idDominio();
-            } else {
-                xmlDaInviare = normalizzato;
-                if (idDominio == null || idDominio.isBlank()) {
-                    throw new BadRequestException(
-                            "Impossibile determinare 'idDominio' (fiscalCode) dalla ricevuta caricata.");
-                }
-                // Valida contro paForNode.xsd (es. la <xsd:choice> IBAN/MBDAttachment):
-                // l'oggetto risultante e' scartato, il corpo inoltrato resta xmlDaInviare
-                // cosi' com'e' (PaForNodeClient.inviaRicevutaXml, nessun remarshal).
-                xmlValidator.validate(normalizzato, formato);
-                String codDominioAtteso = idDominio;
-                Dominio dominio = dominioRepository.findByCodDominio(idDominio)
-                        .orElseThrow(() -> new UnprocessableEntityException(
-                                "Dominio sconosciuto: " + codDominioAtteso));
-                idDominioTecnico = dominio.getId();
-            }
-
-            if (!DominioVisibilita.isVisibile(idDominioTecnico, operatore)) {
+            if (!DominioVisibilita.isVisibile(preparazione.idDominioTecnico(), operatore)) {
                 throw new AccessDeniedException("L'operatore '" + operatore.principal()
-                        + "' non e' autorizzato sul dominio '" + idDominio + "'.");
+                        + "' non e' autorizzato sul dominio '" + stato.idDominio + "'.");
             }
 
             // Rifiuta subito una ri-sottomissione di una ricevuta gia' acquisita, senza
@@ -163,41 +137,97 @@ public class RicevutaUploadService {
             // PAA_RECEIPT_DUPLICATA in PaForNodeClient: quella copre il retry dello
             // stesso tentativo dopo una risposta persa, questo un nuovo caricamento
             // a distanza di tempo.
-            if (rptRepository.findByKey(idDominio, iuv, idRicevuta).isPresent()) {
-                throw new ConflictException("Ricevuta gia' acquisita: idDominio=" + idDominio
-                        + ", iuv=" + iuv + ", idRicevuta=" + idRicevuta + ".");
+            if (rptRepository.findByKey(stato.idDominio, stato.iuv, stato.idRicevuta).isPresent()) {
+                throw new ConflictException("Ricevuta gia' acquisita: idDominio=" + stato.idDominio
+                        + ", iuv=" + stato.iuv + ", idRicevuta=" + stato.idRicevuta + ".");
             }
 
-            try {
-                if (jsonRequest != null) {
-                    paForNodeClient.inviaRicevutaV2(jsonRequest);
-                } else {
-                    paForNodeClient.inviaRicevutaXml(xmlDaInviare, formato);
-                }
-            } catch (PaForNodeTransportException e) {
-                Optional<Rpt> rilettura = rptRepository.findByKey(idDominio, iuv, idRicevuta);
-                if (rilettura.isEmpty()) {
-                    if (e.isTimeout()) {
-                        throw new PaForNodeTimeoutException(
-                                "Timeout durante l'invio della ricevuta a api-pagopa.", e);
-                    }
-                    throw new PaForNodeUnavailableException(
-                            "Errore di trasporto durante l'invio della ricevuta a api-pagopa.", e);
-                }
-                // Rilettura riuscita nel frattempo: l'acquisizione e' comunque andata a
-                // buon fine nonostante il fallimento client-side (issue #59 par. 7).
-            }
+            inviaAApiPagopa(normalizzato, preparazione, stato);
 
-            ResponseEntity<Ricevuta> risposta = rileggiEDataRisposta(idDominio, iuv, idRicevuta, request);
-            idRptAudit = rptRepository.findByKey(idDominio, iuv, idRicevuta).map(Rpt::getId).orElse(null);
-            registraAudit(idDominio, iuv, idRicevuta, idRptAudit, contenuto, formato,
-                    String.valueOf(risposta.getStatusCode().value()), operatore, request);
+            ResponseEntity<Ricevuta> risposta =
+                    rileggiEDataRisposta(stato.idDominio, stato.iuv, stato.idRicevuta, request);
+            stato.idRpt = rptRepository.findByKey(stato.idDominio, stato.iuv, stato.idRicevuta)
+                    .map(Rpt::getId).orElse(null);
+            registraAudit(stato, String.valueOf(risposta.getStatusCode().value()), operatore, request);
             return risposta;
         } catch (RuntimeException e) {
-            registraAudit(idDominio, iuv, idRicevuta, idRptAudit, contenuto, formato,
-                    esitoDa(e), operatore, request);
+            registraAudit(stato, esitoDa(e), operatore, request);
             throw e;
         }
+    }
+
+    /**
+     * Ramo XML: il payload normalizzato e' gia' il corpo da inoltrare, va solo
+     * validato contro {@code paForNode.xsd} e il dominio risolto a partire dal
+     * {@code fiscalCode} letto dal documento. Ramo JSON: la conversione produce
+     * la request e risolve gia' il dominio.
+     */
+    private Preparazione preparaInvio(byte[] normalizzato, StatoUpload stato) {
+        if (stato.formato == RicevutaFormato.JSON_PAGOPA) {
+            RicevutaJsonConversione conversione = jsonConverter.convert(normalizzato);
+            return new Preparazione(conversione.request(), conversione.idDominio());
+        }
+        if (stato.idDominio == null || stato.idDominio.isBlank()) {
+            throw new BadRequestException(
+                    "Impossibile determinare 'idDominio' (fiscalCode) dalla ricevuta caricata.");
+        }
+        // Valida contro paForNode.xsd (es. la <xsd:choice> IBAN/MBDAttachment):
+        // l'oggetto risultante e' scartato, il corpo inoltrato resta il normalizzato
+        // cosi' com'e' (PaForNodeClient.inviaRicevutaXml, nessun remarshal).
+        xmlValidator.validate(normalizzato, stato.formato);
+        String codDominioAtteso = stato.idDominio;
+        Dominio dominio = dominioRepository.findByCodDominio(codDominioAtteso)
+                .orElseThrow(() -> new UnprocessableEntityException(
+                        "Dominio sconosciuto: " + codDominioAtteso));
+        return new Preparazione(null, dominio.getId());
+    }
+
+    /**
+     * Un fallimento di trasporto non e' un esito definitivo: se la rilettura
+     * trova la ricevuta, l'acquisizione e' comunque andata a buon fine
+     * nonostante l'errore client-side (issue #59 par. 7).
+     */
+    private void inviaAApiPagopa(byte[] normalizzato, Preparazione preparazione, StatoUpload stato) {
+        try {
+            if (preparazione.jsonRequest() != null) {
+                paForNodeClient.inviaRicevutaV2(preparazione.jsonRequest());
+            } else {
+                paForNodeClient.inviaRicevutaXml(normalizzato, stato.formato);
+            }
+        } catch (PaForNodeTransportException e) {
+            Optional<Rpt> rilettura = rptRepository.findByKey(stato.idDominio, stato.iuv, stato.idRicevuta);
+            if (rilettura.isEmpty()) {
+                if (e.isTimeout()) {
+                    throw new PaForNodeTimeoutException(
+                            "Timeout durante l'invio della ricevuta a api-pagopa.", e);
+                }
+                throw new PaForNodeUnavailableException(
+                        "Errore di trasporto durante l'invio della ricevuta a api-pagopa.", e);
+            }
+        }
+    }
+
+    /**
+     * Esito di {@link #preparaInvio}: {@code jsonRequest} valorizzata nel solo
+     * ramo JSON — nel ramo XML resta nulla e il corpo da inoltrare e' il
+     * payload normalizzato cosi' com'e'.
+     */
+    private record Preparazione(it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request jsonRequest,
+                                Long idDominioTecnico) {
+    }
+
+    /**
+     * Accumulatore dei dati di audit man mano che diventano determinabili: serve
+     * perche' l'audit va registrato anche quando l'upload fallisce a meta' strada,
+     * col poco che si e' riusciti a estrarre fino a quel punto.
+     */
+    private static final class StatoUpload {
+        private String idDominio;
+        private String iuv;
+        private String idRicevuta;
+        private RicevutaFormato formato;
+        private Long idRpt;
+        private UploadContenuto contenuto;
     }
 
     private ResponseEntity<Ricevuta> rileggiEDataRisposta(String idDominio, String iuv, String idRicevuta,
@@ -208,23 +238,23 @@ public class RicevutaUploadService {
 
     private static URI locationCanonica(String idDominio, String iuv, String idRicevuta) {
         return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path(CANONICAL_PATH)
-                .buildAndExpand(idDominio, iuv, idRicevuta)
+                .pathSegment(SEGMENTO_RICEVUTE, idDominio, iuv, idRicevuta)
+                .build()
                 .toUri();
     }
 
-    private void registraAudit(String idDominio, String iuv, String idRicevuta, Long idRpt,
-                               UploadContenuto contenuto, RicevutaFormato formato, String esito,
+    private void registraAudit(StatoUpload stato, String esito,
                                OperatoreCorrente operatore, HttpServletRequest request) {
         Map<String, Object> dettaglio = new HashMap<>();
-        dettaglio.put("idDominio", idDominio);
-        dettaglio.put("iuv", iuv);
-        dettaglio.put("idRicevuta", idRicevuta);
-        dettaglio.put("nomeFile", contenuto != null ? contenuto.nomeFile() : null);
-        dettaglio.put("dimensione", contenuto != null ? contenuto.bytes().length : null);
-        dettaglio.put("formato", formato != null ? formato.name() : null);
+        dettaglio.put("idDominio", stato.idDominio);
+        dettaglio.put("iuv", stato.iuv);
+        dettaglio.put("idRicevuta", stato.idRicevuta);
+        dettaglio.put("nomeFile", stato.contenuto != null ? stato.contenuto.nomeFile() : null);
+        dettaglio.put("dimensione", stato.contenuto != null ? stato.contenuto.bytes().length : null);
+        dettaglio.put("formato", stato.formato != null ? stato.formato.name() : null);
         dettaglio.put("esito", esito);
-        auditService.registra(AZIONE_AUDIT_CARICA, idRpt != null ? idRpt : 0L, dettaglio, operatore, request);
+        auditService.registra(AZIONE_AUDIT_CARICA, stato.idRpt != null ? stato.idRpt : 0L,
+                dettaglio, operatore, request);
     }
 
     private static String esitoDa(RuntimeException e) {
@@ -255,7 +285,30 @@ public class RicevutaUploadService {
         return "500";
     }
 
+    /**
+     * {@code equals}/{@code hashCode}/{@code toString} generati confronterebbero
+     * {@code bytes} per riferimento: ridefiniti sul contenuto (S6218). Il
+     * {@code toString} riporta la sola dimensione, non il payload.
+     */
     private record UploadContenuto(byte[] bytes, String nomeFile) {
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof UploadContenuto altro
+                    && Arrays.equals(bytes, altro.bytes)
+                    && Objects.equals(nomeFile, altro.nomeFile);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(bytes) + Objects.hashCode(nomeFile);
+        }
+
+        @Override
+        public String toString() {
+            return "UploadContenuto[bytes=" + (bytes != null ? bytes.length : 0)
+                    + " byte, nomeFile=" + nomeFile + "]";
+        }
     }
 
     private UploadContenuto resolveContenuto(HttpServletRequest request, MultipartFile multipartFile) {

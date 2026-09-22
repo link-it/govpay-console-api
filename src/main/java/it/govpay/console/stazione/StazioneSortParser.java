@@ -16,7 +16,7 @@ public final class StazioneSortParser {
     public static final String DEFAULT_SORT_RAW = "codStazione";
 
     private static final Map<String, String> WHITELIST = Map.of(
-            DEFAULT_SORT_RAW, "codStazione");
+            DEFAULT_SORT_RAW, DEFAULT_SORT_RAW);
 
     private StazioneSortParser() {
     }

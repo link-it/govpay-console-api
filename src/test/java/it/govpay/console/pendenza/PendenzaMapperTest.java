@@ -16,6 +16,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import it.govpay.console.model.StatoPendenza;
 
+// I test vivono tutti nelle classi @Nested (MappingDiretti, DerivazioneScaduta), che
+// raggruppano i due comportamenti di mapStato: la classe esterna non ne dichiara di
+// propri, ma la copertura c'e' — S2187 qui e' un falso positivo.
+@SuppressWarnings("java:S2187")
 class PendenzaMapperTest {
 
     private static final Instant NOW = Instant.parse("2026-06-15T10:00:00Z");

@@ -20,7 +20,7 @@ public final class IntermediarioSortParser {
      * Chiavi = nomi pubblici (query param), valori = nomi dei campi entity JPA.
      */
     private static final Map<String, String> WHITELIST = Map.of(
-            DEFAULT_SORT_RAW, "codIntermediario",
+            DEFAULT_SORT_RAW, DEFAULT_SORT_RAW,
             "denominazione", "denominazione");
 
     private IntermediarioSortParser() {

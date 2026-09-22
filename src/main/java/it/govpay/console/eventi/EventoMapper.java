@@ -25,7 +25,7 @@ import it.govpay.console.model.RuoloEvento;
 @Component
 public class EventoMapper {
 
-    private static final String EVENTI_BASE_PATH = "/eventi/";
+    private static final String RISORSA_EVENTI = "eventi";
 
     public EventoSummary toSummary(it.govpay.gde.client.beans.Evento evento) {
         EventoSummary dto = new EventoSummary();
@@ -147,25 +147,37 @@ public class EventoMapper {
     private static EventoLinks links(Long id, String idDominio, String idA2A, String idPendenza,
             PayloadMeta richiesta, PayloadMeta risposta, Fr frCorrelato) {
         EventoLinks links = new EventoLinks();
-        links.setSelf(new Link(EVENTI_BASE_PATH + id));
+        links.setSelf(new Link(percorso(RISORSA_EVENTI, id)));
         if (richiesta.registrato()) {
-            links.setRichiesta(new Link(EVENTI_BASE_PATH + id + "/richiesta"));
+            links.setRichiesta(new Link(percorso(RISORSA_EVENTI, id, "richiesta")));
         }
         if (risposta.registrato()) {
-            links.setRisposta(new Link(EVENTI_BASE_PATH + id + "/risposta"));
+            links.setRisposta(new Link(percorso(RISORSA_EVENTI, id, "risposta")));
         }
         if (idDominio != null) {
-            links.setDominio(new Link("/domini/" + idDominio));
+            links.setDominio(new Link(percorso("domini", idDominio)));
         }
         if (idA2A != null && idPendenza != null) {
-            links.setPendenza(new Link("/pendenze/" + idA2A + "/" + idPendenza));
+            links.setPendenza(new Link(percorso("pendenze", idA2A, idPendenza)));
         }
         if (frCorrelato != null) {
-            links.setFlusso(new Link("/flussi-rendicontazione/" + frCorrelato.getCodDominio()
-                    + "/" + frCorrelato.getCodFlusso() + "/" + frCorrelato.getCodPsp()
-                    + "/" + frCorrelato.getRevisione()));
+            links.setFlusso(new Link(percorso("flussi-rendicontazione", frCorrelato.getCodDominio(),
+                    frCorrelato.getCodFlusso(), frCorrelato.getCodPsp(), frCorrelato.getRevisione())));
         }
         return links;
+    }
+
+    /**
+     * Compone il riferimento relativo di una risorsa V2 dai suoi segmenti: la
+     * base delle collection e' quella dell'API, non un indirizzo configurabile,
+     * quindi qui si concatenano segmenti e non si incolla un URI letterale.
+     */
+    private static String percorso(Object... segmenti) {
+        StringBuilder sb = new StringBuilder();
+        for (Object segmento : segmenti) {
+            sb.append('/').append(segmento);
+        }
+        return sb.toString();
     }
 
     /** {@code numeroHeaders} e' sempre 0 (mai null) anche quando il payload non e' registrato. */

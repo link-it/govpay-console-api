@@ -35,17 +35,17 @@ public final class VersamentoPredicates {
     }
 
     /** Semantica OR fra i valori: {@code id_tipo_versamento IN (...)}. */
-    public static Predicate idTipoPendenzaIn(CriteriaBuilder cb, Path<Versamento> versamento, List<String> values) {
+    public static Predicate idTipoPendenzaIn(Path<Versamento> versamento, List<String> values) {
         return versamento.get("tipoVersamento").get("codTipoVersamento").in(values);
     }
 
     /** Semantica OR fra i valori: {@code direzione IN (...)}. */
-    public static Predicate direzioneIn(CriteriaBuilder cb, Path<Versamento> versamento, List<String> values) {
+    public static Predicate direzioneIn(Path<Versamento> versamento, List<String> values) {
         return versamento.get("direzione").in(values);
     }
 
     /** Semantica OR fra i valori: {@code divisione IN (...)}. */
-    public static Predicate divisioneIn(CriteriaBuilder cb, Path<Versamento> versamento, List<String> values) {
+    public static Predicate divisioneIn(Path<Versamento> versamento, List<String> values) {
         return versamento.get("divisione").in(values);
     }
 }
