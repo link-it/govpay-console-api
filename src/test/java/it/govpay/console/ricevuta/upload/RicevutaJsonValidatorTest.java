@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import it.govpay.console.ricevuta.upload.bizevents.model.CtReceiptModelResponse;
 import it.govpay.console.ricevuta.upload.bizevents.model.Debtor;
+import it.govpay.console.ricevuta.upload.bizevents.model.Payer;
 import it.govpay.console.ricevuta.upload.bizevents.model.TransferPA;
 import it.govpay.console.web.BadRequestException;
 
@@ -113,6 +114,25 @@ class RicevutaJsonValidatorTest {
                 .hasMessageContaining("debtor.entityUniqueIdentifierType")
                 .hasMessageContaining("debtor.entityUniqueIdentifierValue")
                 .hasMessageContaining("debtor.fullName");
+    }
+
+    /**
+     * {@code payer} e' facoltativo — assente non e' un errore — ma se c'e' deve
+     * essere completo, per la stessa ragione di {@code debtor}.
+     */
+    @Test
+    void payerAssenteNonEUnErrore() {
+        assertThatCode(() -> validator.valida(rispostaValida().payer(null))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void payerVuotoElencaICampiObbligatoriMancanti() {
+        CtReceiptModelResponse response = rispostaValida().payer(new Payer());
+        assertThatThrownBy(() -> validator.valida(response))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("payer.entityUniqueIdentifierType")
+                .hasMessageContaining("payer.entityUniqueIdentifierValue")
+                .hasMessageContaining("payer.fullName");
     }
 
     /**

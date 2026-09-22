@@ -177,11 +177,13 @@ public class TracciatoUploadService {
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof UploadContenuto altro
-                    && Arrays.equals(bytes, altro.bytes)
-                    && formato == altro.formato
-                    && Objects.equals(nomeFile, altro.nomeFile)
-                    && Objects.equals(idDominioDaJson, altro.idDominioDaJson);
+            return o instanceof UploadContenuto(
+                        byte[] altriBytes, FormatoTracciato altroFormato,
+                        String altroNomeFile, String altroIdDominioDaJson)
+                    && Arrays.equals(bytes, altriBytes)
+                    && formato == altroFormato
+                    && Objects.equals(nomeFile, altroNomeFile)
+                    && Objects.equals(idDominioDaJson, altroIdDominioDaJson);
         }
 
         @Override

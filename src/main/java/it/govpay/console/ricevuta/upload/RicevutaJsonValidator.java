@@ -1,6 +1,7 @@
 package it.govpay.console.ricevuta.upload;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -8,6 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import it.govpay.console.ricevuta.upload.bizevents.model.CtReceiptModelResponse;
+import it.govpay.console.ricevuta.upload.bizevents.model.Debtor;
+import it.govpay.console.ricevuta.upload.bizevents.model.Payer;
 import it.govpay.console.ricevuta.upload.bizevents.model.TransferPA;
 import it.govpay.console.web.BadRequestException;
 
@@ -52,45 +55,19 @@ public class RicevutaJsonValidator {
 
     /** I 13 campi obbligatori di primo livello dello schema BizEvents, in ordine alfabetico. */
     private static void mancantiRadice(CtReceiptModelResponse response, List<String> mancanti) {
-        if (!StringUtils.hasText(response.getCompanyName())) {
-            mancanti.add("companyName");
-        }
-        if (!StringUtils.hasText(response.getCreditorReferenceId())) {
-            mancanti.add("creditorReferenceId");
-        }
-        if (response.getDebtor() == null) {
-            mancanti.add("debtor");
-        }
-        if (!StringUtils.hasText(response.getDescription())) {
-            mancanti.add("description");
-        }
-        if (!StringUtils.hasText(response.getFiscalCode())) {
-            mancanti.add("fiscalCode");
-        }
-        if (!StringUtils.hasText(response.getIdChannel())) {
-            mancanti.add("idChannel");
-        }
-        if (!StringUtils.hasText(response.getIdPSP())) {
-            mancanti.add("idPSP");
-        }
-        if (!StringUtils.hasText(response.getNoticeNumber())) {
-            mancanti.add("noticeNumber");
-        }
-        if (!StringUtils.hasText(response.getOutcome())) {
-            mancanti.add("outcome");
-        }
-        if (response.getPaymentAmount() == null) {
-            mancanti.add("paymentAmount");
-        }
-        if (!StringUtils.hasText(response.getPspCompanyName())) {
-            mancanti.add("pspCompanyName");
-        }
-        if (!StringUtils.hasText(response.getReceiptId())) {
-            mancanti.add("receiptId");
-        }
-        if (response.getTransferList() == null || response.getTransferList().isEmpty()) {
-            mancanti.add("transferList");
-        }
+        richiediTesto(response.getCompanyName(), "companyName", mancanti);
+        richiediTesto(response.getCreditorReferenceId(), "creditorReferenceId", mancanti);
+        richiediValore(response.getDebtor(), "debtor", mancanti);
+        richiediTesto(response.getDescription(), "description", mancanti);
+        richiediTesto(response.getFiscalCode(), "fiscalCode", mancanti);
+        richiediTesto(response.getIdChannel(), "idChannel", mancanti);
+        richiediTesto(response.getIdPSP(), "idPSP", mancanti);
+        richiediTesto(response.getNoticeNumber(), "noticeNumber", mancanti);
+        richiediTesto(response.getOutcome(), "outcome", mancanti);
+        richiediValore(response.getPaymentAmount(), "paymentAmount", mancanti);
+        richiediTesto(response.getPspCompanyName(), "pspCompanyName", mancanti);
+        richiediTesto(response.getReceiptId(), "receiptId", mancanti);
+        richiediLista(response.getTransferList(), "transferList", mancanti);
     }
 
     /**
@@ -101,20 +78,31 @@ public class RicevutaJsonValidator {
      * letto su un valore nullo).
      */
     private static void mancantiAnnidati(CtReceiptModelResponse response, List<String> mancanti) {
-        if (response.getDebtor() != null) {
-            mancantiSoggetto("debtor", response.getDebtor().getEntityUniqueIdentifierType(),
-                    response.getDebtor().getEntityUniqueIdentifierValue(), response.getDebtor().getFullName(),
-                    mancanti);
-        }
-        if (response.getPayer() != null) {
-            mancantiSoggetto("payer", response.getPayer().getEntityUniqueIdentifierType(),
-                    response.getPayer().getEntityUniqueIdentifierValue(), response.getPayer().getFullName(),
-                    mancanti);
-        }
-        if (response.getTransferList() == null) {
+        mancantiDebtor(response.getDebtor(), mancanti);
+        mancantiPayer(response.getPayer(), mancanti);
+        mancantiTransferList(response.getTransferList(), mancanti);
+    }
+
+    private static void mancantiDebtor(Debtor debtor, List<String> mancanti) {
+        if (debtor == null) {
             return;
         }
-        List<TransferPA> transferList = response.getTransferList();
+        mancantiSoggetto("debtor", debtor.getEntityUniqueIdentifierType(),
+                debtor.getEntityUniqueIdentifierValue(), debtor.getFullName(), mancanti);
+    }
+
+    private static void mancantiPayer(Payer payer, List<String> mancanti) {
+        if (payer == null) {
+            return;
+        }
+        mancantiSoggetto("payer", payer.getEntityUniqueIdentifierType(),
+                payer.getEntityUniqueIdentifierValue(), payer.getFullName(), mancanti);
+    }
+
+    private static void mancantiTransferList(List<TransferPA> transferList, List<String> mancanti) {
+        if (transferList == null) {
+            return;
+        }
         for (int i = 0; i < transferList.size(); i++) {
             TransferPA transfer = transferList.get(i);
             // Un elemento nullo nell'array ("transferList": [null, ...]) e' JSON
@@ -163,26 +151,41 @@ public class RicevutaJsonValidator {
      * {@code Integer} nullo), quindi va intercettato qui come gli altri
      * campi obbligatori.
      */
-    @SuppressWarnings("java:S2583") // getTransferAmount() e' @Nonnull solo per annotazione
-                                    // del generatore OpenAPI: Jackson lascia il campo a null
-                                    // quando il JSON caricato dall'operatore lo omette, ed e'
-                                    // esattamente il caso che questo validatore intercetta.
     private static void mancantiTransfer(int indice, TransferPA transfer, List<String> mancanti) {
         String prefisso = "transferList[" + indice + "]";
-        if (transfer.getIdTransfer() == null) {
-            mancanti.add(prefisso + ".idTransfer");
+        richiediValore(transfer.getIdTransfer(), prefisso + ".idTransfer", mancanti);
+        richiediValore(transfer.getTransferAmount(), prefisso + ".transferAmount", mancanti);
+        richiediTesto(transfer.getFiscalCodePA(), prefisso + ".fiscalCodePA", mancanti);
+        richiediTesto(transfer.getRemittanceInformation(), prefisso + ".remittanceInformation", mancanti);
+        richiediTesto(transfer.getTransferCategory(), prefisso + ".transferCategory", mancanti);
+    }
+
+    // I tre predicati sotto ricevono il valore gia' estratto invece di interrogare il
+    // model: i getter generati da bizEvents.yaml sono annotati @Nonnull per i campi
+    // "required" dello schema, ma e' la descrizione del contratto, non una garanzia
+    // sull'oggetto deserializzato — Jackson lascia il campo a null quando il JSON
+    // caricato dall'operatore lo omette, ed e' esattamente il caso che questo
+    // validatore esiste per intercettare. Passando il valore per parametro il
+    // controllo resta dov'e' utile senza leggersi come una condizione impossibile.
+
+    /** Il campo e' obbligatorio: assente se {@code null}. */
+    private static void richiediValore(Object valore, String campo, List<String> mancanti) {
+        if (valore == null) {
+            mancanti.add(campo);
         }
-        if (transfer.getTransferAmount() == null) {
-            mancanti.add(prefisso + ".transferAmount");
+    }
+
+    /** Il campo e' obbligatorio e non puo' essere vuoto o di soli spazi. */
+    private static void richiediTesto(String valore, String campo, List<String> mancanti) {
+        if (!StringUtils.hasText(valore)) {
+            mancanti.add(campo);
         }
-        if (!StringUtils.hasText(transfer.getFiscalCodePA())) {
-            mancanti.add(prefisso + ".fiscalCodePA");
-        }
-        if (!StringUtils.hasText(transfer.getRemittanceInformation())) {
-            mancanti.add(prefisso + ".remittanceInformation");
-        }
-        if (!StringUtils.hasText(transfer.getTransferCategory())) {
-            mancanti.add(prefisso + ".transferCategory");
+    }
+
+    /** Il campo e' obbligatorio e deve contenere almeno un elemento. */
+    private static void richiediLista(Collection<?> valore, String campo, List<String> mancanti) {
+        if (valore == null || valore.isEmpty()) {
+            mancanti.add(campo);
         }
     }
 }
