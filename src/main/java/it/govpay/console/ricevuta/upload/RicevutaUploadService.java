@@ -294,9 +294,9 @@ public class RicevutaUploadService {
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof UploadContenuto altro
-                    && Arrays.equals(bytes, altro.bytes)
-                    && Objects.equals(nomeFile, altro.nomeFile);
+            return o instanceof UploadContenuto(byte[] altriBytes, String altroNomeFile)
+                    && Arrays.equals(bytes, altriBytes)
+                    && Objects.equals(nomeFile, altroNomeFile);
         }
 
         @Override
