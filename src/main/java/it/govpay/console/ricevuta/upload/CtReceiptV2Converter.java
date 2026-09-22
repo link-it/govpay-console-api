@@ -50,7 +50,7 @@ import it.govpay.console.web.BadRequestException;
  * nel model JSON e non viene quindi valorizzato sul {@link CtReceiptV2}
  * risultante.
  *
- * <p><b>TODO</b>: questa classe e i model generati da {@code bizEvents.yaml}
+ * <p><b>Duplicazione nota</b>: questa classe e i model generati da {@code bizEvents.yaml}
  * sono duplicati identici fra {@code console-api} e {@code govpay-rt-batch}
  * (costo esplicito: "due copie che possono divergere, e la
  * divergenza sarebbe silenziosa").

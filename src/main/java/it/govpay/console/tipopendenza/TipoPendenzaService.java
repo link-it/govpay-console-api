@@ -236,8 +236,8 @@ public class TipoPendenzaService {
             throw new BadRequestException(
                     "Il campo 'idTipoPendenza' non puo' essere modificato tramite PATCH.");
         }
-        // `@NotNull` e `@Size(max)` su `descrizione` sono ora verificati dallo schema;
-        // resta il caso della stringa vuota, che passa entrambi i vincoli.
+        // I vincoli di obbligatorieta' e lunghezza massima su 'descrizione' sono ora
+        // verificati dallo schema; resta il caso della stringa vuota, che li passa entrambi.
         if (result.getDescrizione().isBlank()) {
             throw new BadRequestException(
                     "La rappresentazione risultante dal PATCH ha il campo 'descrizione' vuoto.");

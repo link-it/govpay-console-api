@@ -15,7 +15,6 @@ import it.govpay.console.model.StatoRiconciliazione;
 import it.govpay.console.model.TipoRiscossione;
 import it.govpay.console.web.ListQueryValidator;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 public class RiconciliazioniController implements RiconciliazioniApi {
@@ -32,18 +31,15 @@ public class RiconciliazioniController implements RiconciliazioniApi {
     private final RiconciliazioneDetailService detailService;
     private final RiconciliazioneWriteService writeService;
     private final HttpServletRequest currentRequest;
-    private final HttpServletResponse currentResponse;
 
     public RiconciliazioniController(RiconciliazioneSearchService searchService,
                                      RiconciliazioneDetailService detailService,
                                      RiconciliazioneWriteService writeService,
-                                     HttpServletRequest currentRequest,
-                                     HttpServletResponse currentResponse) {
+                                     HttpServletRequest currentRequest) {
         this.searchService = searchService;
         this.detailService = detailService;
         this.writeService = writeService;
         this.currentRequest = currentRequest;
-        this.currentResponse = currentResponse;
     }
 
     @Override

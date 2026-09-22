@@ -20,8 +20,9 @@ import it.govpay.console.model.MetodoAutenticazione;
  * solo per FORM (il path del filter JSON login) — gli altri metodi sono
  * in-band (auth sulla call stessa).
  *
- * <p>TODO: localizzazione delle etichette via {@code MessageSource} quando
- * il progetto introdurra' i18n.
+ * <p><b>Limite noto</b>: la localizzazione delle etichette via
+ * {@code MessageSource} resta da fare, e ha senso solo quando il progetto
+ * introdurra' i18n.
  */
 @Service
 public class MetodiAutenticazioneResolver {

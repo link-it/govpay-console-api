@@ -13,7 +13,6 @@ import org.springframework.ws.soap.client.SoapFaultClientException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import it.gov.pagopa.pagopa_api.pa.pafornode.CtFaultBean;
 import it.gov.pagopa.pagopa_api.pa.pafornode.CtResponse;
-import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTRes;
 import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request;
 import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Response;
 import it.gov.pagopa.pagopa_api.pa.pafornode.StOutcome;

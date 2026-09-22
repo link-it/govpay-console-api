@@ -34,8 +34,13 @@ public class OnBehalfOfHeaderInserter implements ClientInterceptor {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             log.warn("Nessun principal autenticato nel SecurityContext: header {} non inserito.", HEADER_NAME);
-            return true;
+        } else {
+            inserisciHeader(authentication);
         }
+        return true;
+    }
+
+    private static void inserisciHeader(Authentication authentication) {
         TransportContext context = TransportContextHolder.getTransportContext();
         WebServiceConnection connection = context.getConnection();
         if (connection instanceof HeadersAwareSenderWebServiceConnection httpConnection) {
@@ -45,7 +50,6 @@ public class OnBehalfOfHeaderInserter implements ClientInterceptor {
                 throw new WebServiceIOException("Fail to insert " + HEADER_NAME + " header", e);
             }
         }
-        return true;
     }
 
     @Override

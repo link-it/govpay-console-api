@@ -16,8 +16,6 @@ import it.govpay.console.model.OperazionePendenza;
 import it.govpay.console.model.OperazionePendenzaAllOfRichiesta;
 import it.govpay.console.model.OperazionePendenzaSummary;
 import it.govpay.console.model.OperazionePendenzaSummaryLinks;
-import it.govpay.console.model.StatoOperazionePendenza;
-import it.govpay.console.model.TipoOperazionePendenza;
 import it.govpay.console.model.Link;
 import it.govpay.console.soggetto.SoggettoMapper;
 import tools.jackson.core.JacksonException;

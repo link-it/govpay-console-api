@@ -10,6 +10,14 @@ import jakarta.persistence.criteria.Predicate;
 
 public final class TipoPendenzaDominioSpecifications {
 
+    private static final String FIELD_TIPO_VERSAMENTO = "tipoVersamento";
+    private static final String FIELD_BO_FORM_DEFINIZIONE = "boFormDefinizione";
+    private static final String FIELD_BO_FORM_TIPO = "boFormTipo";
+    private static final String FIELD_TRAC_CSV_HEADER_RISPOSTA = "tracCsvHeaderRisposta";
+    private static final String FIELD_TRAC_CSV_TEMPLATE_RICHIESTA = "tracCsvTemplateRichiesta";
+    private static final String FIELD_TRAC_CSV_TEMPLATE_RISPOSTA = "tracCsvTemplateRisposta";
+    private static final String FIELD_TRAC_CSV_TIPO = "tracCsvTipo";
+
     private TipoPendenzaDominioSpecifications() {
     }
 
@@ -22,7 +30,7 @@ public final class TipoPendenzaDominioSpecifications {
             return null;
         }
         String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("codTipoVersamento")), pattern, LikePatterns.ESCAPE_CHAR);
+        return (root, q, cb) -> cb.like(cb.lower(root.get(FIELD_TIPO_VERSAMENTO).get("codTipoVersamento")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<TipoVersamentoDominio> descrizionePartial(String value) {
@@ -30,7 +38,7 @@ public final class TipoPendenzaDominioSpecifications {
             return null;
         }
         String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("tipoVersamento").get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
+        return (root, q, cb) -> cb.like(cb.lower(root.get(FIELD_TIPO_VERSAMENTO).get("descrizione")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<TipoVersamentoDominio> abilitatoExact(Boolean value) {
@@ -67,11 +75,11 @@ public final class TipoPendenzaDominioSpecifications {
             return null;
         }
         return (root, q, cb) -> {
-            var tv = root.get("tipoVersamento");
-            Predicate override = cb.and(cb.isNotNull(root.get("boFormDefinizione")), cb.isNotNull(root.get("boFormTipo")));
-            Predicate overrideAssente = cb.and(cb.isNull(root.get("boFormDefinizione")), cb.isNull(root.get("boFormTipo")));
-            Predicate globale = cb.and(cb.isNotNull(tv.get("boFormDefinizione")), cb.isNotNull(tv.get("boFormTipo")));
-            Predicate globaleAssente = cb.and(cb.isNull(tv.get("boFormDefinizione")), cb.isNull(tv.get("boFormTipo")));
+            var tv = root.get(FIELD_TIPO_VERSAMENTO);
+            Predicate override = cb.and(cb.isNotNull(root.get(FIELD_BO_FORM_DEFINIZIONE)), cb.isNotNull(root.get(FIELD_BO_FORM_TIPO)));
+            Predicate overrideAssente = cb.and(cb.isNull(root.get(FIELD_BO_FORM_DEFINIZIONE)), cb.isNull(root.get(FIELD_BO_FORM_TIPO)));
+            Predicate globale = cb.and(cb.isNotNull(tv.get(FIELD_BO_FORM_DEFINIZIONE)), cb.isNotNull(tv.get(FIELD_BO_FORM_TIPO)));
+            Predicate globaleAssente = cb.and(cb.isNull(tv.get(FIELD_BO_FORM_DEFINIZIONE)), cb.isNull(tv.get(FIELD_BO_FORM_TIPO)));
             return value
                     ? cb.or(override, cb.and(globale, overrideAssente))
                     : cb.and(overrideAssente, globaleAssente);
@@ -90,27 +98,27 @@ public final class TipoPendenzaDominioSpecifications {
             return null;
         }
         return (root, q, cb) -> {
-            var tv = root.get("tipoVersamento");
+            var tv = root.get(FIELD_TIPO_VERSAMENTO);
             Predicate override = cb.and(
-                    cb.isNotNull(root.get("tracCsvHeaderRisposta")),
-                    cb.isNotNull(root.get("tracCsvTemplateRichiesta")),
-                    cb.isNotNull(root.get("tracCsvTemplateRisposta")),
-                    cb.isNotNull(root.get("tracCsvTipo")));
+                    cb.isNotNull(root.get(FIELD_TRAC_CSV_HEADER_RISPOSTA)),
+                    cb.isNotNull(root.get(FIELD_TRAC_CSV_TEMPLATE_RICHIESTA)),
+                    cb.isNotNull(root.get(FIELD_TRAC_CSV_TEMPLATE_RISPOSTA)),
+                    cb.isNotNull(root.get(FIELD_TRAC_CSV_TIPO)));
             Predicate overrideAssente = cb.and(
-                    cb.isNull(root.get("tracCsvHeaderRisposta")),
-                    cb.isNull(root.get("tracCsvTemplateRichiesta")),
-                    cb.isNull(root.get("tracCsvTemplateRisposta")),
-                    cb.isNull(root.get("tracCsvTipo")));
+                    cb.isNull(root.get(FIELD_TRAC_CSV_HEADER_RISPOSTA)),
+                    cb.isNull(root.get(FIELD_TRAC_CSV_TEMPLATE_RICHIESTA)),
+                    cb.isNull(root.get(FIELD_TRAC_CSV_TEMPLATE_RISPOSTA)),
+                    cb.isNull(root.get(FIELD_TRAC_CSV_TIPO)));
             Predicate globale = cb.and(
-                    cb.isNotNull(tv.get("tracCsvHeaderRisposta")),
-                    cb.isNotNull(tv.get("tracCsvTemplateRichiesta")),
-                    cb.isNotNull(tv.get("tracCsvTemplateRisposta")),
-                    cb.isNotNull(tv.get("tracCsvTipo")));
+                    cb.isNotNull(tv.get(FIELD_TRAC_CSV_HEADER_RISPOSTA)),
+                    cb.isNotNull(tv.get(FIELD_TRAC_CSV_TEMPLATE_RICHIESTA)),
+                    cb.isNotNull(tv.get(FIELD_TRAC_CSV_TEMPLATE_RISPOSTA)),
+                    cb.isNotNull(tv.get(FIELD_TRAC_CSV_TIPO)));
             Predicate globaleAssente = cb.and(
-                    cb.isNull(tv.get("tracCsvHeaderRisposta")),
-                    cb.isNull(tv.get("tracCsvTemplateRichiesta")),
-                    cb.isNull(tv.get("tracCsvTemplateRisposta")),
-                    cb.isNull(tv.get("tracCsvTipo")));
+                    cb.isNull(tv.get(FIELD_TRAC_CSV_HEADER_RISPOSTA)),
+                    cb.isNull(tv.get(FIELD_TRAC_CSV_TEMPLATE_RICHIESTA)),
+                    cb.isNull(tv.get(FIELD_TRAC_CSV_TEMPLATE_RISPOSTA)),
+                    cb.isNull(tv.get(FIELD_TRAC_CSV_TIPO)));
             return value
                     ? cb.or(override, cb.and(globale, overrideAssente))
                     : cb.and(overrideAssente, globaleAssente);
@@ -123,6 +131,6 @@ public final class TipoPendenzaDominioSpecifications {
      * in AND — hardening deliberato sempre in AND"), non una replica letterale del default V1.
      */
     public static Specification<TipoVersamentoDominio> visibiliPerOperatore(OperatoreCorrente operatore) {
-        return (root, q, cb) -> TipoVersamentoVisibilita.predicate(cb, root.get("tipoVersamento").get("id"), operatore);
+        return (root, q, cb) -> TipoVersamentoVisibilita.predicate(cb, root.get(FIELD_TIPO_VERSAMENTO).get("id"), operatore);
     }
 }

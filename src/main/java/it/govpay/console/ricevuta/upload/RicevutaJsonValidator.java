@@ -21,11 +21,37 @@ import it.govpay.console.web.BadRequestException;
 @Component
 public class RicevutaJsonValidator {
 
-    /** I 13 campi obbligatori dello schema BizEvents, in ordine alfabetico. */
+    /** Valori ammessi per {@code outcome} nello schema BizEvents. */
     private static final Set<String> OUTCOME_AMMESSI = Set.of("OK", "KO");
 
     public void valida(CtReceiptModelResponse response) {
         List<String> mancanti = new ArrayList<>();
+        mancantiRadice(response, mancanti);
+        mancantiAnnidati(response, mancanti);
+
+        if (!mancanti.isEmpty()) {
+            throw new BadRequestException("Campi obbligatori mancanti nella ricevuta JSON: "
+                    + String.join(", ", mancanti) + ".");
+        }
+
+        // paymentDateTimeFormatted non e' fra i campi "required" dello schema BizEvents,
+        // ma senza di esso core assegna silenziosamente la data di caricamento come data
+        // di pagamento: va intercettato qui, esplicitamente.
+        if (response.getPaymentDateTimeFormatted() == null) {
+            throw new BadRequestException(
+                    "Campo 'paymentDateTimeFormatted' assente: senza questo campo la data di pagamento "
+                            + "verrebbe impostata silenziosamente alla data di caricamento invece che a quella "
+                            + "effettiva. Il solo campo 'paymentDateTime' (data senza orario) non e' sufficiente.");
+        }
+
+        if (!OUTCOME_AMMESSI.contains(response.getOutcome())) {
+            throw new BadRequestException("Valore non ammesso per 'outcome': '" + response.getOutcome()
+                    + "'. Valori ammessi: " + String.join(", ", OUTCOME_AMMESSI) + ".");
+        }
+    }
+
+    /** I 13 campi obbligatori di primo livello dello schema BizEvents, in ordine alfabetico. */
+    private static void mancantiRadice(CtReceiptModelResponse response, List<String> mancanti) {
         if (!StringUtils.hasText(response.getCompanyName())) {
             mancanti.add("companyName");
         }
@@ -65,11 +91,16 @@ public class RicevutaJsonValidator {
         if (response.getTransferList() == null || response.getTransferList().isEmpty()) {
             mancanti.add("transferList");
         }
+    }
 
-        // Campi obbligatori annidati: la sola presenza di "debtor"/"transferList" non
-        // basta, i loro campi obbligatori vanno verificati anche loro — altrimenti un
-        // "debtor": {} supera questo controllo e causa poi una NullPointerException
-        // nel converter (StEntityUniqueIdentifierType letto su un valore nullo).
+    /**
+     * Campi obbligatori annidati: la sola presenza di {@code debtor}/{@code transferList}
+     * non basta, i loro campi obbligatori vanno verificati anche loro — altrimenti un
+     * {@code "debtor": {}} supera il controllo di primo livello e causa poi una
+     * {@code NullPointerException} nel converter ({@code StEntityUniqueIdentifierType}
+     * letto su un valore nullo).
+     */
+    private static void mancantiAnnidati(CtReceiptModelResponse response, List<String> mancanti) {
         if (response.getDebtor() != null) {
             mancantiSoggetto("debtor", response.getDebtor().getEntityUniqueIdentifierType(),
                     response.getDebtor().getEntityUniqueIdentifierValue(), response.getDebtor().getFullName(),
@@ -80,39 +111,20 @@ public class RicevutaJsonValidator {
                     response.getPayer().getEntityUniqueIdentifierValue(), response.getPayer().getFullName(),
                     mancanti);
         }
-        if (response.getTransferList() != null) {
-            List<TransferPA> transferList = response.getTransferList();
-            for (int i = 0; i < transferList.size(); i++) {
-                TransferPA transfer = transferList.get(i);
-                // Un elemento nullo nell'array ("transferList": [null, ...]) e' JSON
-                // sintatticamente valido: senza questo controllo mancantiTransfer(...)
-                // solleverebbe una NullPointerException invece di un 400 parlante.
-                if (transfer == null) {
-                    mancanti.add("transferList[" + i + "]");
-                    continue;
-                }
+        if (response.getTransferList() == null) {
+            return;
+        }
+        List<TransferPA> transferList = response.getTransferList();
+        for (int i = 0; i < transferList.size(); i++) {
+            TransferPA transfer = transferList.get(i);
+            // Un elemento nullo nell'array ("transferList": [null, ...]) e' JSON
+            // sintatticamente valido: senza questo controllo mancantiTransfer(...)
+            // solleverebbe una NullPointerException invece di un 400 parlante.
+            if (transfer == null) {
+                mancanti.add("transferList[" + i + "]");
+            } else {
                 mancantiTransfer(i, transfer, mancanti);
             }
-        }
-
-        if (!mancanti.isEmpty()) {
-            throw new BadRequestException("Campi obbligatori mancanti nella ricevuta JSON: "
-                    + String.join(", ", mancanti) + ".");
-        }
-
-        // paymentDateTimeFormatted non e' fra i campi "required" dello schema BizEvents,
-        // ma senza di esso core assegna silenziosamente la data di caricamento come data
-        // di pagamento: va intercettato qui, esplicitamente.
-        if (response.getPaymentDateTimeFormatted() == null) {
-            throw new BadRequestException(
-                    "Campo 'paymentDateTimeFormatted' assente: senza questo campo la data di pagamento "
-                            + "verrebbe impostata silenziosamente alla data di caricamento invece che a quella "
-                            + "effettiva. Il solo campo 'paymentDateTime' (data senza orario) non e' sufficiente.");
-        }
-
-        if (!OUTCOME_AMMESSI.contains(response.getOutcome())) {
-            throw new BadRequestException("Valore non ammesso per 'outcome': '" + response.getOutcome()
-                    + "'. Valori ammessi: " + String.join(", ", OUTCOME_AMMESSI) + ".");
         }
     }
 
@@ -151,6 +163,10 @@ public class RicevutaJsonValidator {
      * {@code Integer} nullo), quindi va intercettato qui come gli altri
      * campi obbligatori.
      */
+    @SuppressWarnings("java:S2583") // getTransferAmount() e' @Nonnull solo per annotazione
+                                    // del generatore OpenAPI: Jackson lascia il campo a null
+                                    // quando il JSON caricato dall'operatore lo omette, ed e'
+                                    // esattamente il caso che questo validatore intercetta.
     private static void mancantiTransfer(int indice, TransferPA transfer, List<String> mancanti) {
         String prefisso = "transferList[" + indice + "]";
         if (transfer.getIdTransfer() == null) {

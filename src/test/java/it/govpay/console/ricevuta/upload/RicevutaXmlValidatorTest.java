@@ -33,17 +33,6 @@ class RicevutaXmlValidatorTest {
             "xsd/pagopa/paForNode.xsd", "xsd/pagopa/sac-common-types-1.0.xsd" };
 
     /**
-     * Con gli XSD dentro un jar le risorse hanno protocollo {@code jar:file:}, non
-     * {@code file:} — la stessa condizione che nel fat jar di Spring Boot diventa
-     * {@code jar:nested:} e che faceva fallire l'avvio con
-     * "'nested' access is not allowed due to restriction set by the
-     * accessExternalSchema property".
-     * <p>
-     * Non e' un test di stile: con l'implementazione precedente, che passava il
-     * systemId della risorsa a {@code newSchema} e ammetteva il solo protocollo
-     * {@code file}, questo test falliva.
-     */
-    /**
      * Riproduce l'avvio fallito in container. Nel fat jar di Spring Boot le risorse
      * hanno protocollo {@code jar:nested:}, e la JDK, controllando
      * {@code accessExternalSchema}, ne estrae il sotto-protocollo {@code nested}: non
@@ -98,7 +87,17 @@ class RicevutaXmlValidatorTest {
         }
     }
 
-    /** Lo schema si carica anche quando le risorse stanno in un jar. */
+    /**
+     * Lo schema si carica anche quando le risorse stanno in un jar: le risorse hanno
+     * allora protocollo {@code jar:file:}, non {@code file:} — la stessa condizione
+     * che nel fat jar di Spring Boot diventa {@code jar:nested:} e che faceva fallire
+     * l'avvio con "'nested' access is not allowed due to restriction set by the
+     * accessExternalSchema property".
+     * <p>
+     * Non e' un test di stile: con l'implementazione precedente, che passava il
+     * systemId della risorsa a {@code newSchema} e ammetteva il solo protocollo
+     * {@code file}, questo test falliva.
+     */
     @Test
     void schemaCaricabileConRisorseInJar(@TempDir Path tmp) throws Exception {
         URL jar = jarConGliXsd(tmp);
@@ -144,7 +143,9 @@ class RicevutaXmlValidatorTest {
     void transferSenzaIbanESenzaMbdAttachmentVieneRifiutato() {
         byte[] xml = fixture("rt-v2_2-ok.xml");
         String senzaIban = new String(xml, StandardCharsets.UTF_8)
-                .replaceAll("(?s)<[^>]*IBAN[^>]*>.*?</[^>]*IBAN>", "");
+                // Il prefisso di namespace e' opzionale ma delimitato dai ':': niente
+                // quantificatori sovrapposti, quindi nessun backtracking non lineare.
+                .replaceAll("(?s)<(?:\\w+:)?IBAN>.*?</(?:\\w+:)?IBAN>", "");
         assertThat(senzaIban).doesNotContain("IBAN").doesNotContain("MBDAttachment");
 
         assertThatThrownBy(() -> new RicevutaXmlValidator()

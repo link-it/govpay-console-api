@@ -180,9 +180,7 @@ public class EventoSearchService {
      */
     private ResolvedDomini resolveIdDominio(String richiesto, OperatoreCorrente operatore) {
         if (operatore.tuttiIDomini()) {
-            return richiesto != null
-                    ? new ResolvedDomini(false, List.of(richiesto))
-                    : new ResolvedDomini(false, List.of());
+            return new ResolvedDomini(false, richiesto != null ? List.of(richiesto) : List.<String>of());
         }
         List<String> visibili = eventoAcl.codiciVisibili(operatore);
         if (visibili.isEmpty()) {

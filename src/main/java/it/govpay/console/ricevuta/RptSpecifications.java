@@ -41,6 +41,7 @@ import it.govpay.console.security.VersamentoVisibilita;
  */
 public final class RptSpecifications {
 
+    private static final String FIELD_VERSAMENTO = "versamento";
     private static final String FIELD_DATA_MSG_RICEVUTA = "dataMsgRicevuta";
     private static final String FIELD_DATA_MSG_RICHIESTA = "dataMsgRichiesta";
 
@@ -113,7 +114,7 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, root.get("versamento"), value);
+        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, root.get(FIELD_VERSAMENTO), value);
     }
 
     /**
@@ -127,49 +128,49 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("versamento").get("codVersamentoEnte"), value);
+        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("codVersamentoEnte"), value);
     }
 
     public static Specification<Rpt> identificativoDebitoreExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, root.get("versamento"), value);
+        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, root.get(FIELD_VERSAMENTO), value);
     }
 
     public static Specification<Rpt> idUnitaOperativaExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("versamento").get("unitaOperativa").get("codUo"), value);
+        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("unitaOperativa").get("codUo"), value);
     }
 
     public static Specification<Rpt> idTipoPendenzaIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(cb, root.get("versamento"), values);
+        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(root.get(FIELD_VERSAMENTO), values);
     }
 
     public static Specification<Rpt> direzioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.direzioneIn(cb, root.get("versamento"), values);
+        return (root, q, cb) -> VersamentoPredicates.direzioneIn(root.get(FIELD_VERSAMENTO), values);
     }
 
     public static Specification<Rpt> divisioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.divisioneIn(cb, root.get("versamento"), values);
+        return (root, q, cb) -> VersamentoPredicates.divisioneIn(root.get(FIELD_VERSAMENTO), values);
     }
 
     public static Specification<Rpt> tassonomiaExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("versamento").get("tassonomia"), value);
+        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("tassonomia"), value);
     }
 
     /**
@@ -193,11 +194,11 @@ public final class RptSpecifications {
             return null;
         }
         String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("versamento").get("debitoreAnagrafica")), pattern, LikePatterns.ESCAPE_CHAR);
+        return (root, q, cb) -> cb.like(cb.lower(root.get(FIELD_VERSAMENTO).get("debitoreAnagrafica")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
-        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root.get("versamento"), operatore);
+        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root.get(FIELD_VERSAMENTO), operatore);
     }
 
     /**

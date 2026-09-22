@@ -30,10 +30,6 @@ public final class ListQueryValidator {
     }
 
     /**
-     * Modalità cursor attiva se {@code ?cursor} è presente nella query string,
-     * anche con valore vuoto ("prima pagina cursor-mode").
-     */
-    /**
      * Valore da passare al query record per la modalita' di paginazione in uso:
      * {@code null} in modalita' offset, il cursore in modalita' cursor — stringa
      * vuota alla prima pagina, dove il client non ha ancora un cursore.
@@ -45,6 +41,10 @@ public final class ListQueryValidator {
         return cursor != null ? cursor : "";
     }
 
+    /**
+     * Modalità cursor attiva se {@code ?cursor} è presente nella query string,
+     * anche con valore vuoto ("prima pagina cursor-mode").
+     */
     public static boolean isCursorMode(HttpServletRequest request) {
         return request != null && request.getParameterMap().containsKey("cursor");
     }
@@ -84,15 +84,17 @@ public final class ListQueryValidator {
     }
 
     /**
-     * {@code null} se il parametro non e' presente; altrimenti rimuove i valori
+     * Lista vuota se il parametro non e' presente; altrimenti rimuove i valori
      * vuoti (elementi CSV consecutivi, es. {@code ?param=,,}) e valida i vincoli
      * comuni ai filtri CSV multi-valore: lista risultante non vuota, al massimo
      * {@code max} elementi. Usato da ogni filtro con semantica OR su piu' valori
-     * ({@code idTipoPendenza}, {@code direzione}, {@code divisione}, ...).
+     * ({@code idTipoPendenza}, {@code direzione}, {@code divisione}, ...) —
+     * parametro assente e lista vuota sono equivalenti per i chiamanti, che in
+     * entrambi i casi non aggiungono alcun predicato.
      */
     public static List<String> normalizeCsvList(List<String> raw, String paramName, int max) {
         if (raw == null) {
-            return null;
+            return List.of();
         }
         List<String> normalized = raw.stream().filter(v -> v != null && !v.isBlank()).toList();
         if (normalized.isEmpty()) {

@@ -19,6 +19,9 @@ public class NoopExternalCallMetricsRecorder extends ExternalCallMetricsRecorder
         super(null, null);
     }
 
+    // Il nome del metodo e' imposto dalla superclasse ExternalCallMetricsRecorder
+    // (govpay-common): non e' rinominabile da qui senza rompere l'override.
+    @SuppressWarnings("java:S6213")
     @Override
     public void record(String client, String operation, ExternalCall call) {
         call.run();

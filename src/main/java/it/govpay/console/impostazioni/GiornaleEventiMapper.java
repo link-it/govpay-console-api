@@ -63,8 +63,8 @@ public class GiornaleEventiMapper {
         if (source == null) {
             return defaultEvento();
         }
-        LogEnum log = source.getLog() != null ? LogEnum.fromValue(source.getLog().name()) : LogEnum.fromValue(DEFAULT_POLICY);
-        DumpEnum dump = source.getDump() != null ? DumpEnum.fromValue(source.getDump().name()) : DumpEnum.fromValue(DEFAULT_POLICY);
+        LogEnum log = LogEnum.fromValue(source.getLog() != null ? source.getLog().name() : DEFAULT_POLICY);
+        DumpEnum dump = DumpEnum.fromValue(source.getDump() != null ? source.getDump().name() : DEFAULT_POLICY);
         return new GdeEvento(log, dump);
     }
 
