@@ -1,3 +1,39 @@
+2026-09-24  Giuliano Pintori <pintori@link.it>
+
+	* [Logging] Transaction ID e Correlation ID dalla libreria comune.
+	Rimosso RequestIdFilter locale, sostituito dal TransactionIdFilter di
+	govpay-common. Il filtro locale fondeva i due identificativi di BP-LOG-3:
+	accettava X-Request-ID dall'esterno e lo riemetteva come
+	X-Govpay-IdTransazione, lasciando quindi che fosse il client a imporre il
+	transaction id del componente.
+	Ora i due identificativi sono distinti: il transaction id e' sempre generato
+	dalla console (UUID v4, mai accettato dall'esterno) e restituito su
+	X-Transaction-ID e X-Govpay-IdTransazione; il correlation id e' letto da
+	X-Correlation-ID o X-Request-ID, generato se assente, restituito al client e
+	propagato alle chiamate downstream da tutti i RestTemplate della libreria.
+	Cambio di comportamento per i client: un X-Request-ID inviato in richiesta
+	non si ritrova piu' su X-Govpay-IdTransazione, ma su X-Correlation-ID e
+	X-Request-ID. L'header legacy continua a esistere e a portare l'identificativo
+	interno, come in GovPay 3.
+	Aggiunto logging.pattern.level con transactionId e correlationId: la chiave
+	MDC del transaction id e' la stessa di GovPay 3, quindi un pattern
+	%X{transactionId} resta valido.
+
+	* [Logging] Endpoint di gestione dei livelli di log a runtime (BP-LOG-1).
+	LogLevelController espone /admin/logging/loggers: elenco dei logger
+	gestibili, impostazione e ripristino del livello, refresh immediato. La
+	modifica ha effetto subito su questo nodo ed e' persistita sulla riga
+	log_level della tabella configurazione, da cui gli altri componenti del
+	cluster la applicano al proprio refresh.
+	Gli endpoint non fanno parte del contratto OpenAPI: sono di amministrazione e
+	richiedono, oltre all'autenticazione, il diritto ACL sul servizio
+	"Configurazione e manutenzione" (BP-SEC-2), in lettura per le consultazioni e
+	in scrittura per le modifiche.
+	Esposto anche /actuator/loggers sulla porta management, per la modifica
+	immediata sul singolo nodo. E' un endpoint di scrittura e sulla porta
+	management la protezione e' demandata alla rete, come gia' per prometheus:
+	va tenuta su rete interna.
+
 2026-09-15  Giuliano Pintori <pintori@link.it>
 
 	* [Build]
