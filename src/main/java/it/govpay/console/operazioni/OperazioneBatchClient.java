@@ -16,6 +16,7 @@ import it.govpay.common.batch.dto.BatchStatusInfo;
 import it.govpay.common.batch.dto.ExecutionsPage;
 import it.govpay.common.batch.dto.LastExecutionInfo;
 import it.govpay.common.batch.dto.NextExecutionInfo;
+import it.govpay.console.common.QueryParams;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.NotFoundException;
 
@@ -80,11 +81,13 @@ public class OperazioneBatchClient {
         if (statoCsv != null) {
             builder.queryParam("stato", statoCsv);
         }
+        // Normalizzati in UTC: vedi QueryParams.istanteUtc, un offset con il '+'
+        // arriverebbe al microservizio spezzato da un decoding come spazio.
         if (dataInizioMin != null) {
-            builder.queryParam("dataInizioMin", dataInizioMin);
+            builder.queryParam("dataInizioMin", QueryParams.istanteUtc(dataInizioMin));
         }
         if (dataInizioMax != null) {
-            builder.queryParam("dataInizioMax", dataInizioMax);
+            builder.queryParam("dataInizioMax", QueryParams.istanteUtc(dataInizioMax));
         }
         return get(builder.toUriString(), ExecutionsPage.class, url);
     }

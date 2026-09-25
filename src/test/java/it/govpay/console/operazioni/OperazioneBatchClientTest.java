@@ -9,6 +9,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.OffsetDateTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -135,6 +137,29 @@ class OperazioneBatchClientTest {
         assertThat(page.getResults()).hasSize(1);
         assertThat(page.getResults().get(0).getExecutionId()).isEqualTo(1L);
         assertThat(page.isHasNextPage()).isFalse();
+        server.verify();
+    }
+
+    /**
+     * Stesso difetto corretto su {@code EventoGdeClient}: con un offset diverso da
+     * UTC la resa di {@code OffsetDateTime} contiene un {@code +}, che non viene
+     * percent-encodato e che il microservizio decodifica come uno spazio,
+     * rifiutando la richiesta con un 400 (per il chiamante: 502). Gli istanti si
+     * normalizzano percio' in UTC — vedi {@code QueryParams.istanteUtc}.
+     */
+    @Test
+    void listExecutions_istantiConOffsetNonUtc_vengonoNormalizzatiInUtc() {
+        OffsetDateTime minRoma = OffsetDateTime.parse("2026-09-24T17:04:11+02:00");
+        OffsetDateTime maxRoma = OffsetDateTime.parse("2026-09-25T17:04:11+02:00");
+
+        server.expect(requestTo(URL + "/executions?page=1&limit=10&total=false"
+                        + "&dataInizioMin=2026-09-24T15:04:11Z&dataInizioMax=2026-09-25T15:04:11Z"))
+                .andRespond(withSuccess("""
+                        {"results":[],"page":1,"limit":10,"hasNextPage":false}""",
+                        MediaType.APPLICATION_JSON));
+
+        client.listExecutions(URL, null, minRoma, maxRoma, 1, 10, false);
+
         server.verify();
     }
 
