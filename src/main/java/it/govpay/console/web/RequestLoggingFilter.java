@@ -17,10 +17,11 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Logga ogni richiesta HTTP a livello INFO con metodo, path, status,
- * principal (se autenticato) e durata. Il {@code requestId} in MDC e' settato
- * da {@link RequestIdFilter}, quindi appare automaticamente nel formato di log.
+ * principal (se autenticato) e durata. Il {@code transactionId} e il
+ * {@code correlationId} in MDC sono settati dal {@code TransactionIdFilter} di
+ * govpay-common, quindi appaiono automaticamente nel formato di log.
  *
- * Posizionato DOPO {@link RequestIdFilter} per disporre del correlation-id.
+ * Posizionato DOPO {@code TransactionIdFilter} per disporre degli identificativi.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
