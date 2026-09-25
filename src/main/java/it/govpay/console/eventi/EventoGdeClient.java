@@ -1,5 +1,7 @@
 package it.govpay.console.eventi;
 
+import java.time.OffsetDateTime;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -10,6 +12,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import it.govpay.common.client.model.Connettore;
+import it.govpay.console.common.QueryParams;
 import it.govpay.common.configurazione.service.ConfigurazioneService;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.gde.client.beans.Evento;
@@ -90,7 +93,7 @@ public class EventoGdeClient {
         if (query.cursorMode()) {
             builder.queryParam("pagingMode", "CURSOR");
             if (query.cursorData() != null) {
-                builder.queryParam("cursorData", query.cursorData())
+                builder.queryParam("cursorData", QueryParams.istanteUtc(query.cursorData()))
                         .queryParam("cursorId", query.cursorId());
             }
         } else {
@@ -99,8 +102,8 @@ public class EventoGdeClient {
                 builder.queryParam("total", true);
             }
         }
-        addIfPresent(builder, "dataDa", query.dataDa());
-        addIfPresent(builder, "dataA", query.dataA());
+        addIstante(builder, "dataDa", query.dataDa());
+        addIstante(builder, "dataA", query.dataA());
         for (String dominio : query.idDominio()) {
             builder.queryParam("idDominio", dominio);
         }
@@ -125,4 +128,11 @@ public class EventoGdeClient {
             builder.queryParam(name, value);
         }
     }
+
+    private void addIstante(UriComponentsBuilder builder, String name, OffsetDateTime value) {
+        if (value != null) {
+            builder.queryParam(name, QueryParams.istanteUtc(value));
+        }
+    }
+
 }
