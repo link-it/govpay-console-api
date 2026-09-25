@@ -1,5 +1,8 @@
 package it.govpay.console.eventi;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -90,7 +93,7 @@ public class EventoGdeClient {
         if (query.cursorMode()) {
             builder.queryParam("pagingMode", "CURSOR");
             if (query.cursorData() != null) {
-                builder.queryParam("cursorData", query.cursorData())
+                builder.queryParam("cursorData", istanteUtc(query.cursorData()))
                         .queryParam("cursorId", query.cursorId());
             }
         } else {
@@ -99,8 +102,8 @@ public class EventoGdeClient {
                 builder.queryParam("total", true);
             }
         }
-        addIfPresent(builder, "dataDa", query.dataDa());
-        addIfPresent(builder, "dataA", query.dataA());
+        addIstante(builder, "dataDa", query.dataDa());
+        addIstante(builder, "dataA", query.dataA());
         for (String dominio : query.idDominio()) {
             builder.queryParam("idDominio", dominio);
         }
@@ -124,5 +127,26 @@ public class EventoGdeClient {
         if (value != null) {
             builder.queryParam(name, value);
         }
+    }
+
+    private void addIstante(UriComponentsBuilder builder, String name, OffsetDateTime value) {
+        if (value != null) {
+            builder.queryParam(name, istanteUtc(value));
+        }
+    }
+
+    /**
+     * Gli istanti si inviano a GDE sempre normalizzati in UTC, quindi resi con
+     * la {@code Z} finale. Non e' una preferenza di formato: reso con un offset
+     * diverso da UTC, {@link OffsetDateTime#toString()} produce un {@code +}
+     * (es. {@code +02:00}) che e' un sub-delimiter legale in una query string,
+     * e come tale {@link UriComponentsBuilder} non lo percent-encoda. Lato GDE
+     * Tomcat decodifica quel {@code +} come uno spazio, il binding su
+     * {@code OffsetDateTime} fallisce e la richiesta torna 400 — che qui
+     * diventa un 502 opaco. L'istante resta lo stesso, cambia solo il
+     * rappresentante scelto per scriverlo.
+     */
+    private static String istanteUtc(OffsetDateTime value) {
+        return value.withOffsetSameInstant(ZoneOffset.UTC).toString();
     }
 }

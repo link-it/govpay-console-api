@@ -107,6 +107,58 @@ class EventoGdeClientTest {
         server.verify();
     }
 
+    /**
+     * Istanti con offset diverso da UTC: {@code OffsetDateTime.toString()} li rende
+     * con un {@code +} che, essendo un sub-delimiter legale in una query string,
+     * {@code UriComponentsBuilder} non percent-encoda. Lato GDE Tomcat lo
+     * decodificherebbe come uno spazio e il binding su {@code OffsetDateTime}
+     * fallirebbe con un 400 (per il chiamante: 502 "Chiamata al servizio GDE
+     * fallita"). Si normalizzano quindi in UTC prima di comporre la URI.
+     *
+     * <p>Caso reale: senza {@code dataDa} esplicita il default e'
+     * {@code now(clock) - 24h} con {@code Clock.systemDefaultZone()}, quindi in
+     * Europe/Rome un {@code +02:00} — ed era il motivo per cui la stessa chiamata
+     * funzionava passando una data in {@code Z} e falliva senza.
+     */
+    @Test
+    void findEventi_istantiConOffsetNonUtc_vengonoNormalizzatiInUtc() {
+        OffsetDateTime daRoma = OffsetDateTime.parse("2026-09-24T17:04:11+02:00");
+        OffsetDateTime aRoma = OffsetDateTime.parse("2026-09-25T17:04:11+02:00");
+
+        server.expect(requestTo(BASE_URL + "/eventi?limit=25&offset=0"
+                        + "&dataDa=2026-09-24T15:04:11Z&dataA=2026-09-25T15:04:11Z"))
+                .andRespond(withSuccess("""
+                        {"page":{"offset":0,"limit":25,"hasNext":false},"items":[]}""",
+                        MediaType.APPLICATION_JSON));
+
+        EventoGdeQuery query = new EventoGdeQuery(
+                25, 0, false, null, null, false,
+                daRoma, aRoma, List.of(),
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+        client.findEventi(query);
+        server.verify();
+    }
+
+    /** Stessa normalizzazione sul cursore, che e' anch'esso un istante. */
+    @Test
+    void findEventi_cursorDataConOffsetNonUtc_vieneNormalizzatoInUtc() {
+        OffsetDateTime cursorRoma = OffsetDateTime.parse("2026-09-24T17:04:11+02:00");
+
+        server.expect(requestTo(BASE_URL + "/eventi?limit=10&pagingMode=CURSOR"
+                        + "&cursorData=2026-09-24T15:04:11Z&cursorId=42"))
+                .andRespond(withSuccess("""
+                        {"page":{"limit":10,"hasNext":false},"items":[]}""", MediaType.APPLICATION_JSON));
+
+        EventoGdeQuery query = new EventoGdeQuery(
+                10, 0, true, cursorRoma, 42L, false,
+                null, null, List.of(),
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+        client.findEventi(query);
+        server.verify();
+    }
+
     @Test
     void findEventi_servizioNonAbilitato_lanciaGdeNonConfiguratoException() {
         when(configurazioneService.isServizioGDEAbilitato()).thenReturn(false);
