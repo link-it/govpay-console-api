@@ -101,14 +101,14 @@ public class StazioneService {
     public ListStazioni200Response list(String idIntermediario, StazioneListQuery query) {
         aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
         Intermediario parent = loadIntermediario(idIntermediario);
-        log.debug("listStazioni intermediario={} filtri[codStazione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
-                idIntermediario, query.codStazione(), query.abilitato(),
+        log.debug("listStazioni intermediario={} filtri[idStazione={}, abilitato={}], page={}, limit={}, sort={}, total={}",
+                idIntermediario, query.idStazione(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<Stazione> spec = Specification.allOf(
                 Stream.of(
                         StazioneSpecifications.byIntermediarioId(parent.getId()),
-                        StazioneSpecifications.codStazionePartial(query.codStazione()),
+                        StazioneSpecifications.codStazionePartial(query.idStazione()),
                         StazioneSpecifications.abilitatoExact(query.abilitato()))
                 .filter(Objects::nonNull)
                 .toList());

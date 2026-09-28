@@ -1865,7 +1865,7 @@ paths:
       summary: Elenca gli intermediari pagoPA (paginati).
       description: |
         Filtri opzionali e ortogonali (AND):
-        - `codIntermediario` — match parziale;
+        - `idIntermediario` — match parziale;
         - `denominazione` — match parziale;
         - `abilitato` — match esatto.
 
@@ -1876,13 +1876,13 @@ paths:
 
         Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
         prefisso per ASC), campi multipli separati da virgola; campi ammessi:
-        `codIntermediario`, `denominazione`. Default `codIntermediario` (ASC).
+        `idIntermediario`, `denominazione`. Default `idIntermediario` (ASC).
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Total'
-        - $ref: '#/components/parameters/CodIntermediario'
+        - $ref: '#/components/parameters/IdIntermediarioFilter'
         - $ref: '#/components/parameters/Denominazione'
         - $ref: '#/components/parameters/Abilitato'
       responses:
@@ -2125,7 +2125,7 @@ paths:
       summary: Elenca le stazioni di un intermediario (paginate).
       description: |
         Filtri opzionali e ortogonali (AND):
-        - `codStazione` — match parziale;
+        - `idStazione` — match parziale;
         - `abilitato` — match esatto.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
@@ -2133,13 +2133,13 @@ paths:
         `?total=true` vengono aggiunti `totalResults` e `totalPages` (Page).
 
         Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
-        prefisso per ASC); campi ammessi: `codStazione`. Default `codStazione` (ASC).
+        prefisso per ASC); campi ammessi: `idStazione`. Default `idStazione` (ASC).
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Total'
-        - $ref: '#/components/parameters/CodStazione'
+        - $ref: '#/components/parameters/StazioneIdFilter'
         - $ref: '#/components/parameters/Abilitato'
       responses:
         '200':
@@ -13761,11 +13761,11 @@ components:
       schema:
         type: string
 
-    CodIntermediario:
-      name: codIntermediario
+    IdIntermediarioFilter:
+      name: idIntermediario
       in: query
       required: false
-      description: Match parziale sul codice intermediario.
+      description: Match parziale sull'identificativo dell'intermediario.
       schema:
         type: string
 
@@ -13896,11 +13896,14 @@ components:
       schema:
         type: string
 
-    CodStazione:
-      name: codStazione
+    StazioneIdFilter:
+      name: idStazione
       in: query
       required: false
-      description: Match parziale sul codice stazione.
+      description: |
+        Match parziale sull'identificativo della stazione. Distinto da
+        `IdStazioneFilter`, che su `/domini` e' un match esatto usato per
+        restringere ai domini di una stazione.
       schema:
         type: string
 

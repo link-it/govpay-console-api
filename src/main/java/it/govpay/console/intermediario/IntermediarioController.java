@@ -30,7 +30,7 @@ public class IntermediarioController implements IntermediariApi {
                                                                         Integer limit,
                                                                         String sort,
                                                                         Boolean total,
-                                                                        String codIntermediario,
+                                                                        String idIntermediario,
                                                                         String denominazione,
                                                                         Boolean abilitato) {
         IntermediarioListQuery query = new IntermediarioListQuery(
@@ -38,7 +38,7 @@ public class IntermediarioController implements IntermediariApi {
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                codIntermediario,
+                idIntermediario,
                 denominazione,
                 abilitato);
         return ResponseEntity.ok(service.list(query));
