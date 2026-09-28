@@ -1220,7 +1220,7 @@ paths:
         (l'anti-leak non si applica in scrittura).
       parameters:
         - $ref: '#/components/parameters/IdDominioPath'
-        - $ref: '#/components/parameters/RiconciliazioneIdPath'
+        - $ref: '#/components/parameters/RiconciliazioneIdWritePath'
       requestBody:
         required: true
         content:
@@ -8510,8 +8510,16 @@ components:
           properties:
             id:
               type: string
-              description: Identificativo della riconciliazione, scelto dal client in scrittura.
-              pattern: '^[0-9A-Za-z]{1,35}$'
+              maxLength: 35
+              description: |
+                Identificativo della riconciliazione. In scrittura lo sceglie il
+                client, con il vincolo alfanumerico documentato sul path del `PUT`.
+                In lettura e' il valore che il prodotto ha memorizzato: sui record
+                registrati per flusso e' l'idFlusso assegnato dal PSP, che contiene
+                i trattini della data (`2026-08-22GovPAYPsp1-0850160128`). Per
+                questo qui non c'e' il vincolo alfanumerico: restringerlo
+                escluderebbe dal contratto righe che il prodotto restituisce.
+              example: '2026-08-22GovPAYPsp1-0850160128'
             dominio:
               $ref: '#/components/schemas/DominioRef'
             importo:
@@ -13508,7 +13516,25 @@ components:
       name: id
       in: path
       required: true
-      description: Identificativo della riconciliazione, scelto dal client in scrittura.
+      description: |
+        Identificativo della riconciliazione cosi' come compare nell'elenco.
+        Nessun vincolo di alfabeto: sui record registrati per flusso e'
+        l'idFlusso assegnato dal PSP, che contiene i trattini della data. Il
+        vincolo alfanumerico vale solo dove l'identificativo lo sceglie il
+        client, cioe' sul `PUT` (`RiconciliazioneIdWritePath`).
+      schema:
+        type: string
+        maxLength: 35
+      example: '2026-08-22GovPAYPsp1-0850160128'
+
+    RiconciliazioneIdWritePath:
+      name: id
+      in: path
+      required: true
+      description: |
+        Identificativo della riconciliazione scelto dal client. In scrittura e'
+        alfanumerico, come nella V3 del core: e' il client a coniarlo, e questo
+        e' il solo punto in cui l'API puo' imporne la forma.
       schema:
         type: string
         pattern: '^[0-9A-Za-z]{1,35}$'

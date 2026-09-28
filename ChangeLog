@@ -1,5 +1,20 @@
 2026-09-28  Giuliano Pintori <pintori@link.it>
 
+	* [Riconciliazioni] Issue #92 Il dettaglio rifiutava con 400 gli
+	identificativi che l'elenco restituisce.
+	Il parametro di path portava pattern '^[0-9A-Za-z]{1,35}$', ereditato dalla
+	V3 del core dove lo stesso path serve la sola scrittura con identificativo
+	scelto dal client. In lettura pero' l'identificativo e' il contenuto di
+	incassi.identificativo, che sui record registrati per flusso e' l'idFlusso
+	assegnato dal PSP e contiene i trattini della data: il dettaglio era quindi
+	irraggiungibile per tutte le riconciliazioni non singole.
+	Il vincolo alfanumerico resta sul PUT, dove l'identificativo lo conia il
+	client ed e' il solo punto in cui l'API puo' imporne la forma; in lettura,
+	sul path e sul campo id delle rappresentazioni, resta il solo limite di
+	lunghezza della colonna.
+
+2026-09-28  Giuliano Pintori <pintori@link.it>
+
 	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
 	comuni in collisione con quelli di console-api.
 	Lo scan di it.govpay.common.repository escludeva i cinque repository noti
