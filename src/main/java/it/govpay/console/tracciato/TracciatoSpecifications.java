@@ -28,6 +28,12 @@ public final class TracciatoSpecifications {
         if (value == null) {
             return null;
         }
+        // NON_RICONOSCIUTO non e' un valore della colonna ma il complemento dei
+        // quattro noti: filtrarci sopra serve a trovare le righe anomale, che
+        // altrimenti si vedono solo scorrendo l'elenco.
+        if (value == StatoTracciatoPendenza.NON_RICONOSCIUTO) {
+            return (root, q, cb) -> cb.not(root.get("stato").in(TracciatoStatoMapper.statiDbNoti()));
+        }
         return (root, q, cb) -> {
             var statoPredicate = cb.equal(root.get("stato"), TracciatoStatoMapper.statoDbFor(value));
             String likePattern = TracciatoStatoMapper.beanDatiLikePattern(value);

@@ -93,9 +93,12 @@ public class TracciatoMapper {
                 .richiesta(new Link(base + "/richiesta"))
                 .operazioni(new Link(base + "/operazioni"));
 
+        // Di una riga con stato fuori vocabolario non si sa se un esito sia stato
+        // prodotto: il link non viene esposto, perche' un link che risponde 404
+        // e' peggio di un link assente.
         boolean esitoProdotto = switch (stato) {
             case ESEGUITO, ESEGUITO_CON_ERRORI, ELABORAZIONE_STAMPA, SCARTATO -> true;
-            case IN_ATTESA, IN_ELABORAZIONE -> false;
+            case IN_ATTESA, IN_ELABORAZIONE, NON_RICONOSCIUTO -> false;
         };
         if (esitoProdotto) {
             links.esito(new Link(base + "/esito"));

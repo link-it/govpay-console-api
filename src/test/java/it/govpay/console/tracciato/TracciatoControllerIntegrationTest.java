@@ -61,6 +61,8 @@ class TracciatoControllerIntegrationTest {
     private DominioRepository dominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
+    @Autowired
+    private it.govpay.console.repository.TracciatoRepository tracciatoRepository;
 
     private Dominio dominio;
 
@@ -349,5 +351,73 @@ class TracciatoControllerIntegrationTest {
         String principal = utenzaConDominioEScrittura("op-dettaglio-404");
         mvc.perform(get(BASE + "/999999999").with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    // ----- stato fuori vocabolario ------------------------------------------
+
+    /**
+     * Porta un tracciato appena caricato a uno stato che il core non scrive,
+     * come si trova su dati storici o su uno stato introdotto dal core prima
+     * che console-api sia aggiornata.
+     */
+    private Long tracciatoConStatoFuoriVocabolario(String principal) throws Exception {
+        String location = mvc.perform(post(BASE).with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody("12345678901", "12345678901")))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getHeader("Location");
+        Long id = Long.valueOf(location.substring(location.lastIndexOf('/') + 1));
+
+        it.govpay.console.entity.Tracciato tracciato = tracciatoRepository.findById(id).orElseThrow();
+        tracciato.setStato("ELABORATO");
+        tracciatoRepository.save(tracciato);
+        return id;
+    }
+
+    @Test
+    void elencoConUnaRigaDiStatoFuoriVocabolarioReturns200() throws Exception {
+        String principal = utenzaConDominioEScrittura("op-stato-ignoto");
+        tracciatoConStatoFuoriVocabolario(principal);
+
+        // Prima l'eccezione sulla singola riga faceva rispondere 500 all'intera
+        // pagina: qui si verifica che l'elenco resti leggibile.
+        mvc.perform(get(BASE).with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].stato", is("NON_RICONOSCIUTO")));
+    }
+
+    @Test
+    void dettaglioConStatoFuoriVocabolarioReturns200() throws Exception {
+        String principal = utenzaConDominioEScrittura("op-stato-ignoto-dettaglio");
+        Long id = tracciatoConStatoFuoriVocabolario(principal);
+
+        mvc.perform(get(BASE + "/" + id).with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stato", is("NON_RICONOSCIUTO")))
+                // di una riga anomala non si sa se l'esito sia stato prodotto:
+                // il link non viene esposto
+                .andExpect(jsonPath("$._links.esito").doesNotExist());
+    }
+
+    @Test
+    void filtroPerStatoNonRiconosciutoSelezionaLeRigheAnomale() throws Exception {
+        String principal = utenzaConDominioEScrittura("op-filtro-stato-ignoto");
+        tracciatoConStatoFuoriVocabolario(principal);
+        // un secondo tracciato, questo con uno stato regolare
+        mvc.perform(post(BASE).with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody("12345678901", "12345678901")))
+                .andExpect(status().isAccepted());
+
+        mvc.perform(get(BASE).param("stato", "NON_RICONOSCIUTO").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].stato", is("NON_RICONOSCIUTO")));
+
+        mvc.perform(get(BASE).param("stato", "IN_ATTESA").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].stato", is("IN_ATTESA")));
     }
 }

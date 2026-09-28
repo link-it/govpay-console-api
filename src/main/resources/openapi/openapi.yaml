@@ -12166,7 +12166,17 @@ components:
 
     StatoTracciatoPendenza:
       type: string
-      description: Stato di elaborazione del tracciato. Stessi valori esatti di V1.
+      description: |
+        Stato di elaborazione del tracciato. I primi sei valori sono gli stessi
+        esatti di V1.
+
+        `NON_RICONOSCIUTO` non e' uno stato che il prodotto assegna: e' il modo
+        in cui l'elenco rappresenta una riga il cui `tracciati.stato` non
+        rientra nel vocabolario noto, senza per questo rendere illeggibile
+        l'intera pagina. Si incontra su dati storici scritti da versioni
+        precedenti del core, o su uno stato introdotto dal core prima che
+        console-api sia aggiornata. Come filtro `?stato=NON_RICONOSCIUTO`
+        seleziona esattamente quelle righe.
       example: ESEGUITO
       enum:
         - IN_ATTESA
@@ -12175,6 +12185,7 @@ components:
         - ESEGUITO_CON_ERRORI
         - SCARTATO
         - ELABORAZIONE_STAMPA
+        - NON_RICONOSCIUTO
 
     FormatoTracciato:
       type: string
