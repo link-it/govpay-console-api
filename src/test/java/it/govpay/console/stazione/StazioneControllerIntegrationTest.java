@@ -171,7 +171,7 @@ class StazioneControllerIntegrationTest {
 
     @Test
     void filterByCodStazionePartial() throws Exception {
-        mvc.perform(get("/intermediari/INT-001/stazioni").param("codStazione", "_02")
+        mvc.perform(get("/intermediari/INT-001/stazioni").param("idStazione", "_02")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
@@ -188,7 +188,7 @@ class StazioneControllerIntegrationTest {
     }
 
     @Test
-    void defaultSortByCodStazioneAsc() throws Exception {
+    void defaultSortByIdStazioneAsc() throws Exception {
         mvc.perform(get("/intermediari/INT-001/stazioni").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idStazione",
@@ -197,11 +197,21 @@ class StazioneControllerIntegrationTest {
 
     @Test
     void customSortDesc() throws Exception {
-        mvc.perform(get("/intermediari/INT-001/stazioni").param("sort", "-codStazione")
+        mvc.perform(get("/intermediari/INT-001/stazioni").param("sort", "-idStazione")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idStazione",
                         contains("INT-001_03", "INT-001_02", "INT-001_01")));
+    }
+
+    @Test
+    void sortSulNomeInternoDellaColonnaReturns400() throws Exception {
+        // codStazione era il nome accettato prima: ora il campo pubblico e' idStazione,
+        // lo stesso della rappresentazione e del path.
+        mvc.perform(get("/intermediari/INT-001/stazioni").param("sort", "codStazione")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail", containsString("idStazione")));
     }
 
     @Test

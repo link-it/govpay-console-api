@@ -13,10 +13,11 @@ import org.springframework.data.domain.Sort;
  */
 public final class StazioneSortParser {
 
-    public static final String DEFAULT_SORT_RAW = "codStazione";
+    public static final String DEFAULT_SORT_RAW = "idStazione";
 
+    /** Chiavi = nomi pubblici (query param), valori = nomi dei campi entity JPA. */
     private static final Map<String, String> WHITELIST = Map.of(
-            DEFAULT_SORT_RAW, DEFAULT_SORT_RAW);
+            DEFAULT_SORT_RAW, "codStazione");
 
     private StazioneSortParser() {
     }

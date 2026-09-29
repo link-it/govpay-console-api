@@ -14,13 +14,13 @@ import org.springframework.data.domain.Sort;
  */
 public final class IntermediarioSortParser {
 
-    public static final String DEFAULT_SORT_RAW = "codIntermediario";
+    public static final String DEFAULT_SORT_RAW = "idIntermediario";
 
     /**
      * Chiavi = nomi pubblici (query param), valori = nomi dei campi entity JPA.
      */
     private static final Map<String, String> WHITELIST = Map.of(
-            DEFAULT_SORT_RAW, DEFAULT_SORT_RAW,
+            DEFAULT_SORT_RAW, "codIntermediario",
             "denominazione", "denominazione");
 
     private IntermediarioSortParser() {

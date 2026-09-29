@@ -5,7 +5,7 @@ public record IntermediarioListQuery(
         int limit,
         String sort,
         Boolean total,
-        String codIntermediario,
+        String idIntermediario,
         String denominazione,
         Boolean abilitato) {
 }
