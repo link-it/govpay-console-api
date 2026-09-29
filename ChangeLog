@@ -13,7 +13,20 @@
 	sul path e sul campo id delle rappresentazioni, resta il solo limite di
 	lunghezza della colonna.
 
-2026-09-28  Giuliano Pintori <pintori@link.it>
+	* [Impostazioni] Issue #93 Il giro lettura -> scrittura su
+	/impostazioni/hardening rendeva la risorsa non piu' scrivibile.
+	I campi numerici del captcha sono primitivi nel bean di configurazione, e il
+	mapper sostituiva con zero quelli assenti dal corpo. Per la soglia lo schema
+	dichiara minimo 0.1: la scrittura produceva un valore che l'API stessa
+	rifiuta, la GET successiva lo restituiva e il PUT di quella rappresentazione
+	dava 400. Il cruscotto, che rilegge e riscrive la risorsa intera, non
+	riusciva piu' a salvare finche' non si correggeva la riga a mano sul
+	database. Zero sui due timeout era altrettanto insidioso: sulla chiamata di
+	verifica significa attesa illimitata.
+	Ora i campi assenti prendono il default del prodotto (0.7 e 5000 ms, gli
+	stessi del core), e in lettura una soglia memorizzata fuori intervallo non
+	viene esposta: la GET restituisce sempre una rappresentazione che la PUT
+	successiva accetta.
 
 	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
 	comuni in collisione con quelli di console-api.
