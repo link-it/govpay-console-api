@@ -1,5 +1,33 @@
 2026-09-28  Giuliano Pintori <pintori@link.it>
 
+	* [Riconciliazioni] Issue #92 Il dettaglio rifiutava con 400 gli
+	identificativi che l'elenco restituisce.
+	Il parametro di path portava pattern '^[0-9A-Za-z]{1,35}$', ereditato dalla
+	V3 del core dove lo stesso path serve la sola scrittura con identificativo
+	scelto dal client. In lettura pero' l'identificativo e' il contenuto di
+	incassi.identificativo, che sui record registrati per flusso e' l'idFlusso
+	assegnato dal PSP e contiene i trattini della data: il dettaglio era quindi
+	irraggiungibile per tutte le riconciliazioni non singole.
+	Il vincolo alfanumerico resta sul PUT, dove l'identificativo lo conia il
+	client ed e' il solo punto in cui l'API puo' imporne la forma; in lettura,
+	sul path e sul campo id delle rappresentazioni, resta il solo limite di
+	lunghezza della colonna.
+
+	* [Impostazioni] Issue #93 Il giro lettura -> scrittura su
+	/impostazioni/hardening rendeva la risorsa non piu' scrivibile.
+	I campi numerici del captcha sono primitivi nel bean di configurazione, e il
+	mapper sostituiva con zero quelli assenti dal corpo. Per la soglia lo schema
+	dichiara minimo 0.1: la scrittura produceva un valore che l'API stessa
+	rifiuta, la GET successiva lo restituiva e il PUT di quella rappresentazione
+	dava 400. Il cruscotto, che rilegge e riscrive la risorsa intera, non
+	riusciva piu' a salvare finche' non si correggeva la riga a mano sul
+	database. Zero sui due timeout era altrettanto insidioso: sulla chiamata di
+	verifica significa attesa illimitata.
+	Ora i campi assenti prendono il default del prodotto (0.7 e 5000 ms, gli
+	stessi del core), e in lettura una soglia memorizzata fuori intervallo non
+	viene esposta: la GET restituisce sempre una rappresentazione che la PUT
+	successiva accetta.
+
 	* [Intermediari, Stazioni] Issue #94 Filtro e ordinamento usavano i nomi
 	interni delle colonne.
 	Per ordinare e filtrare gli intermediari bisognava chiamare il campo
@@ -13,8 +41,6 @@
 	filtro e per il sort; i nomi delle colonne restano confinati alle
 	Specifications e alla mappatura dei SortParser. Modifica non compatibile
 	all'indietro: l'API non e' ancora rilasciata.
-
-2026-09-28  Giuliano Pintori <pintori@link.it>
 
 	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
 	comuni in collisione con quelli di console-api.

@@ -338,6 +338,26 @@ class RiconciliazioniIntegrationTest {
     }
 
     @Test
+    void dettaglioConIdentificativoDiFlussoRaggiungibile() throws Exception {
+        // I record registrati per flusso portano come identificativo l'idFlusso
+        // assegnato dal PSP, con i trattini della data: il pattern alfanumerico sul
+        // path li rendeva irraggiungibili benche' l'elenco li restituisse.
+        String idFlusso = "2026-08-22GovPAYPsp1-0850160128";
+        newIncasso(domA, idFlusso, "ACQUISITO", null, idFlusso, null, 70.0, date(2026, 8, 22), null);
+        String p = utenteDominiStar("u-id-flusso");
+
+        mvc.perform(get("/riconciliazioni?idFlusso=" + idFlusso).with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].id", is(idFlusso)));
+
+        mvc.perform(get("/riconciliazioni/" + DOM_A + "/" + idFlusso).with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(idFlusso)))
+                .andExpect(jsonPath("$._links.self.href", is("/riconciliazioni/" + DOM_A + "/" + idFlusso)));
+    }
+
+    @Test
     void dettaglioNonTrovataRitorna404() throws Exception {
         String p = utenteDominiStar("u-404");
         mvc.perform(get("/riconciliazioni/" + DOM_A + "/RICINESISTENTE").with(httpBasic(p, PASSWORD)))

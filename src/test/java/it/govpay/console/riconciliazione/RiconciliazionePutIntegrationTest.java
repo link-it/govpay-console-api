@@ -113,6 +113,19 @@ class RiconciliazionePutIntegrationTest {
     }
 
     @Test
+    void registrazioneConIdNonAlfanumericoRitorna400() throws Exception {
+        // In scrittura l'identificativo lo conia il client: qui il vincolo
+        // alfanumerico resta, ed e' il solo punto in cui l'API puo' imporlo.
+        String p = utenteScrittura("u-id-non-alfanumerico");
+        mvc.perform(put("/riconciliazioni/" + DOM_A + "/2026-08-22GovPAYPsp1-0850160128")
+                        .with(httpBasic(p, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"importo": 100.0, "idFlusso": "FLUSSO-PUT-OK"}"""))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void nuovaRegistrazioneConCausaleCumulativaEstraeIdFlusso() throws Exception {
         newFr(domA, "2026-06-20-OKFLOW", "ACCETTATA", false, null, 100.0);
         String p = utenteScrittura("u-causale");
