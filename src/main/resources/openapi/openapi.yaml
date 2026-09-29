@@ -7461,10 +7461,18 @@ components:
       description: |
         Forma comune di tutte le risposte paginate.
         I consumer specializzano `results` via `allOf` con il proprio item type.
-        Due modalita' di paginazione mutuamente esclusive a livello di response:
-        - **offset** (default): `pagination` valorizzato (page/limit/hasNextPage + opzionali totalResults/totalPages se richiesto `total=true`);
-        - **cursor** (opt-in con `?cursor=`): `nextCursor` valorizzato con il cursore della pagina successiva.
-        L'esclusione mutua e' enforced dal controller (`?page` + `?cursor` => 400).
+        Due modalita' di paginazione a livello di response:
+        - **offset**: `pagination` valorizzato (page/limit/hasNextPage + opzionali totalResults/totalPages se richiesto `total=true`);
+        - **cursor**: `nextCursor` valorizzato con il cursore della pagina successiva.
+
+        La modalita' cursor esiste **solo sulle operazioni che dichiarano il
+        parametro `cursor`**; sulle altre la paginazione e' per pagina e basta,
+        e `nextCursor` non compare mai. Dove esiste, le due modalita' sono
+        mutuamente esclusive e l'esclusione e' applicata dal servizio:
+        `?page` esplicito, `?sort` esplicito o `?total=true` insieme a
+        `?cursor` danno 400. Dove non esiste, `?cursor=` e' rifiutato con 400
+        invece di essere ignorato: un client che credesse di paginare a cursore
+        rileggerebbe la prima pagina all'infinito senza alcun segnale.
       required:
         - results
       properties:
@@ -13181,7 +13189,8 @@ components:
         nella singola operazione).
 
         Mutuamente esclusivo con `page` esplicito, `sort` esplicito e
-        `total=true`. Cursor malformato → 400.
+        `total=true`. Cursor malformato → 400. Sulle operazioni che non
+        dichiarano questo parametro, inviarlo comunque da 400.
       schema:
         type: string
 
