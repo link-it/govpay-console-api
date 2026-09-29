@@ -69,6 +69,22 @@
 	console-api usa. Un repository nuovo pubblicato da govpay-common non entra
 	piu' nello scan finche' non lo si aggiunge esplicitamente all'eccezione.
 
+	* [Tracciati] Issue #90 GET /pendenze/tracciati non fallisce piu' se una
+	riga ha uno stato fuori vocabolario.
+	La mappatura dello stato DB verso quello REST sollevava IllegalStateException
+	su un valore diverso dai quattro che il core scrive (ELABORAZIONE, COMPLETATO,
+	SCARTATO, IN_STAMPA). Girando dentro lo stream sui risultati, una sola riga
+	anomala faceva rispondere 500 all'intera pagina, quindi l'elenco restava
+	inaccessibile finche' quella riga non veniva corretta a mano sul database.
+	Ora la riga viene esposta con il nuovo stato NON_RICONOSCIUTO e l'anomalia
+	finisce nei log a livello WARN. Il valore e' aggiunto all'enum
+	StatoTracciatoPendenza dell'OpenAPI: come filtro, ?stato=NON_RICONOSCIUTO
+	seleziona esattamente le righe il cui stato non e' fra i quattro noti, cosi'
+	che si possano cercare senza scorrere tutto l'elenco. Per una riga anomala
+	non viene esposto il link all'esito, perche' non si sa se sia stato prodotto.
+	Si incontra su dati storici scritti da versioni precedenti del core, o su uno
+	stato introdotto dal core prima che console-api sia aggiornata.
+
 2026-09-24  Giuliano Pintori <pintori@link.it>
 
 	* [Logging] Transaction ID e Correlation ID dalla libreria comune.
