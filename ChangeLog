@@ -28,6 +28,20 @@
 	viene esposta: la GET restituisce sempre una rappresentazione che la PUT
 	successiva accetta.
 
+	* [Intermediari, Stazioni] Issue #94 Filtro e ordinamento usavano i nomi
+	interni delle colonne.
+	Per ordinare e filtrare gli intermediari bisognava chiamare il campo
+	codIntermediario, mentre la rappresentazione, il path e ogni riferimento
+	incrociato lo chiamano idIntermediario; stessa divergenza sulle stazioni fra
+	codStazione e idStazione. Ogni altra risorsa della V2 usa il nome pubblico da
+	entrambe le parti - /domini accetta ?sort=idDominio e mappa internamente su
+	codDominio - quindi un client che costruisce l'ordinamento dal nome della
+	colonna che sta mostrando riceveva 400 proprio sulla colonna identificativa.
+	I due parametri di query si chiamano ora idIntermediario e idStazione, per il
+	filtro e per il sort; i nomi delle colonne restano confinati alle
+	Specifications e alla mappatura dei SortParser. Modifica non compatibile
+	all'indietro: l'API non e' ancora rilasciata.
+
 	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
 	comuni in collisione con quelli di console-api.
 	Lo scan di it.govpay.common.repository escludeva i cinque repository noti

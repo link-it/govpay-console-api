@@ -135,7 +135,7 @@ class IntermediarioControllerIntegrationTest {
 
     @Test
     void filterByCodIntermediarioPartial() throws Exception {
-        mvc.perform(get("/intermediari").param("codIntermediario", "001").with(httpBasic(PRINCIPAL, PASSWORD)))
+        mvc.perform(get("/intermediari").param("idIntermediario", "001").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
                 .andExpect(jsonPath("$.results[0].idIntermediario", is("INT-001")));
@@ -158,7 +158,7 @@ class IntermediarioControllerIntegrationTest {
     }
 
     @Test
-    void defaultSortByCodIntermediarioAsc() throws Exception {
+    void defaultSortByIdIntermediarioAsc() throws Exception {
         mvc.perform(get("/intermediari").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idIntermediario",
@@ -167,10 +167,19 @@ class IntermediarioControllerIntegrationTest {
 
     @Test
     void customSortDesc() throws Exception {
-        mvc.perform(get("/intermediari").param("sort", "-codIntermediario").with(httpBasic(PRINCIPAL, PASSWORD)))
+        mvc.perform(get("/intermediari").param("sort", "-idIntermediario").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idIntermediario",
                         contains("INT-003", "INT-002", "INT-001")));
+    }
+
+    @Test
+    void sortSulNomeInternoDellaColonnaReturns400() throws Exception {
+        // codIntermediario era il nome accettato prima: ora il campo pubblico e'
+        // uno solo, e il messaggio di errore indica quali sono.
+        mvc.perform(get("/intermediari").param("sort", "codIntermediario").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail", containsString("idIntermediario")));
     }
 
     @Test

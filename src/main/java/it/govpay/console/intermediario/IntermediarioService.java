@@ -89,14 +89,14 @@ public class IntermediarioService {
     @Transactional(readOnly = true)
     public ListIntermediari200Response list(IntermediarioListQuery query) {
         aclAuthorizer.requireLettura(AclServizio.ANAGRAFICA_PAGO_PA);
-        log.debug("listIntermediari filtri[codIntermediario={}, denominazione={}, abilitato={}], "
+        log.debug("listIntermediari filtri[idIntermediario={}, denominazione={}, abilitato={}], "
                         + "page={}, limit={}, sort={}, total={}",
-                query.codIntermediario(), query.denominazione(), query.abilitato(),
+                query.idIntermediario(), query.denominazione(), query.abilitato(),
                 query.page(), query.limit(), query.sort(), query.total());
 
         Specification<Intermediario> spec = Specification.allOf(
                 Stream.of(
-                        IntermediarioSpecifications.codIntermediarioPartial(query.codIntermediario()),
+                        IntermediarioSpecifications.codIntermediarioPartial(query.idIntermediario()),
                         IntermediarioSpecifications.denominazionePartial(query.denominazione()),
                         IntermediarioSpecifications.abilitatoExact(query.abilitato()))
                 .filter(Objects::nonNull)

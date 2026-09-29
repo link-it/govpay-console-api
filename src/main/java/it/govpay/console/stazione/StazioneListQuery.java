@@ -5,6 +5,6 @@ public record StazioneListQuery(
         int limit,
         String sort,
         Boolean total,
-        String codStazione,
+        String idStazione,
         Boolean abilitato) {
 }
