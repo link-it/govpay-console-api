@@ -1220,7 +1220,7 @@ paths:
         (l'anti-leak non si applica in scrittura).
       parameters:
         - $ref: '#/components/parameters/IdDominioPath'
-        - $ref: '#/components/parameters/RiconciliazioneIdPath'
+        - $ref: '#/components/parameters/RiconciliazioneIdWritePath'
       requestBody:
         required: true
         content:
@@ -1865,7 +1865,7 @@ paths:
       summary: Elenca gli intermediari pagoPA (paginati).
       description: |
         Filtri opzionali e ortogonali (AND):
-        - `codIntermediario` — match parziale;
+        - `idIntermediario` — match parziale;
         - `denominazione` — match parziale;
         - `abilitato` — match esatto.
 
@@ -1876,13 +1876,13 @@ paths:
 
         Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
         prefisso per ASC), campi multipli separati da virgola; campi ammessi:
-        `codIntermediario`, `denominazione`. Default `codIntermediario` (ASC).
+        `idIntermediario`, `denominazione`. Default `idIntermediario` (ASC).
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Total'
-        - $ref: '#/components/parameters/CodIntermediario'
+        - $ref: '#/components/parameters/IdIntermediarioFilter'
         - $ref: '#/components/parameters/Denominazione'
         - $ref: '#/components/parameters/Abilitato'
       responses:
@@ -2125,7 +2125,7 @@ paths:
       summary: Elenca le stazioni di un intermediario (paginate).
       description: |
         Filtri opzionali e ortogonali (AND):
-        - `codStazione` — match parziale;
+        - `idStazione` — match parziale;
         - `abilitato` — match esatto.
 
         **Paginazione** (offset): `?page=N&limit=L`. Di default la risposta
@@ -2133,13 +2133,13 @@ paths:
         `?total=true` vengono aggiunti `totalResults` e `totalPages` (Page).
 
         Ordinamento via `?sort=campo` (prefisso `-` per DESC, `+` o nessun
-        prefisso per ASC); campi ammessi: `codStazione`. Default `codStazione` (ASC).
+        prefisso per ASC); campi ammessi: `idStazione`. Default `idStazione` (ASC).
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Total'
-        - $ref: '#/components/parameters/CodStazione'
+        - $ref: '#/components/parameters/StazioneIdFilter'
         - $ref: '#/components/parameters/Abilitato'
       responses:
         '200':
@@ -8518,8 +8518,16 @@ components:
           properties:
             id:
               type: string
-              description: Identificativo della riconciliazione, scelto dal client in scrittura.
-              pattern: '^[0-9A-Za-z]{1,35}$'
+              maxLength: 35
+              description: |
+                Identificativo della riconciliazione. In scrittura lo sceglie il
+                client, con il vincolo alfanumerico documentato sul path del `PUT`.
+                In lettura e' il valore che il prodotto ha memorizzato: sui record
+                registrati per flusso e' l'idFlusso assegnato dal PSP, che contiene
+                i trattini della data (`2026-08-22GovPAYPsp1-0850160128`). Per
+                questo qui non c'e' il vincolo alfanumerico: restringerlo
+                escluderebbe dal contratto righe che il prodotto restituisce.
+              example: '2026-08-22GovPAYPsp1-0850160128'
             dominio:
               $ref: '#/components/schemas/DominioRef'
             importo:
@@ -11262,6 +11270,11 @@ components:
         Configurazione Google reCAPTCHA. La chiave segreta non e' inclusa: si
         imposta tramite l'endpoint dedicato `/impostazioni/hardening/credenziali`
         e non e' mai restituita dalle GET.
+
+        `soglia` viene omessa in lettura se il valore memorizzato e' fuori
+        dall'intervallo dichiarato — succede su configurazioni scritte dalla V1
+        o da versioni precedenti di questa API. Cosi' una GET restituisce
+        sempre una rappresentazione che la PUT successiva accetta.
       properties:
         serverURL:
           type: string
@@ -11276,7 +11289,11 @@ components:
           format: double
           minimum: 0.1
           maximum: 1.0
-          description: Soglia di accettazione della risposta di validazione.
+          description: |
+            Soglia di accettazione della risposta di validazione. Se assente in
+            scrittura viene memorizzato il default del prodotto (0.7): la
+            configurazione sottostante non sa rappresentare "non impostata", e
+            zero accetterebbe qualunque punteggio.
         parametro:
           type: string
           pattern: '[a-zA-Z0-9-_]+'
@@ -11287,9 +11304,16 @@ components:
         connectionTimeoutMs:
           type: integer
           format: int32
+          description: |
+            Timeout di connessione verso il servizio di verifica. Se assente in
+            scrittura viene memorizzato il default del prodotto (5000 ms): zero,
+            sulla chiamata sottostante, significa attesa illimitata.
         readTimeoutMs:
           type: integer
           format: int32
+          description: |
+            Timeout di lettura verso il servizio di verifica, con la stessa
+            regola di `connectionTimeoutMs`.
 
     ImpostazioniHardening:
       type: object
@@ -13517,7 +13541,25 @@ components:
       name: id
       in: path
       required: true
-      description: Identificativo della riconciliazione, scelto dal client in scrittura.
+      description: |
+        Identificativo della riconciliazione cosi' come compare nell'elenco.
+        Nessun vincolo di alfabeto: sui record registrati per flusso e'
+        l'idFlusso assegnato dal PSP, che contiene i trattini della data. Il
+        vincolo alfanumerico vale solo dove l'identificativo lo sceglie il
+        client, cioe' sul `PUT` (`RiconciliazioneIdWritePath`).
+      schema:
+        type: string
+        maxLength: 35
+      example: '2026-08-22GovPAYPsp1-0850160128'
+
+    RiconciliazioneIdWritePath:
+      name: id
+      in: path
+      required: true
+      description: |
+        Identificativo della riconciliazione scelto dal client. In scrittura e'
+        alfanumerico, come nella V3 del core: e' il client a coniarlo, e questo
+        e' il solo punto in cui l'API puo' imporne la forma.
       schema:
         type: string
         pattern: '^[0-9A-Za-z]{1,35}$'
@@ -13770,11 +13812,11 @@ components:
       schema:
         type: string
 
-    CodIntermediario:
-      name: codIntermediario
+    IdIntermediarioFilter:
+      name: idIntermediario
       in: query
       required: false
-      description: Match parziale sul codice intermediario.
+      description: Match parziale sull'identificativo dell'intermediario.
       schema:
         type: string
 
@@ -13905,11 +13947,14 @@ components:
       schema:
         type: string
 
-    CodStazione:
-      name: codStazione
+    StazioneIdFilter:
+      name: idStazione
       in: query
       required: false
-      description: Match parziale sul codice stazione.
+      description: |
+        Match parziale sull'identificativo della stazione. Distinto da
+        `IdStazioneFilter`, che su `/domini` e' un match esatto usato per
+        restringere ai domini di una stazione.
       schema:
         type: string
 

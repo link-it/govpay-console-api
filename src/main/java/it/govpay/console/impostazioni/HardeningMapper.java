@@ -1,6 +1,8 @@
 package it.govpay.console.impostazioni;
 
 import it.govpay.common.configurazione.model.GoogleCaptcha;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import it.govpay.common.configurazione.model.Hardening;
@@ -17,6 +19,23 @@ import it.govpay.console.model.ImpostazioniHardeningCredenziali;
 @Component
 public class HardeningMapper {
 
+    private static final Logger log = LoggerFactory.getLogger(HardeningMapper.class);
+
+    /**
+     * Default del prodotto per i campi numerici del captcha, gli stessi che il
+     * core scrive in {@code Configurazione.getHardeningDefault()}. Servono
+     * perche' in {@link GoogleCaptcha} i tre campi sono primitivi: lo zero non
+     * e' distinguibile da "non impostato", e nessuno dei tre zeri e' un valore
+     * sensato — zero come soglia accetta qualunque punteggio, zero come timeout
+     * significa attesa illimitata sulla chiamata di verifica.
+     */
+    static final double SOGLIA_DEFAULT = 0.7d;
+    static final int TIMEOUT_DEFAULT_MS = 5000;
+
+    /** Intervallo che lo schema dichiara per {@code soglia}. */
+    static final double SOGLIA_MIN = 0.1d;
+    static final double SOGLIA_MAX = 1.0d;
+
     public it.govpay.console.model.ImpostazioniHardening toDto(Hardening source) {
         it.govpay.console.model.ImpostazioniHardening dto = new it.govpay.console.model.ImpostazioniHardening();
         dto.setAbilitato(source.isAbilitato());
@@ -31,12 +50,30 @@ public class HardeningMapper {
         }
         captcha.setServerURL(source.getServerURL());
         captcha.setSiteKey(source.getSiteKey());
-        captcha.setSoglia(source.getSoglia());
+        captcha.setSoglia(sogliaEsponibile(source.getSoglia()));
         captcha.setParametro(source.getResponseParameter());
         captcha.setDenyOnFail(source.isDenyOnFail());
         captcha.setConnectionTimeoutMs(source.getConnectionTimeout());
         captcha.setReadTimeoutMs(source.getReadTimeout());
         return captcha;
+    }
+
+    /**
+     * Una soglia fuori dall'intervallo dichiarato non viene restituita come se
+     * fosse valida: la si omette, che per un campo opzionale vuol dire "non
+     * configurata". Sono valori che restano solo su configurazioni scritte
+     * prima di questa correzione o dalla V1; restituirli tali e' quali
+     * produceva una rappresentazione che la successiva scrittura rifiutava,
+     * lasciando la risorsa non piu' salvabile dal cruscotto.
+     */
+    private static Double sogliaEsponibile(double soglia) {
+        if (soglia < SOGLIA_MIN || soglia > SOGLIA_MAX) {
+            log.warn("Soglia reCAPTCHA memorizzata fuori intervallo [{}, {}]: {}. "
+                    + "Non viene esposta; la prossima scrittura la riporta al default {}.",
+                    SOGLIA_MIN, SOGLIA_MAX, soglia, SOGLIA_DEFAULT);
+            return null;
+        }
+        return soglia;
     }
 
     /** Applica il DTO su un {@link Hardening} esistente, preservando {@code secretKey}. */
@@ -53,13 +90,16 @@ public class HardeningMapper {
         GoogleCaptcha googleCaptcha = new GoogleCaptcha();
         googleCaptcha.setServerURL(captcha.getServerURL());
         googleCaptcha.setSiteKey(captcha.getSiteKey());
-        googleCaptcha.setSoglia(captcha.getSoglia() != null ? captcha.getSoglia() : 0d);
+        // I campi assenti prendono il default del prodotto, non zero: zero non e'
+        // un valore che l'API accetterebbe di rileggere (la soglia ha minimo 0.1)
+        // ne' uno che il core interpreta come "non impostato".
+        googleCaptcha.setSoglia(captcha.getSoglia() != null ? captcha.getSoglia() : SOGLIA_DEFAULT);
         googleCaptcha.setResponseParameter(captcha.getParametro());
         googleCaptcha.setDenyOnFail(Boolean.TRUE.equals(captcha.getDenyOnFail()));
         googleCaptcha.setConnectionTimeout(captcha.getConnectionTimeoutMs() != null
-                ? captcha.getConnectionTimeoutMs() : 0);
+                ? captcha.getConnectionTimeoutMs() : TIMEOUT_DEFAULT_MS);
         googleCaptcha.setReadTimeout(captcha.getReadTimeoutMs() != null
-                ? captcha.getReadTimeoutMs() : 0);
+                ? captcha.getReadTimeoutMs() : TIMEOUT_DEFAULT_MS);
         googleCaptcha.setSecretKey(secretKeyEsistente);
         target.setGoogleCatpcha(googleCaptcha);
     }

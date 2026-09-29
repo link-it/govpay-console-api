@@ -31,14 +31,14 @@ public class StazioneController implements StazioniApi {
                                                                 Integer limit,
                                                                 String sort,
                                                                 Boolean total,
-                                                                String codStazione,
+                                                                String idStazione,
                                                                 Boolean abilitato) {
         StazioneListQuery query = new StazioneListQuery(
                 page == null ? 1 : page,
                 limit == null ? 25 : limit,
                 sort,
                 total,
-                codStazione,
+                idStazione,
                 abilitato);
         return ResponseEntity.ok(service.list(idIntermediario, query));
     }

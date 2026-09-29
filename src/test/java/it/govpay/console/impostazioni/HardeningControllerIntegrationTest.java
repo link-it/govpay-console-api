@@ -150,6 +150,74 @@ class HardeningControllerIntegrationTest {
                 .andExpect(jsonPath("$.captcha.soglia", is(0.9)));
     }
 
+    // ----- giro lettura -> scrittura -------------------------------------------
+
+    @Test
+    void giroLetturaScritturaRipetibile() throws Exception {
+        grantScrittura();
+        // Il cruscotto rilegge e riscrive la risorsa intera: due giri di seguito
+        // devono restare possibili. Prima, con la soglia assente dal primo corpo,
+        // il PUT memorizzava zero, la GET lo restituiva e il PUT successivo lo
+        // rifiutava perche' lo schema vuole almeno 0.1.
+        putConfig(currentEtag(), """
+                {"abilitato":true,"captcha":{"siteKey":"site-abc","denyOnFail":false}}""");
+
+        String letto = mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        mvc.perform(put(BASE).with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", currentEtag())
+                        .contentType(MediaType.APPLICATION_JSON).content(letto))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void campiNumericiAssentiPrendonoIlDefaultDelProdotto() throws Exception {
+        grantScrittura();
+        // minimalBody non porta i due timeout: zero significherebbe attesa
+        // illimitata sulla chiamata di verifica.
+        putConfig(currentEtag(), minimalBody());
+        mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.captcha.soglia", is(0.5)))
+                .andExpect(jsonPath("$.captcha.connectionTimeoutMs", is(5000)))
+                .andExpect(jsonPath("$.captcha.readTimeoutMs", is(5000)));
+
+        // e la soglia, quando manca anche lei
+        putConfig(currentEtag(), """
+                {"abilitato":true,"captcha":{"siteKey":"site-abc"}}""");
+        mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.captcha.soglia", is(0.7)));
+    }
+
+    @Test
+    void sogliaMemorizzataFuoriIntervalloNonVieneEsposta() throws Exception {
+        grantScrittura();
+        putConfig(currentEtag(), minimalBody());
+        // configurazione scritta dalla V1 o da una versione precedente di questa API
+        Hardening hardening = objectMapper.readValue(
+                configurazioneRepository.findByNome(ConfigurazioneKeys.KEY_HARDENING).orElseThrow().getValore(),
+                Hardening.class);
+        hardening.getGoogleCatpcha().setSoglia(0d);
+        scriviHardening(hardening);
+
+        mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.captcha.siteKey", is("site-abc")))
+                .andExpect(jsonPath("$.captcha.soglia").doesNotExist());
+
+        // e la risorsa resta scrivibile: la rappresentazione letta e' accettata
+        String letto = mvc.perform(get(BASE).with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(put(BASE).with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", currentEtag())
+                        .contentType(MediaType.APPLICATION_JSON).content(letto))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.captcha.soglia", is(0.7)));
+    }
+
     @Test
     void putCredenzialiWithoutDirittoReturns403() throws Exception {
         grantLettura();
@@ -230,6 +298,13 @@ class HardeningControllerIntegrationTest {
         if (!has) {
             grantLettura();
         }
+    }
+
+    private void scriviHardening(Hardening hardening) {
+        it.govpay.common.entity.ConfigurazioneEntity riga =
+                configurazioneRepository.findByNome(ConfigurazioneKeys.KEY_HARDENING).orElseThrow();
+        riga.setValore(objectMapper.writeValueAsString(hardening));
+        configurazioneRepository.save(riga);
     }
 
     private static String minimalBody() {
