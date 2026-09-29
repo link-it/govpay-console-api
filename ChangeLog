@@ -1,5 +1,21 @@
 2026-09-28  Giuliano Pintori <pintori@link.it>
 
+	* [Paginazione] Issue #95 ?cursor= veniva ignorato in silenzio dalle
+	collezioni senza paginazione keyset.
+	Sette operazioni dichiarano il cursore e applicano la mutua esclusione con
+	page, sort e total; sulle altre diciassette il parametro veniva semplicemente
+	ignorato, con risposta 200 e senza nextCursor. Un client convinto di paginare
+	a cursore rileggeva la prima pagina all'infinito senza alcun segnale, mentre
+	lo schema comune PaginatedResponse dichiarava la modalita' cursor e la sua
+	mutua esclusione come se valessero per tutte le risposte paginate.
+	Un interceptor rifiuta ora ?cursor= dove l'operazione non lo dichiara, con un
+	messaggio che indica quale paginazione la risorsa supporta. Il controllo e'
+	sulla firma dell'operazione (il @RequestParam generato dall'OpenAPI) e non su
+	un elenco di rotte da tenere allineato a mano. Descrizioni di
+	PaginatedResponse e del parametro cursor riscritte di conseguenza.
+
+2026-09-28  Giuliano Pintori <pintori@link.it>
+
 	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
 	comuni in collisione con quelli di console-api.
 	Lo scan di it.govpay.common.repository escludeva i cinque repository noti
