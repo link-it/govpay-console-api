@@ -23,21 +23,23 @@ import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypesScanne
 
 import it.govpay.common.entity.ConfigurazioneEntity;
 import it.govpay.common.entity.ConnettoreEntity;
-import it.govpay.common.repository.ApplicazioneRepository;
-import it.govpay.common.repository.DominioLogoRepository;
-import it.govpay.common.repository.DominioRepository;
-import it.govpay.common.repository.IntermediarioRepository;
-import it.govpay.common.repository.StazioneRepository;
 
 /**
- * Repository scan esteso a {@code it.govpay.common.repository} ma con
- * {@code excludeFilters}: molte tabelle sono modellate in common in sola
- * lettura (per costruire RestTemplate/leggere configurazione) E in
- * console-api in CRUD completo con la propria entity
- * slim — i repository di common per quelle tabelle avrebbero lo stesso nome
- * bean di default delle controparti CRUD di console. Restano attivi solo
- * {@code ConnettoreEntityRepository} e {@code ConfigurazioneRepository}
- * (nessuna collisione, non hanno un equivalente CRUD in console-api).
+ * Repository scan esteso a {@code it.govpay.common.repository} ma limitato ai
+ * due soli repository che servono: molte tabelle sono modellate in common in
+ * sola lettura (per costruire RestTemplate/leggere configurazione) E in
+ * console-api in CRUD completo con la propria entity slim — i repository di
+ * common per quelle tabelle avrebbero lo stesso nome bean di default delle
+ * controparti CRUD di console, e il contesto non parte.
+ * <p>
+ * Il filtro e' espresso come esclusione di tutto il pacchetto con l'eccezione
+ * di {@code ConnettoreEntityRepository} e {@code ConfigurazioneRepository},
+ * invece che come elenco dei nomi in collisione: l'elenco andava aggiornato a
+ * ogni repository nuovo pubblicato da govpay-common, e finche' non lo era il
+ * servizio non partiva — e' successo con i repository di anagrafica aggiunti
+ * nella 2.0.4 (unita' operative, tipi versamento, iban, tributi). Cosi'
+ * invece un repository nuovo in common non entra nello scan di console-api
+ * finche' qualcuno non lo aggiunge esplicitamente all'eccezione.
  * <p>
  * Component scan NON esteso a {@code it.govpay.common.client}/
  * {@code it.govpay.common.configurazione}: i pochi bean di sola lettura che
@@ -52,9 +54,9 @@ import it.govpay.common.repository.StazioneRepository;
  */
 @SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
 @EnableJpaRepositories(basePackages = { "it.govpay.console.repository", "it.govpay.common.repository" },
-        excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE,
-                classes = { ApplicazioneRepository.class, DominioRepository.class,
-                        IntermediarioRepository.class, StazioneRepository.class, DominioLogoRepository.class }))
+        excludeFilters = @Filter(type = FilterType.REGEX,
+                pattern = "it\\.govpay\\.common\\.repository\\."
+                        + "(?!ConnettoreEntityRepository$|ConfigurazioneRepository$).*"))
 public class GovPayConsoleApplication extends SpringBootServletInitializer {
 
     @Override

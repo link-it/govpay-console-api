@@ -1,3 +1,18 @@
+2026-09-28  Giuliano Pintori <pintori@link.it>
+
+	* [Avvio] Il contesto non parte contro govpay-common 2.0.4: repository
+	comuni in collisione con quelli di console-api.
+	Lo scan di it.govpay.common.repository escludeva i cinque repository noti
+	in collisione elencandoli uno per uno. I repository di anagrafica aggiunti
+	da govpay-common nella 2.0.4 (unita' operative, tipi versamento, tipi
+	versamento dominio, iban, tipi tributo, tributi) hanno gli stessi nomi bean
+	delle controparti CRUD di console-api, e non essendo nell'elenco facevano
+	fallire l'avvio con BeanDefinitionOverrideException.
+	L'esclusione e' ora espressa al contrario: tutto il pacchetto tranne
+	ConnettoreEntityRepository e ConfigurazioneRepository, i due soli che
+	console-api usa. Un repository nuovo pubblicato da govpay-common non entra
+	piu' nello scan finche' non lo si aggiunge esplicitamente all'eccezione.
+
 2026-09-24  Giuliano Pintori <pintori@link.it>
 
 	* [Logging] Transaction ID e Correlation ID dalla libreria comune.
