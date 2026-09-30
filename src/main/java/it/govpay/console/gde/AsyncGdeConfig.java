@@ -7,6 +7,8 @@ import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import it.govpay.common.logging.MdcTaskDecorator;
+
 /**
  * Bean {@code gdeExecutor} usato da {@link ConsoleGdeService} per l'invio
  * asincrono degli eventi GDE, alias anche {@code asyncHttpExecutor} perche'
@@ -14,10 +16,20 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * {@code it.govpay.common.client.service.ConnettoreService} (qualifier
  * atteso da quella classe, vedi {@link GdeCommonBeansConfig}).
  * <p>
- * Se {@code app.gde.async=true} (default prod): {@link ThreadPoolTaskExecutor}
- * con pool dedicato {@code gde-*}. Se {@code app.gde.async=false} (default
- * profilo test): {@link SyncTaskExecutor}, cosi' i test che verificano
- * l'invio dell'evento lo trovano senza dover attendere il thread async.
+ * Se {@code app.gde.async=true} (default): {@link ThreadPoolTaskExecutor} con
+ * pool dedicato {@code gde-*}. Se {@code app.gde.async=false}:
+ * {@link SyncTaskExecutor}, per test che vogliono trovare l'invio
+ * dell'evento senza dover attendere il thread async.
+ * <p>
+ * {@link MdcTaskDecorator} e' indispensabile sul ramo asincrono: senza,
+ * transaction id e correlation id (in {@code TransactionContext}, un
+ * ThreadLocal) non attraversano il cambio di thread verso il pool —
+ * {@code AbstractGdeService#inviaEvento} eseguito sul thread {@code gde-*}
+ * troverebbe un contesto vuoto, perdendo sia la correlazione nei log di
+ * quell'invio sia la propagazione del correlation id alla chiamata HTTP
+ * verso il GDE (fatta da {@code CorrelationIdClientInterceptor}, che legge
+ * lo stesso ThreadLocal). Il ramo sincrono non ne ha bisogno: gira sul
+ * thread chiamante, dove il contesto e' gia' presente.
  */
 @Configuration
 public class AsyncGdeConfig {
@@ -38,6 +50,7 @@ public class AsyncGdeConfig {
         // l'invio GDE non deve mai bloccare la response: log e drop
         exec.setRejectedExecutionHandler((r, e) -> org.slf4j.LoggerFactory.getLogger(AsyncGdeConfig.class)
                 .warn("Evento GDE rifiutato dall'executor (pool saturo): evento droppato."));
+        exec.setTaskDecorator(new MdcTaskDecorator());
         exec.initialize();
         return exec;
     }
