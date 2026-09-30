@@ -16,6 +16,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import it.govpay.common.gde.GdeEventInfo;
+import it.govpay.common.gde.GdeUtils;
+import it.govpay.common.logging.TransactionContext;
 import it.govpay.gde.client.beans.CategoriaEvento;
 import it.govpay.gde.client.beans.ComponenteEvento;
 import it.govpay.gde.client.beans.EsitoEvento;
@@ -41,10 +43,24 @@ import jakarta.servlet.http.HttpServletResponse;
  * testuale/strutturato (JSON, problem+json, XML, text/*); altrimenti
  * sostituisce il payload con il placeholder fisso {@code "binary"}, senza mai
  * bufferizzare l'intero contenuto binario in memoria (vedi
- * {@link GdeCapturingResponseWrapper}).
+ * {@link GdeCapturingResponseWrapper}). Gli header sensibili (Authorization,
+ * Cookie, ecc.) sono oscurati da {@link GdeUtils#maskSensitiveHeaderValue}.
+ * <p>
+ * L'ordine deve essere numericamente MAGGIORE dell'ordine di
+ * {@code TransactionIdFilter} (default {@code HIGHEST_PRECEDENCE + 100}), non
+ * minore — stesso principio di {@link it.govpay.console.web.RequestLoggingFilter}:
+ * un filtro con ordine piu' basso avvolge quelli con ordine piu' alto
+ * dall'esterno, quindi il suo blocco {@code finally} (dove questo filtro
+ * costruisce l'evento GDE, incluso {@code transactionId}) verrebbe eseguito
+ * DOPO che {@code TransactionIdFilter} ha gia' ripulito il proprio contesto —
+ * qui {@code TransactionContext.getTransactionId()} risulterebbe gia' nullo.
+ * Resta comunque ampiamente esterno alla catena di sicurezza di Spring
+ * (ordinata a {@code SecurityProperties.DEFAULT_FILTER_ORDER}, un valore
+ * prossimo allo zero, non a {@code HIGHEST_PRECEDENCE}): nessun conflitto tra
+ * i due vincoli.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 17)
+@Order(Ordered.HIGHEST_PRECEDENCE + 120)
 public class GdeEventFilter extends OncePerRequestFilter {
 
     private static final String UNKNOWN_OPERATION = "UNKNOWN";
@@ -117,6 +133,7 @@ public class GdeEventFilter extends OncePerRequestFilter {
                 .statusCodeRisposta(status)
                 .headersRisposta(extractResponseHeaders(response))
                 .payloadRisposta(responsePayload(response))
+                .transactionId(TransactionContext.getTransactionId())
                 .build();
 
         consoleGdeService.inviaEventoAsync(eventInfo);
@@ -191,7 +208,7 @@ public class GdeEventFilter extends OncePerRequestFilter {
     private static Header header(String nome, String valore) {
         Header header = new Header();
         header.setNome(nome);
-        header.setValore(valore);
+        header.setValore(GdeUtils.maskSensitiveHeaderValue(nome, valore));
         return header;
     }
 

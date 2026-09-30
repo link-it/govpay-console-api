@@ -23,8 +23,10 @@ import jakarta.servlet.http.HttpServletResponse;
  *       {@code finally} del filtro: la catena di Spring Security ripulisce
  *       il {@code SecurityContext} nel proprio {@code finally}, che si
  *       chiude prima di risalire fino a un filtro esterno come
- *       {@link GdeEventFilter} (ordine +17, piu' esterno della security
- *       chain). Un {@link HandlerInterceptor#preHandle} gira alla stessa
+ *       {@link GdeEventFilter} (ordine {@code HIGHEST_PRECEDENCE + 120},
+ *       ampiamente esterno alla security chain, che parte da
+ *       {@code SecurityProperties.DEFAULT_FILTER_ORDER}). Un
+ *       {@link HandlerInterceptor#preHandle} gira alla stessa
  *       profondita' del controller, quando il contesto e' ancora garantito
  *       popolato.</li>
  * </ul>

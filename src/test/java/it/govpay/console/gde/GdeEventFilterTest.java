@@ -17,6 +17,7 @@ import org.springframework.web.servlet.HandlerMapping;
 
 import it.govpay.common.gde.GdeEventInfo;
 import it.govpay.gde.client.beans.EsitoEvento;
+import it.govpay.gde.client.beans.Header;
 import jakarta.servlet.FilterChain;
 
 class GdeEventFilterTest {
@@ -97,6 +98,39 @@ class GdeEventFilterTest {
         GdeEventInfo eventInfo = capturedEventInfo();
         assertThat(eventInfo.getStatusCodeRisposta()).isEqualTo(404);
         assertThat(eventInfo.getEsito()).isEqualTo(EsitoEvento.KO);
+    }
+
+    @Test
+    void oscuraLHeaderAuthorizationConLeCredenzialiBasic() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/pendenze");
+        request.addHeader("Authorization", "Basic QTJBLVRFU1Q6dGVzdC1wYXNzd29yZA==");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        GdeEventInfo eventInfo = capturedEventInfo();
+        Header authorization = eventInfo.getHeadersRichiesta().stream()
+                .filter(h -> "Authorization".equalsIgnoreCase(h.getNome()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(authorization.getValore()).isEqualTo("***");
+    }
+
+    @Test
+    void oscuraLHeaderSetCookieInRisposta() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/pendenze");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) ->
+                ((jakarta.servlet.http.HttpServletResponse) res).addHeader("Set-Cookie", "JSESSIONID=segreto");
+
+        filter.doFilter(request, response, chain);
+
+        GdeEventInfo eventInfo = capturedEventInfo();
+        Header setCookie = eventInfo.getHeadersRisposta().stream()
+                .filter(h -> "Set-Cookie".equalsIgnoreCase(h.getNome()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(setCookie.getValore()).isEqualTo("***");
     }
 
     private GdeEventInfo capturedEventInfo() {
