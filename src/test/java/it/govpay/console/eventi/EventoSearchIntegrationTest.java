@@ -169,7 +169,7 @@ class EventoSearchIntegrationTest {
     // ----- validazioni di costo ---------------------------------------------------------
 
     @Test
-    void messaggiSenzaRangeEntro7Giorni_ritorna400() throws Exception {
+    void messaggiConRangeOltre7Giorni_ritorna400() throws Exception {
         String p = utenteDominiStar("u-msg400");
 
         mvc.perform(get("/eventi?messaggi=timeout&dataDa=2020-01-01T00:00:00Z")
@@ -184,6 +184,45 @@ class EventoSearchIntegrationTest {
         mvc.perform(get("/eventi?messaggi=timeout&dataDa=2026-06-25T00:00:00Z&dataA=2026-06-26T00:00:00Z")
                         .with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * Senza date l'intervallo effettivo e' la finestra di default di 24 ore, che
+     * soddisfa entrambi i vincoli: ne' il filtro {@code messaggi} ne'
+     * {@code total=true} vanno rifiutati solo perche' le date non sono state
+     * passate. E' quanto dichiara l'OpenAPI dopo la correzione del testo.
+     */
+    @Test
+    void messaggiSenzaDate_ok() throws Exception {
+        String p = utenteDominiStar("u-msg-default");
+
+        mvc.perform(get("/eventi?messaggi=timeout").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void totalSenzaDate_ok() throws Exception {
+        String p = utenteDominiStar("u-tot-default");
+        when(eventoGdeClient.findEventi(any())).thenReturn(
+                new ListaEventi().page(new PageInfo().offset(0L).limit(25).total(7L).hasNext(false))
+                        .items(java.util.List.of()));
+
+        mvc.perform(get("/eventi?total=true").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagination.totalResults", org.hamcrest.Matchers.is(7)));
+    }
+
+    /**
+     * Il solo {@code dataA} non fa scattare il default su {@code dataDa}: senza
+     * limite inferiore l'ampiezza non e' misurabile, e dove serve misurarla la
+     * richiesta e' rifiutata.
+     */
+    @Test
+    void totalConSoloDataA_ritorna400() throws Exception {
+        String p = utenteDominiStar("u-tot-soloA");
+
+        mvc.perform(get("/eventi?total=true&dataA=2026-06-25T00:00:00Z").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

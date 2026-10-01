@@ -1,3 +1,18 @@
+2026-10-01  Giuliano Pintori <pintori@link.it>
+
+	* [Giornale Eventi] Issue #103 OpenAPI di /eventi: il testo dichiarava 400
+	dove il servizio risponde 200.
+	Il contratto diceva che il filtro messaggi senza intervallo temporale e
+	?total=true senza intervallo davano 400. Non succede, e correttamente: quando
+	dataDa e dataA mancano entrambi, dataDa viene forzato a "adesso meno 24 ore",
+	e il vincolo e' valutato su quell'intervallo effettivo - 24 ore stanno dentro
+	sia il limite del conteggio sia i 7 giorni del full-text.
+	Le due frasi ora dicono che il limite e' sull'ampiezza dell'intervallo
+	effettivo e cosa valgono gli estremi assenti, compreso il caso del solo dataA,
+	che non fa scattare il default e viene rifiutato dove l'ampiezza va misurata.
+	Nessun cambio di comportamento: tre test nuovi fissano i casi che il testo
+	descriveva al contrario.
+
 2026-09-28  Giuliano Pintori <pintori@link.it>
 
 	* [Riconciliazioni] Issue #92 Il dettaglio rifiutava con 400 gli
