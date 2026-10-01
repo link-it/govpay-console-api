@@ -1298,8 +1298,8 @@ paths:
         Filtri supportati: `idDominio`, `iuv`, `ccp`, `idA2A`, `idPendenza`
         (match esatto), `componente`, `categoria`, `esito`, `ruolo`,
         `tipoEvento`, `sottotipoEvento` (match esatto), `severitaDa`/
-        `severitaA` (range), `messaggi` (full-text, richiede intervallo
-        temporale entro 7 giorni). Tutti opzionali e in AND.
+        `severitaA` (range), `messaggi` (full-text, ammesso solo su un
+        intervallo temporale di al massimo 7 giorni). Tutti opzionali e in AND.
 
         Se `dataDa`/`dataA` sono entrambi assenti vengono forzati
         silenziosamente a "ultime 24 ore" per evitare la scansione completa
@@ -1320,9 +1320,13 @@ paths:
         In modalita' cursor `page` esplicito o `total=true` generano 400 con
         motivazione parlante. Cursor malformato → 400.
 
-        `?total=true` e' rifiutato con 400 se non abbinato a un intervallo
-        temporale (`dataDa`/`dataA`) di al massimo 24 ore: il conteggio e'
-        l'operazione piu' costosa su questa tabella.
+        `?total=true` e' ammesso solo su un intervallo temporale di al massimo
+        24 ore: il conteggio e' l'operazione piu' costosa su questa tabella.
+        Come per il filtro `messaggi`, l'ampiezza e' misurata sull'intervallo
+        **effettivo** — `dataA` assente vale "adesso", ed entrambi assenti
+        valgono la finestra di default di 24 ore, che lo soddisfa. Quindi
+        `?total=true` da solo funziona, mentre abbinato a un `dataDa` piu'
+        vecchio di 24 ore da' 400.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/EventoLimit'
@@ -1360,8 +1364,10 @@ paths:
                           $ref: '#/components/schemas/EventoSummary'
         '400':
           description: |
-            Filtro non supportato, parametro malformato, `messaggi` senza
-            intervallo temporale, o `total=true` con intervallo troppo ampio.
+            Filtro non supportato, parametro malformato, o intervallo temporale
+            incompatibile con l'operazione richiesta (`messaggi` oltre i 7
+            giorni, `total=true` oltre le 24 ore, intervallo negativo, oppure
+            `dataA` senza `dataDa` quando uno dei due vincoli si applica).
           content:
             application/problem+json:
               schema:
@@ -13644,8 +13650,10 @@ components:
       required: false
       description: |
         Limite inferiore (incluso) sulla data evento (ISO 8601 date-time). Se
-        omesso insieme a `dataA`, viene forzato silenziosamente a "adesso
-        meno 24 ore" per evitare una scansione completa della tabella.
+        omesso **insieme a** `dataA`, viene forzato silenziosamente a "adesso
+        meno 24 ore" per evitare una scansione completa della tabella. Se e'
+        omesso ma `dataA` e' presente il default non si applica: la ricerca non
+        ha limite inferiore.
       schema:
         type: string
         format: date-time
@@ -13654,7 +13662,11 @@ components:
       name: dataA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data evento (ISO 8601 date-time).
+      description: |
+        Limite superiore (incluso) sulla data evento (ISO 8601 date-time). Se
+        omesso non viene imposto alcun limite superiore; dove conta l'ampiezza
+        dell'intervallo (`?total=true`, filtro `messaggi`) l'estremo mancante
+        vale "adesso".
       schema:
         type: string
         format: date-time
@@ -13759,8 +13771,16 @@ components:
       required: false
       description: |
         Ricerca full-text (case-insensitive) su `sottotipoEsito` e
-        `dettaglioEsito`. Richiede un intervallo temporale (`dataDa`/`dataA`)
-        entro 7 giorni: senza, 400 problem+json (costo pieno scan altrimenti).
+        `dettaglioEsito`. Ammessa solo su un intervallo temporale di al massimo
+        7 giorni, altrimenti 400 problem+json: senza limite sarebbe uno scan
+        pieno.
+
+        Il vincolo e' valutato sull'intervallo **effettivo**, non sui soli
+        parametri ricevuti: `dataA` assente vale "adesso", e se mancano
+        entrambi vale la finestra di 24 ore che `dataDa` assume per default,
+        che quindi lo soddisfa. Si ha 400 se l'intervallo supera i 7 giorni, se
+        e' negativo, o se e' stato indicato il solo `dataA` (nessun limite
+        inferiore da cui misurarlo).
       schema:
         type: string
 
