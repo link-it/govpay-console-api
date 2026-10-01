@@ -279,7 +279,6 @@ components:
           format: binary
         title:
           type: string
-          maxLength: 70
           example: "Avviso di pagamento"
         second_language:
           type: object
@@ -290,7 +289,6 @@ components:
               $ref: '#/components/schemas/Languages'
             title:
               type: string
-              maxLength: 70
           required:
             ["bilinguism", "language", "title"]
           example:
@@ -326,6 +324,17 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Instalment'
+            reduced_payments:
+              type: array
+              items:
+                $ref: '#/components/schemas/ThresholdPayment'
+            informativa_importo:
+              type: string
+              maxLength: 255
+              description: >-
+                Se valorizzato, sostituisce il testo standard della nota informativa
+                sull'importo. Se valorizzato con stringa vuota, l'informativa viene omessa.
+              example: "L'importo può variare in base a sgravi, interessi o sanzioni."
 
     Iban:
       type: object
@@ -353,6 +362,22 @@ components:
           properties:
             instalment_number:
               type: integer
+
+    ThresholdType:
+      type: string
+      enum: [ENTRO, OLTRE]
+
+    ThresholdPayment:
+      allOf:
+        - $ref: '#/components/schemas/Amount'
+        - type: object
+          required: [threshold_type, threshold_days]
+          properties:
+            threshold_type:
+              $ref: '#/components/schemas/ThresholdType'
+            threshold_days:
+              type: integer
+              minimum: 1
 
     Amount:
       type: object
