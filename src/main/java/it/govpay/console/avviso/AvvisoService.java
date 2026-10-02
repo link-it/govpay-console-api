@@ -22,6 +22,7 @@ import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.NotAcceptableMediaTypeException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.stampe.client.model.PaymentNotice;
@@ -95,6 +96,7 @@ public class AvvisoService {
                         "Avviso PDF non disponibile per pendenze con Marca da Bollo Telematica.");
             }
             PaymentNotice payload = pdfPayloadMapper.toPaymentNotice(versamento, lingua);
+            rifiutaBilingueSenzaCausaleTradotta(payload);
             String filename = buildFilename(versamento);
             log.debug("getAvviso PDF streaming idPendenza={} lingua={}",
                     versamento.getCodVersamentoEnte(), lingua);
@@ -113,6 +115,22 @@ public class AvvisoService {
         }
         Avviso avviso = avvisoMapper.toAvviso(versamento);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(avviso);
+    }
+
+    /**
+     * {@code second_language.title} e' richiesto dallo schema di govpay-stampe
+     * ({@code bilinguism}/{@code language}/{@code title}): senza una causale tradotta
+     * configurata ({@code proprieta.linguaSecondariaCausale}), un avviso bilingue non e' un
+     * documento valido — rifiutato qui con un 400 chiaro, invece di lasciare che govpay-stampe
+     * lo rifiuti a sua volta e far arrivare al chiamante un 502 generico.
+     */
+    private static void rifiutaBilingueSenzaCausaleTradotta(PaymentNotice payload) {
+        if (payload.getSecondLanguage() != null && payload.getSecondLanguage().getTitle() == null) {
+            throw new BadRequestException(
+                    "la pendenza non ha una causale tradotta configurata "
+                            + "(proprieta.linguaSecondariaCausale): impossibile generare l'avviso bilingue.",
+                    "linguaSecondaria");
+        }
     }
 
     /**
