@@ -205,6 +205,23 @@ class AvvisoPdfPayloadMapperTest {
         assertThat(notice.getCreditor().getPostalAuthMessage()).isEqualTo("Aut. Ente n. 1 del 01/01/2020");
     }
 
+    @Test
+    void cbillCodeLettoDalDominio() {
+        Versamento v = versamento();
+        v.getDominio().setCbill("ABCDE");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getCreditor().getCbillCode()).isEqualTo("ABCDE");
+    }
+
+    @Test
+    void cbillCodeAssenteSeDominioNonLoHaConfigurato() {
+        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+
+        assertThat(notice.getCreditor().getCbillCode()).isNull();
+    }
+
     /**
      * Le colonne a DB sono varchar(255), il contratto stampe valida maxLength 50/70:
      * si tronca, perche' un campo di sola resa grafica non deve far fallire il PDF.

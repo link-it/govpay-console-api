@@ -254,6 +254,7 @@ public class AvvisoPdfPayloadMapper {
         if (dominio != null) {
             c.setFiscalCode(dominio.getCodDominio());
             c.setBusinessName(tronca(dominio.getRagioneSociale(), MAX_BUSINESS_NAME));
+            c.setCbillCode(dominio.getCbill());
             // Autorizzazione poste dell'ente: govpay-stampe la usa come fallback
             // quando l'IBAN postale non ne porta una propria.
             c.setPostalAuthMessage(tronca(dominio.getAutStampaPoste(), MAX_POSTAL_AUTH_MESSAGE));
