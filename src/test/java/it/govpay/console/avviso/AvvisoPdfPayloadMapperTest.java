@@ -253,6 +253,43 @@ class AvvisoPdfPayloadMapperTest {
         assertThat(AvvisoPdfPayloadMapper.toClientLanguage(null)).isNull();
     }
 
+    // --- title ('oggetto del pagamento'): la causale vera, non un'intestazione fissa ---
+
+    @Test
+    void titleEhLaCausaleDecodificata() {
+        Versamento v = versamento();
+        v.setCausaleVersamento("01 " + Base64.getEncoder().encodeToString(
+                "Pagamento TARI 2026".getBytes(StandardCharsets.UTF_8)));
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getTitle()).isEqualTo("Pagamento TARI 2026");
+    }
+
+    @Test
+    void titleAssenteSeCausaleVersamentoAssente() {
+        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+
+        assertThat(notice.getTitle()).isNull();
+    }
+
+    @Test
+    void secondLanguageTitleAssenteSenzaCausaleTradottaInProprieta() {
+        PaymentNotice notice = mapper.toPaymentNotice(versamento(), LinguaSecondaria.EN);
+
+        assertThat(notice.getSecondLanguage().getTitle()).isNull();
+    }
+
+    @Test
+    void secondLanguageTitleLettaDaProprieta() {
+        Versamento v = versamento();
+        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
+
+        assertThat(notice.getSecondLanguage().getTitle()).isEqualTo("TARI payment 2026");
+    }
+
     // --- informativaImporto: letta da Versamento.proprieta (JSON legacy) ---
 
     @Test

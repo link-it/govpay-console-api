@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 
 import tools.jackson.databind.ObjectMapper;
 
+import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.SingoloVersamento;
@@ -36,8 +37,9 @@ import it.govpay.stampe.client.model.PaymentNotice;
  * <ul>
  *   <li><b>Default lingua da {@code proprieta} JSON</b>: (per ora)
  *       applichiamo solo l'override esplicito utente.</li>
- *   <li><b>{@code linguaSecondariaCausale}/altri campi di {@code proprieta}</b>: non letti
- *       — solo {@code informativaImportoAvviso} (vedi {@link #informativaImportoDi}).</li>
+ *   <li><b>Altri campi di {@code proprieta}</b> (descrizioneImporto, lineaTestoRicevuta1/2,
+ *       dataScandenzaAvviso): non letti — solo {@code informativaImportoAvviso} e
+ *       {@code linguaSecondariaCausale} (vedi {@link #proprietaDi}).</li>
  * </ul>
  *
  * <p><b>Non in scope</b>: endpoint
@@ -61,39 +63,47 @@ public class AvvisoPdfPayloadMapper {
 
     public PaymentNotice toPaymentNotice(Versamento v, LinguaSecondaria linguaSecondaria) {
         IbanAccredito postale = ibanPostale(v);
+        ProprietaPendenza proprieta = proprietaDi(v);
 
         PaymentNotice notice = new PaymentNotice();
         notice.setLanguage(Languages.IT);
         notice.setCreditor(mapCreditor(v.getDominio()));
         notice.setDebtor(mapDebtor(v));
-        notice.setTitle("AVVISO DI PAGAMENTO");
+        // 'title' e' l'oggetto del pagamento (oggetto_del_pagamento/XSD), non un'intestazione
+        // fissa: stesso campo del legacy v1 (AvvisoPagamentoUtils.fromVersamento), che ci
+        // scrive la causale vera.
+        notice.setTitle(causaleDi(v));
         notice.setPostal(postale != null);
         notice.setFirstLogo(firstLogoOf(v.getDominio()));
         notice.setFull(mapFullAmount(v, postale));
-        notice.setInformativaImporto(informativaImportoDi(v));
+        notice.setInformativaImporto(proprieta != null ? proprieta.getInformativaImportoAvviso() : null);
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
-            notice.setSecondLanguage(buildSecondLanguage(secondaria));
+            String causaleTradotta = proprieta != null ? proprieta.getLinguaSecondariaCausale() : null;
+            notice.setSecondLanguage(buildSecondLanguage(secondaria, causaleTradotta));
         }
         return notice;
     }
 
+    private static String causaleDi(Versamento v) {
+        return CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento());
+    }
+
     /**
-     * Stessa semantica del legacy ({@code AvvisoPagamentoV2Utils.getInformativaImportoAvviso}):
-     * {@code null} se {@code proprieta} e' assente/vuoto o non contiene l'override — in quel
-     * caso {@code govpay-stampe} applica la nota standard. Un JSON malformato non deve far
-     * fallire la generazione dell'avviso per un campo puramente accessorio: si logga e si
-     * procede come se l'override non fosse presente.
+     * {@code null} se {@code proprieta} e' assente/vuoto o non interpretabile come JSON — un
+     * blob malformato non deve far fallire la generazione dell'avviso per campi puramente
+     * accessori ({@code informativaImportoAvviso}/{@code linguaSecondariaCausale}): si logga e
+     * si procede come se non fossero presenti.
      */
-    private String informativaImportoDi(Versamento v) {
+    private ProprietaPendenza proprietaDi(Versamento v) {
         String proprieta = v.getProprieta();
         if (!StringUtils.hasText(proprieta)) {
             return null;
         }
         try {
-            return objectMapper.readValue(proprieta, ProprietaPendenza.class).getInformativaImportoAvviso();
+            return objectMapper.readValue(proprieta, ProprietaPendenza.class);
         } catch (RuntimeException e) {
-            log.warn("Versamento [{}]: proprieta non interpretabile come JSON, informativaImporto ignorato.",
+            log.warn("Versamento [{}]: proprieta non interpretabile come JSON, ignorata.",
                     v.getCodVersamentoEnte(), e);
             return null;
         }
@@ -201,14 +211,17 @@ public class AvvisoPdfPayloadMapper {
     }
 
     /**
-     * Costruisce {@link NoticeMetadataSecondLanguage} con {@code bilinguism=true}
-     * e la lingua selezionata. Il {@code title} resta {@code null}: il rendering
-     * dei titoli localizzati e' competenza del microservizio {@code govpay-stampe}.
+     * Costruisce {@link NoticeMetadataSecondLanguage} con {@code bilinguism=true}, la lingua
+     * selezionata e la causale tradotta se configurata ({@code proprieta.linguaSecondariaCausale}
+     * — stesso campo del legacy). Se non configurata {@code title} resta {@code null}: nessun
+     * fallback sulla causale italiana, per non mostrare testo non tradotto etichettato come
+     * lingua secondaria.
      */
-    private static NoticeMetadataSecondLanguage buildSecondLanguage(Languages lang) {
+    private static NoticeMetadataSecondLanguage buildSecondLanguage(Languages lang, String causaleTradotta) {
         NoticeMetadataSecondLanguage sl = new NoticeMetadataSecondLanguage();
         sl.setBilinguism(Boolean.TRUE);
         sl.setLanguage(lang);
+        sl.setTitle(causaleTradotta);
         return sl;
     }
 
