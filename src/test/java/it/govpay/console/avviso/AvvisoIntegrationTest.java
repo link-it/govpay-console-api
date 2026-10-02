@@ -481,7 +481,9 @@ class AvvisoIntegrationTest {
 
     @Test
     void linguaSecondariaDePopulatesSecondLanguage() throws Exception {
-        newPendenzaConAvviso("PEND-DE", "012345678901234567");
+        Versamento v = newPendenzaConAvviso("PEND-DE", "012345678901234567");
+        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
+        versamentoRepository.save(v);
         doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
                 .when(stampeClient).streamPaymentNotice(any(), any());
 
@@ -498,6 +500,27 @@ class AvvisoIntegrationTest {
         assertThat(payload.getSecondLanguage()).isNotNull();
         assertThat(payload.getSecondLanguage().getBilinguism()).isTrue();
         assertThat(payload.getSecondLanguage().getLanguage()).isEqualTo(Languages.DE);
+        assertThat(payload.getSecondLanguage().getTitle()).isEqualTo("TARI payment 2026");
+    }
+
+    /**
+     * {@code second_language.title} e' richiesto dallo schema di govpay-stampe: senza una
+     * causale tradotta configurata, l'avviso bilingue non e' un documento valido — va rifiutato
+     * qui (400), non lasciato arrivare a govpay-stampe per poi tradurre il suo 400 in un 502
+     * generico al chiamante. {@code stampeClient} non va mai invocato.
+     */
+    @Test
+    void linguaSecondariaSenzaCausaleTradottaRestituisce400() throws Exception {
+        newPendenzaConAvviso("PEND-DE-NO-CAUSALE", "012345678901234568");
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-DE-NO-CAUSALE/avviso")
+                        .param("linguaSecondaria", "DE")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/problem+json"));
+
+        verify(stampeClient, never()).streamPaymentNotice(any(), any());
     }
 
     @Test

@@ -56,6 +56,18 @@ public class AvvisoPdfPayloadMapper {
     private static final int MAX_OWNER_BUSINESS_NAME = 50;
     private static final int MAX_POSTAL_AUTH_MESSAGE = 70;
 
+    /** Limite del contratto {@code govpay-stampe.yaml} su {@code Creditor.business_name}. */
+    private static final int MAX_BUSINESS_NAME = 50;
+
+    /** Limite del contratto {@code govpay-stampe.yaml} su {@code Debtor.full_name}. */
+    private static final int MAX_FULL_NAME = 70;
+
+    /**
+     * Limite del contratto {@code govpay-stampe.yaml} su {@code Debtor.address_line_1}/
+     * {@code address_line_2}.
+     */
+    private static final int MAX_ADDRESS_LINE = 70;
+
     private final ObjectMapper objectMapper;
 
     public AvvisoPdfPayloadMapper(ObjectMapper objectMapper) {
@@ -241,7 +253,7 @@ public class AvvisoPdfPayloadMapper {
         Creditor c = new Creditor();
         if (dominio != null) {
             c.setFiscalCode(dominio.getCodDominio());
-            c.setBusinessName(dominio.getRagioneSociale());
+            c.setBusinessName(tronca(dominio.getRagioneSociale(), MAX_BUSINESS_NAME));
             // Autorizzazione poste dell'ente: govpay-stampe la usa come fallback
             // quando l'IBAN postale non ne porta una propria.
             c.setPostalAuthMessage(tronca(dominio.getAutStampaPoste(), MAX_POSTAL_AUTH_MESSAGE));
@@ -249,16 +261,23 @@ public class AvvisoPdfPayloadMapper {
         return c;
     }
 
+    /**
+     * {@code addressLine1}/{@code addressLine2} troncano DOPO la concatenazione: i limiti dello
+     * schema (50/70 caratteri) sono quelli imposti da pagoPA sul singolo campo del bollettino,
+     * non sulle singole colonne DB che li compongono (es. {@code debitore_indirizzo varchar(70)}
+     * + {@code debitore_civico varchar(16)} possono insieme superare 70) — troncare le colonne
+     * singolarmente prima di concatenarle non basterebbe a garantire il rispetto del limite.
+     */
     private static Debtor mapDebtor(Versamento v) {
         Debtor d = new Debtor();
         d.setFiscalCode(v.getDebitoreIdentificativo());
-        d.setFullName(v.getDebitoreAnagrafica());
+        d.setFullName(tronca(v.getDebitoreAnagrafica(), MAX_FULL_NAME));
         if (StringUtils.hasText(v.getDebitoreIndirizzo())) {
             StringBuilder line1 = new StringBuilder(v.getDebitoreIndirizzo());
             if (StringUtils.hasText(v.getDebitoreCivico())) {
                 line1.append(", ").append(v.getDebitoreCivico());
             }
-            d.setAddressLine1(line1.toString());
+            d.setAddressLine1(tronca(line1.toString(), MAX_ADDRESS_LINE));
         }
         StringBuilder line2 = new StringBuilder();
         if (StringUtils.hasText(v.getDebitoreCap())) {
@@ -271,7 +290,7 @@ public class AvvisoPdfPayloadMapper {
             line2.append(" (").append(v.getDebitoreProvincia()).append(')');
         }
         if (!line2.isEmpty()) {
-            d.setAddressLine2(line2.toString().trim());
+            d.setAddressLine2(tronca(line2.toString().trim(), MAX_ADDRESS_LINE));
         }
         return d;
     }

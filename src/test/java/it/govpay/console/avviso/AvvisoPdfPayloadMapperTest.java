@@ -224,6 +224,54 @@ class AvvisoPdfPayloadMapperTest {
     }
 
     @Test
+    void businessNameTroncatoA50Caratteri() {
+        Versamento v = versamento();
+        v.getDominio().setRagioneSociale("A".repeat(60));
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getCreditor().getBusinessName()).hasSize(50);
+    }
+
+    @Test
+    void fullNameTroncatoA70Caratteri() {
+        Versamento v = versamento();
+        v.setDebitoreAnagrafica("B".repeat(80));
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getDebtor().getFullName()).hasSize(70);
+    }
+
+    /**
+     * {@code debitoreIndirizzo varchar(70)} + {@code debitoreCivico varchar(16)} possono
+     * insieme superare 70: il limite dello schema (pagoPA) si applica al campo risultante, non
+     * alle singole colonne concatenate.
+     */
+    @Test
+    void addressLine1TroncatoA70CaratteriDopoLaConcatenazione() {
+        Versamento v = versamento();
+        v.setDebitoreIndirizzo("C".repeat(70));
+        v.setDebitoreCivico("1234567890123456");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getDebtor().getAddressLine1()).hasSize(70);
+    }
+
+    @Test
+    void addressLine2TroncatoA70CaratteriDopoLaConcatenazione() {
+        Versamento v = versamento();
+        v.setDebitoreCap("0000000000000000");
+        v.setDebitoreLocalita("D".repeat(35));
+        v.setDebitoreProvincia("E".repeat(35));
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getDebtor().getAddressLine2()).hasSize(70);
+    }
+
+    @Test
     void deMapsToClientDE() {
         assertThat(AvvisoPdfPayloadMapper.toClientLanguage(LinguaSecondaria.DE)).isEqualTo(Languages.DE);
     }
