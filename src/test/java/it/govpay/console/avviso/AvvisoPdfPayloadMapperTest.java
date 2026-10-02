@@ -17,10 +17,11 @@ import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.PaymentNotice;
+import tools.jackson.databind.json.JsonMapper;
 
 class AvvisoPdfPayloadMapperTest {
 
-    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper();
+    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper(JsonMapper.shared());
 
     private static Versamento versamento() {
         Stazione stazione = new Stazione();
@@ -250,5 +251,56 @@ class AvvisoPdfPayloadMapperTest {
     @Test
     void nullMapsToNull() {
         assertThat(AvvisoPdfPayloadMapper.toClientLanguage(null)).isNull();
+    }
+
+    // --- informativaImporto: letta da Versamento.proprieta (JSON legacy) ---
+
+    @Test
+    void informativaImportoAssenteSenzaProprieta() {
+        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+
+        assertThat(notice.getInformativaImporto()).isNull();
+    }
+
+    @Test
+    void informativaImportoLettaDaProprieta() {
+        Versamento v = versamento();
+        v.setProprieta("{\"informativaImportoAvviso\": \"Testo personalizzato\"}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getInformativaImporto()).isEqualTo("Testo personalizzato");
+    }
+
+    @Test
+    void informativaImportoVuotaOmetteLaNota() {
+        Versamento v = versamento();
+        v.setProprieta("{\"informativaImportoAvviso\": \"\"}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getInformativaImporto()).isEmpty();
+    }
+
+    /** Campi legacy non modellati (descrizioneImporto, ecc.) non devono far fallire il parsing. */
+    @Test
+    void informativaImportoIgnoraAltriCampiDiProprieta() {
+        Versamento v = versamento();
+        v.setProprieta("{\"linguaSecondaria\": \"eng\", \"informativaImportoAvviso\": \"Nota custom\", "
+                + "\"descrizioneImporto\": [{\"voce\": \"x\"}]}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getInformativaImporto()).isEqualTo("Nota custom");
+    }
+
+    @Test
+    void informativaImportoAssenteConProprietaMalformata() {
+        Versamento v = versamento();
+        v.setProprieta("{non e' json valido");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getInformativaImporto()).isNull();
     }
 }

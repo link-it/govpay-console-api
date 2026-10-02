@@ -3,8 +3,12 @@ package it.govpay.console.avviso;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import tools.jackson.databind.ObjectMapper;
 
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
@@ -32,6 +36,8 @@ import it.govpay.stampe.client.model.PaymentNotice;
  * <ul>
  *   <li><b>Default lingua da {@code proprieta} JSON</b>: (per ora)
  *       applichiamo solo l'override esplicito utente.</li>
+ *   <li><b>{@code linguaSecondariaCausale}/altri campi di {@code proprieta}</b>: non letti
+ *       — solo {@code informativaImportoAvviso} (vedi {@link #informativaImportoDi}).</li>
  * </ul>
  *
  * <p><b>Non in scope</b>: endpoint
@@ -41,9 +47,17 @@ import it.govpay.stampe.client.model.PaymentNotice;
 @Component
 public class AvvisoPdfPayloadMapper {
 
+    private static final Logger log = LoggerFactory.getLogger(AvvisoPdfPayloadMapper.class);
+
     /** Limiti del contratto {@code govpay-stampe.yaml} sullo schema {@code Iban}. */
     private static final int MAX_OWNER_BUSINESS_NAME = 50;
     private static final int MAX_POSTAL_AUTH_MESSAGE = 70;
+
+    private final ObjectMapper objectMapper;
+
+    public AvvisoPdfPayloadMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public PaymentNotice toPaymentNotice(Versamento v, LinguaSecondaria linguaSecondaria) {
         IbanAccredito postale = ibanPostale(v);
@@ -56,11 +70,33 @@ public class AvvisoPdfPayloadMapper {
         notice.setPostal(postale != null);
         notice.setFirstLogo(firstLogoOf(v.getDominio()));
         notice.setFull(mapFullAmount(v, postale));
+        notice.setInformativaImporto(informativaImportoDi(v));
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
             notice.setSecondLanguage(buildSecondLanguage(secondaria));
         }
         return notice;
+    }
+
+    /**
+     * Stessa semantica del legacy ({@code AvvisoPagamentoV2Utils.getInformativaImportoAvviso}):
+     * {@code null} se {@code proprieta} e' assente/vuoto o non contiene l'override — in quel
+     * caso {@code govpay-stampe} applica la nota standard. Un JSON malformato non deve far
+     * fallire la generazione dell'avviso per un campo puramente accessorio: si logga e si
+     * procede come se l'override non fosse presente.
+     */
+    private String informativaImportoDi(Versamento v) {
+        String proprieta = v.getProprieta();
+        if (!StringUtils.hasText(proprieta)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(proprieta, ProprietaPendenza.class).getInformativaImportoAvviso();
+        } catch (RuntimeException e) {
+            log.warn("Versamento [{}]: proprieta non interpretabile come JSON, informativaImporto ignorato.",
+                    v.getCodVersamentoEnte(), e);
+            return null;
+        }
     }
 
     /**

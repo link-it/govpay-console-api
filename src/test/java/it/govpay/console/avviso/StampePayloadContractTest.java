@@ -37,7 +37,7 @@ class StampePayloadContractTest {
 
     private static final String SPEC = "/openapi/govpay-stampe.yaml";
 
-    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper();
+    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper(tools.jackson.databind.json.JsonMapper.shared());
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
 
     @Test
