@@ -290,6 +290,23 @@ class AvvisoPdfPayloadMapperTest {
         assertThat(notice.getSecondLanguage().getTitle()).isEqualTo("TARI payment 2026");
     }
 
+    @Test
+    void secondLanguageInformativaImportoAssenteSenzaProprieta() {
+        PaymentNotice notice = mapper.toPaymentNotice(versamento(), LinguaSecondaria.EN);
+
+        assertThat(notice.getSecondLanguage().getInformativaImporto()).isNull();
+    }
+
+    @Test
+    void secondLanguageInformativaImportoLettaDaProprieta() {
+        Versamento v = versamento();
+        v.setProprieta("{\"linguaSecondariaInformativaImportoAvviso\": \"Custom text\"}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
+
+        assertThat(notice.getSecondLanguage().getInformativaImporto()).isEqualTo("Custom text");
+    }
+
     // --- informativaImporto: letta da Versamento.proprieta (JSON legacy) ---
 
     @Test

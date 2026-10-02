@@ -38,8 +38,9 @@ import it.govpay.stampe.client.model.PaymentNotice;
  *   <li><b>Default lingua da {@code proprieta} JSON</b>: (per ora)
  *       applichiamo solo l'override esplicito utente.</li>
  *   <li><b>Altri campi di {@code proprieta}</b> (descrizioneImporto, lineaTestoRicevuta1/2,
- *       dataScandenzaAvviso): non letti — solo {@code informativaImportoAvviso} e
- *       {@code linguaSecondariaCausale} (vedi {@link #proprietaDi}).</li>
+ *       dataScandenzaAvviso): non letti — solo {@code informativaImportoAvviso},
+ *       {@code linguaSecondariaCausale} e {@code linguaSecondariaInformativaImportoAvviso}
+ *       (vedi {@link #proprietaDi}).</li>
  * </ul>
  *
  * <p><b>Non in scope</b>: endpoint
@@ -80,7 +81,10 @@ public class AvvisoPdfPayloadMapper {
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
             String causaleTradotta = proprieta != null ? proprieta.getLinguaSecondariaCausale() : null;
-            notice.setSecondLanguage(buildSecondLanguage(secondaria, causaleTradotta));
+            String informativaImportoTradotta = proprieta != null
+                    ? proprieta.getLinguaSecondariaInformativaImportoAvviso()
+                    : null;
+            notice.setSecondLanguage(buildSecondLanguage(secondaria, causaleTradotta, informativaImportoTradotta));
         }
         return notice;
     }
@@ -92,8 +96,9 @@ public class AvvisoPdfPayloadMapper {
     /**
      * {@code null} se {@code proprieta} e' assente/vuoto o non interpretabile come JSON — un
      * blob malformato non deve far fallire la generazione dell'avviso per campi puramente
-     * accessori ({@code informativaImportoAvviso}/{@code linguaSecondariaCausale}): si logga e
-     * si procede come se non fossero presenti.
+     * accessori ({@code informativaImportoAvviso}/{@code linguaSecondariaCausale}/
+     * {@code linguaSecondariaInformativaImportoAvviso}): si logga e si procede come se non
+     * fossero presenti.
      */
     private ProprietaPendenza proprietaDi(Versamento v) {
         String proprieta = v.getProprieta();
@@ -212,16 +217,23 @@ public class AvvisoPdfPayloadMapper {
 
     /**
      * Costruisce {@link NoticeMetadataSecondLanguage} con {@code bilinguism=true}, la lingua
-     * selezionata e la causale tradotta se configurata ({@code proprieta.linguaSecondariaCausale}
-     * — stesso campo del legacy). Se non configurata {@code title} resta {@code null}: nessun
-     * fallback sulla causale italiana, per non mostrare testo non tradotto etichettato come
-     * lingua secondaria.
+     * selezionata, la causale tradotta se configurata ({@code proprieta.linguaSecondariaCausale}
+     * — stesso campo del legacy) e la nota-importo tradotta se configurata
+     * ({@code proprieta.linguaSecondariaInformativaImportoAvviso}). Se non configurati,
+     * {@code title}/{@code informativaImporto} restano {@code null}: nessun fallback sul testo
+     * italiano, per non mostrare testo non tradotto etichettato come lingua secondaria.
+     *
+     * <p>{@code informativaImporto} qui viene sempre passato cosi' com'e': e' govpay-stampe-api
+     * (non questo mapper) a leggerlo solo se {@code PaymentNotice.informativaImporto} e'
+     * valorizzato, stesso vincolo del legacy.</p>
      */
-    private static NoticeMetadataSecondLanguage buildSecondLanguage(Languages lang, String causaleTradotta) {
+    private static NoticeMetadataSecondLanguage buildSecondLanguage(Languages lang, String causaleTradotta,
+            String informativaImportoTradotta) {
         NoticeMetadataSecondLanguage sl = new NoticeMetadataSecondLanguage();
         sl.setBilinguism(Boolean.TRUE);
         sl.setLanguage(lang);
         sl.setTitle(causaleTradotta);
+        sl.setInformativaImporto(informativaImportoTradotta);
         return sl;
     }
 
