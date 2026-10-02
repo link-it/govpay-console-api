@@ -103,6 +103,8 @@ class StampePayloadContractTest {
         v.setDataScadenza(OffsetDateTime.now().plusDays(30));
         v.setDebitoreIdentificativo("RSSMRA80A01H501U");
         v.setDebitoreAnagrafica("Mario Rossi");
+        v.setCausaleVersamento("01 "
+                + Base64.getEncoder().encodeToString("Pagamento di test".getBytes(StandardCharsets.UTF_8)));
         return v;
     }
 
