@@ -23,7 +23,9 @@ import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.dominio.DominioLogoCodec;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Rpt;
+import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.ricevuta.pagopa.JaxbUtils;
 import it.govpay.console.ricevuta.pagopa.RptRtConversionException;
 import it.govpay.stampe.client.model.Payer;
@@ -47,12 +49,10 @@ import jakarta.xml.bind.JAXBException;
  * certificato al momento del pagamento, coerenti con quanto stampato dal legacy, e non
  * cambiano se la pendenza viene modificata in seguito.
  *
- * <p>Campo <i>placeholder</i>, non ancora risolto:
- * <ul>
- *   <li>{@code organization.address} / {@code location}: stringhe vuote (l'anagrafica del
- *       dominio in V1 vive in {@code uo} con {@code cod_uo='EC'}, non è mappata in questa
- *       entity slim);</li>
- * </ul>
+ * <p>{@code organization.address} / {@code location}: come in V1, letti dall'unità operativa
+ * con {@code cod_uo='EC'} del dominio ({@code impostaIndirizzoEnteCreditore}), non dall'ente
+ * beneficiario della RT (che per {@code ctReceipt}/{@code ctReceiptV2} non esiste nello schema
+ * pagoPA). Se l'UO EC non è censita, stringhe vuote.
  *
  * <p>{@code psp}: {@code denominazioneAttestante} se presente, altrimenti {@code codPsp},
  * altrimenti {@code "N/D"} — colonne denormalizzate al momento dell'acquisizione della RT,
@@ -66,9 +66,14 @@ public class RicevutaPdfPayloadMapper {
     private static final DateTimeFormatter DATETIME_DDMMYYYY_HHMM =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    private static final String COD_UO_ENTE_CREDITORE = "EC";
+
+    private final UnitaOperativaRepository unitaOperativaRepository;
     private final String pagopaLogoBase64;
 
-    public RicevutaPdfPayloadMapper(@Value("${govpay.stampe.logo.pagopa:}") String pagopaLogoBase64) {
+    public RicevutaPdfPayloadMapper(UnitaOperativaRepository unitaOperativaRepository,
+            @Value("${govpay.stampe.logo.pagopa:}") String pagopaLogoBase64) {
+        this.unitaOperativaRepository = unitaOperativaRepository;
         this.pagopaLogoBase64 = pagopaLogoBase64;
     }
 
@@ -104,12 +109,21 @@ public class RicevutaPdfPayloadMapper {
         return "";
     }
 
-    private static ReceiptOrganization mapOrganization(Dominio d) {
+    private ReceiptOrganization mapOrganization(Dominio d) {
         ReceiptOrganization o = new ReceiptOrganization();
         o.setFiscalCode(d != null ? d.getCodDominio() : "");
         o.setBusinessName(d != null ? d.getRagioneSociale() : "");
-        o.setAddress("");
-        o.setLocation("");
+        UnitaOperativa enteCreditore = d != null
+                ? unitaOperativaRepository.findByDominio_IdAndCodUo(d.getId(), COD_UO_ENTE_CREDITORE).orElse(null)
+                : null;
+        if (enteCreditore != null) {
+            o.setAddress(buildAddressLine(enteCreditore.getUoIndirizzo(), enteCreditore.getUoCivico()));
+            o.setLocation(buildLocationLine(enteCreditore.getUoCap(), enteCreditore.getUoLocalita(),
+                    enteCreditore.getUoProvincia()));
+        } else {
+            o.setAddress("");
+            o.setLocation("");
+        }
         return o;
     }
 
