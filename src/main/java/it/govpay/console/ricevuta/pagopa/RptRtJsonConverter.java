@@ -4,15 +4,15 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.module.jakarta.xmlbind.JakartaXmlBindAnnotationModule;
-
 import it.govpay.console.entity.Rpt;
 import jakarta.xml.bind.JAXBException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.cfg.EnumFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.module.jakarta.xmlbind.JakartaXmlBindAnnotationModule;
 
 /**
  * Converte i tracciati XML PagoPA (RPT e RT, conservati come XML nel DB) nel
@@ -29,11 +29,14 @@ public class RptRtJsonConverter {
 	private final ObjectMapper mapper;
 
 	public RptRtJsonConverter() {
-		this.mapper = new ObjectMapper();
-		this.mapper.registerModule(new JakartaXmlBindAnnotationModule());
-		this.mapper.registerModule(new PagoPaDateModule());
-		this.mapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
-		this.mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+		// Default Jackson 2 (ordine delle proprieta' non alfabetico, ecc.) per
+		// mantenere invariato il JSON prodotto rispetto alla versione Jackson 2.
+		this.mapper = JsonMapper.builderWithJackson2Defaults()
+				.addModule(new JakartaXmlBindAnnotationModule())
+				.addModule(new PagoPaDateModule())
+				.enable(EnumFeature.READ_ENUMS_USING_TO_STRING)
+				.disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.build();
 	}
 
 	/**
