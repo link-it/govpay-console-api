@@ -10,8 +10,6 @@ import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import it.gov.digitpa.schemas._2011.pagamenti.RPT;
 import it.gov.digitpa.schemas._2011.pagamenti.RT;
 import it.gov.pagopa.pagopa_api.pa.pafornode.CtPaymentPA;
@@ -27,6 +25,7 @@ import it.govpay.console.entity.Rpt;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Smoke test della conversione XML→JSON sui tre tracciati SANP (230 / 240 / 321 V2),

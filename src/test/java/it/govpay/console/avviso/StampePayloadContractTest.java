@@ -13,14 +13,14 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.Versamento;
 import it.govpay.stampe.client.model.PaymentNotice;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Contract-check del payload avviso contro lo schema OpenAPI di govpay-stampe
@@ -37,8 +37,8 @@ class StampePayloadContractTest {
 
     private static final String SPEC = "/openapi/govpay-stampe.yaml";
 
-    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper(tools.jackson.databind.json.JsonMapper.shared());
-    private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+    private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper(JsonMapper.shared());
+    private final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
 
     @Test
     @SuppressWarnings("unchecked")

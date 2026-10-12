@@ -195,7 +195,7 @@
 
         <!-- Serializzazione JSON dei modelli JAXB (annotazioni jakarta.xml.bind) -->
         <dependency>
-            <groupId>com.fasterxml.jackson.module</groupId>
+            <groupId>tools.jackson.module</groupId>
             <artifactId>jackson-module-jakarta-xmlbind-annotations</artifactId>
         </dependency>
 
@@ -447,6 +447,8 @@
                                 <openApiNullable>true</openApiNullable>
                                 <serializableModel>true</serializableModel>
                                 <dateLibrary>java8</dateLibrary>
+                                <useSpringBoot4>true</useSpringBoot4>
+                                <useJackson3>true</useJackson3>
                             </configOptions>
                         </configuration>
                     </execution>
@@ -469,6 +471,8 @@
                                 <openApiNullable>true</openApiNullable>
                                 <serializableModel>true</serializableModel>
                                 <dateLibrary>java8</dateLibrary>
+                                <useSpringBoot4>true</useSpringBoot4>
+                                <useJackson3>true</useJackson3>
                             </configOptions>
                         </configuration>
                     </execution>

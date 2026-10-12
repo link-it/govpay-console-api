@@ -1,3 +1,18 @@
+2026-10-12  Giuliano Pintori <pintori@link.it>
+
+	* [Build] Migrazione a Jackson 3 degli ultimi usi di Jackson 2.
+	La conversione dei tracciati RPT/RT in JSON (RptRtJsonConverter e
+	PagoPaDateModule) usava ancora l'ObjectMapper di Jackson 2 e il modulo
+	com.fasterxml.jackson.module:jackson-module-jakarta-xmlbind-annotations:
+	passa a tools.jackson e al modulo Jackson 3 equivalente. Il mapper e'
+	costruito con i default Jackson 2 (builderWithJackson2Defaults), cosi' il
+	JSON prodotto resta identico, compreso l'ordine delle proprieta'.
+	I client generati govpay-stampe-client e bizevents-client ora sono generati
+	con useSpringBoot4 e useJackson3: le classi di supporto (RFC3339*)
+	dipendevano da jackson-databind 2.
+	Resta Jackson 2 solo come dipendenza transitiva di springdoc
+	(swagger-core), non usata dal codice del progetto.
+
 2026-10-01  Giuliano Pintori <pintori@link.it>
 
 	* [Giornale Eventi] Issue #103 OpenAPI di /eventi: il testo dichiarava 400
