@@ -129,7 +129,7 @@ jobs:
         mvn dependency:copy-dependencies -DoutputDirectory=target/dependency
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarqube-scan-action@v5
+      uses: SonarSource/sonarqube-scan-action@v8
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: https://sonarcloud.io
@@ -374,7 +374,7 @@ jobs:
 
     - name: Build and push development image
       if: ${{ endsWith(needs.build.outputs.version, '-SNAPSHOT') }}
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: docker/buildcontext
         file: docker/govpay-console-api/Dockerfile.daFile
@@ -474,7 +474,7 @@ jobs:
 
     - name: Create GitHub release
       id: create_release
-      uses: softprops/action-gh-release@v2.2.1
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           artifacts/govpay-console-api-${{ github.ref_name }}.war
@@ -514,7 +514,7 @@ jobs:
         cp -fr commons buildcontext/
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: docker/buildcontext
         file: docker/govpay-console-api/Dockerfile.github

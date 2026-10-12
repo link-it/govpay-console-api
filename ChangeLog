@@ -1,5 +1,15 @@
 2026-10-12  Giuliano Pintori <pintori@link.it>
 
+	* [Build] Aggiornamento delle action del workflow a Node 24.
+	- SonarSource/sonarqube-scan-action: v5 -> v8. La v5 non e' piu'
+	  supportata e ha una vulnerabilita' nota (avviso a ogni build); usava
+	  inoltre al suo interno una versione di actions/cache ancora su Node 20.
+	  Dalla v6 gli args non passano piu' dalla shell: quelli in uso non hanno
+	  virgolette ne' spazi nei valori, quindi restano invariati.
+	- softprops/action-gh-release: v2.2.1 -> v3 (runtime Node 24).
+	- docker/build-push-action: v6 -> v7 (runtime Node 24; le env
+	  DOCKER_BUILD_* rimosse dalla v7 non sono usate).
+
 	* [Build] Migrazione a Jackson 3 degli ultimi usi di Jackson 2.
 	La conversione dei tracciati RPT/RT in JSON (RptRtJsonConverter e
 	PagoPaDateModule) usava ancora l'ObjectMapper di Jackson 2 e il modulo
