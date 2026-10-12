@@ -1,6 +1,9 @@
 package it.govpay.console.ricevuta;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -10,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +27,9 @@ import it.gov.digitpa.schemas._2011.pagamenti.RT;
 import it.gov.digitpa.schemas._2011.pagamenti.StTipoIdentificativoUnivocoPersFG;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Rpt;
+import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.stampe.client.model.Receipt;
 import it.govpay.stampe.client.model.ReceiptItem;
 import it.govpay.stampe.client.model.ReceiptItemStatus;
@@ -37,7 +43,9 @@ import jakarta.xml.bind.JAXBException;
  */
 class RicevutaPdfPayloadMapperTest {
 
-    private final RicevutaPdfPayloadMapper mapper = new RicevutaPdfPayloadMapper("");
+    /** Nessuno stub di default: {@code Optional.empty()} finche' un test non lo configura diversamente. */
+    private final UnitaOperativaRepository unitaOperativaRepository = mock(UnitaOperativaRepository.class);
+    private final RicevutaPdfPayloadMapper mapper = new RicevutaPdfPayloadMapper(unitaOperativaRepository, "");
 
     // ---------- SANP_230 (ctRicevutaTelematica) ----------
 
@@ -162,12 +170,41 @@ class RicevutaPdfPayloadMapperTest {
         v.setDebitoreAnagrafica("Debitore attuale, diverso da quello storico");
         v.setDebitoreIdentificativo("DBTATT00A00A000A");
         Dominio d = new Dominio();
+        d.setId(42L);
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Test");
         v.setDominio(d);
         rpt.setVersamento(v);
 
         return rpt;
+    }
+
+    @Test
+    void organizationLeggeIndirizzoDallUnitaOperativaEc() throws JAXBException {
+        Rpt rpt = rptSanp230(true);
+        UnitaOperativa ec = new UnitaOperativa();
+        ec.setUoIndirizzo("Piazza Duomo");
+        ec.setUoCivico("1");
+        ec.setUoCap("20100");
+        ec.setUoLocalita("Milano");
+        ec.setUoProvincia("MI");
+        when(unitaOperativaRepository.findByDominio_IdAndCodUo(eq(42L), eq("EC"))).thenReturn(Optional.of(ec));
+
+        Receipt receipt = mapper.toReceipt(rpt);
+
+        assertThat(receipt.getOrganization().getAddress()).isEqualTo("Piazza Duomo, 1");
+        assertThat(receipt.getOrganization().getLocation()).isEqualTo("20100 Milano (MI)");
+    }
+
+    @Test
+    void organizationHaIndirizzoVuotoSeLUnitaOperativaEcNonEsiste() throws JAXBException {
+        Rpt rpt = rptSanp230(true);
+        // unitaOperativaRepository senza stub -> Optional.empty() di default
+
+        Receipt receipt = mapper.toReceipt(rpt);
+
+        assertThat(receipt.getOrganization().getAddress()).isEmpty();
+        assertThat(receipt.getOrganization().getLocation()).isEmpty();
     }
 
     // ---------- ctReceipt (SANP_240) ----------
