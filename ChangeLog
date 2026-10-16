@@ -1,3 +1,24 @@
+2026-10-16  Giuliano Pintori <pintori@link.it>
+
+	* [Tracciati] Issue #116 GET /pendenze/tracciati restituisce 500 se un tracciato ha formato XML.
+	TracciatoMapper convertiva il formato con FormatoTracciato.fromValue senza
+	protezione, ma i due vocabolari non coincidevano: il core dichiara
+	FORMATO_TRACCIATO { CSV, JSON, XML }, il contratto si fermava a JSON e CSV. Su
+	un valore non previsto il metodo generato solleva IllegalArgumentException, e
+	girando dentro lo stream sui risultati una sola riga rendeva illeggibile
+	l'intero elenco: stessa forma del difetto corretto per lo stato con la #90, su
+	un campo diverso. L'elenco con un limite basso, che non raggiungeva la riga,
+	continuava a funzionare - da qui i due soli scenari falliti nella notturna.
+	XML aggiunto all'enum, perche' la lettura non puo' rifiutare un valore che il
+	prodotto ha scritto nella colonna, e rifiutato con 400 in caricamento, dove non
+	e' ammesso: il core chiamato a elaborarlo solleva "formato non supportato", e
+	senza il rifiuto il ramo del caricamento lo avrebbe trattato come CSV scrivendo
+	un tracciato che nessuno puo' elaborare. Il rifiuto sta nel ramo multipart
+	perche' e' il solo in cui il parametro 'formato' pesa: negli altri il formato
+	deriva dal Content-Type.
+	La descrizione dell'enum dice ora che l'elenco va tenuto allineato a quello del
+	core, che e' l'invariante da cui dipende la leggibilita' della pagina.
+
 2026-10-12  Giuliano Pintori <pintori@link.it>
 
 	* [Build] Aggiornamento delle action del workflow a Node 24.

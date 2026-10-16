@@ -113,6 +113,15 @@ public class TracciatoUploadService {
         boolean stampaAvvisi = stampaAvvisiParam == null || stampaAvvisiParam;
 
         UploadContenuto contenuto = resolveContenuto(request, multipartFile, contentType, formatoParam);
+        // XML sta nell'enum perche' la colonna tracciati.formato puo' contenerlo su
+        // dati gia' presenti, ma non e' un formato caricabile: il core, chiamato a
+        // elaborarlo, solleva "formato non supportato". Senza questo rifiuto il
+        // ramo sotto lo tratterebbe come CSV, scrivendo un tracciato che nessuno
+        // puo' elaborare.
+        if (contenuto.formato() == FormatoTracciato.XML) {
+            throw new BadRequestException("Formato 'XML' non ammesso in caricamento: usare 'JSON' o 'CSV'. "
+                    + "Il valore esiste solo su tracciati gia' presenti e non e' elaborabile.");
+        }
         validateSize(contenuto.bytes());
 
         String idDominio = resolveIdDominio(contenuto, idDominioParam);

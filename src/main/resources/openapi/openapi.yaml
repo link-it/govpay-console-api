@@ -12227,10 +12227,24 @@ components:
 
     FormatoTracciato:
       type: string
-      description: Formato del file caricato/da caricare per un tracciato di pendenze.
+      description: |
+        Formato del file di un tracciato di pendenze.
+
+        I tre valori sono quelli che la colonna `tracciati.formato` puo'
+        contenere, perche' il core li dichiara nel proprio
+        `FORMATO_TRACCIATO`. In **caricamento** sono pero' ammessi solo `JSON`
+        e `CSV`: `XML` e' un valore storico che il core non elabora - la sua
+        elaborazione solleva "formato non supportato" - e che qui viene
+        rifiutato con 400. Compare quindi solo in lettura, su tracciati gia'
+        presenti.
+
+        L'elenco deve restare allineato a quello del core: un formato che il
+        prodotto scrive e questo enum non contempla renderebbe illeggibile
+        l'intera pagina, non solo quella riga.
       enum:
         - JSON
         - CSV
+        - XML
 
     TracciatoPendenze:
       type: object
