@@ -1,5 +1,6 @@
 package it.govpay.console.tracciato;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
@@ -351,6 +352,58 @@ class TracciatoControllerIntegrationTest {
         String principal = utenzaConDominioEScrittura("op-dettaglio-404");
         mvc.perform(get(BASE + "/999999999").with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    // ----- formato storico XML ----------------------------------------------
+
+    /**
+     * {@code tracciati.formato} puo' contenere XML, perche' il core lo dichiara
+     * nel proprio {@code FORMATO_TRACCIATO}. Finche' l'enum del contratto si
+     * fermava a JSON e CSV, la conversione sollevava IllegalArgumentException
+     * dentro lo stream sui risultati e una sola riga cosi' faceva rispondere 500
+     * all'intera pagina: l'elenco con un limite basso, che non la raggiungeva,
+     * continuava invece a funzionare.
+     */
+    @Test
+    void elencoConTracciatoInFormatoXmlReturns200() throws Exception {
+        String principal = utenzaConDominioEScrittura("op-formato-xml");
+        String location = mvc.perform(post(BASE).with(httpBasic(principal, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody("12345678901", "12345678901")))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getHeader("Location");
+        Long id = Long.valueOf(location.substring(location.lastIndexOf('/') + 1));
+
+        it.govpay.console.entity.Tracciato tracciato = tracciatoRepository.findById(id).orElseThrow();
+        tracciato.setFormato("XML");
+        tracciatoRepository.save(tracciato);
+
+        mvc.perform(get(BASE).with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", hasSize(1)))
+                .andExpect(jsonPath("$.results[0].formatoRichiesta", is("XML")));
+
+        mvc.perform(get(BASE + "/" + id).with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formatoRichiesta", is("XML")));
+    }
+
+    /**
+     * Il formato del caricamento deriva dal Content-Type, e il parametro
+     * {@code formato} pesa solo nel ramo multipart: e' quindi li' l'unico modo
+     * per chiedere XML, ed e' li' che va rifiutato.
+     */
+    @Test
+    void uploadMultipartConFormatoXmlReturns400() throws Exception {
+        String principal = utenzaConDominioEScrittura("op-upload-xml");
+        MockMultipartFile file = new MockMultipartFile("file", "tracciato.xml", "application/xml",
+                jsonBody("12345678901", "12345678901").getBytes());
+
+        mvc.perform(multipart(BASE).file(file).param("formato", "XML")
+                        .param("idDominio", "12345678901")
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail", containsString("non ammesso in caricamento")));
     }
 
     // ----- stato fuori vocabolario ------------------------------------------
