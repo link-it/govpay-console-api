@@ -118,7 +118,7 @@ public class OperazioneSearchService {
         OperatoreCorrente operatore = currentOperatorService.get();
         Tracciato tracciato = tracciatoRepository.findById(idTracciato)
                 .orElseThrow(() -> new NotFoundException("Tracciato non trovato: " + idTracciato));
-        if (!DominioVisibilita.isVisibile(tracciato.getDominio().getId(), operatore)) {
+        if (!DominioVisibilita.isVisibile(tracciato.getIdDominio(), operatore)) {
             throw new NotFoundException("Tracciato non trovato: " + idTracciato);
         }
         return tracciato;

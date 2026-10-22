@@ -1,3 +1,19 @@
+2026-10-22  Giuliano Pintori <pintori@link.it>
+
+	* [Tracciati] Issue #84 GET /pendenze/tracciati restituisce 500 se un tracciato riferisce un dominio non censito.
+	tracciati.cod_dominio non ha FK verso domini, e la V1 lo scrive senza
+	verificarne l'esistenza: il caricamento controlla solo il formato del codice,
+	e il dominio inesistente emerge solo in elaborazione (CSV scartato, JSON
+	completato con tutte le operazioni in DOM_000). Su un codice assente Hibernate
+	lascia a null l'associazione verso Dominio, e TracciatoMapper sollevava NPE
+	dentro lo stream sui risultati: una sola riga rendeva illeggibile l'intero
+	elenco, stessa forma dei difetti corretti con la #90 e la #116. Lo stesso NPE
+	colpiva il controllo di visibilita' nel dettaglio e nelle sotto-risorse.
+	Il codice dominio e' ora mappato anche come colonna di sola lettura: il
+	riferimento al dominio espone il solo codice, senza ragione sociale, e il
+	tracciato resta visibile agli operatori autorizzati su tutti i domini, mentre
+	per quelli con domini espliciti risponde 404 come un id sconosciuto.
+
 2026-10-16  Giuliano Pintori <pintori@link.it>
 
 	* [Tracciati] Issue #116 GET /pendenze/tracciati restituisce 500 se un tracciato ha formato XML.

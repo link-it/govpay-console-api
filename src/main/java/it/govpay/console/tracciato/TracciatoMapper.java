@@ -49,7 +49,7 @@ public class TracciatoMapper {
         TracciatoPendenze dto = new TracciatoPendenze(
                 entity.getId(),
                 entity.getFileNameRichiesta(),
-                toDominioRef(entity.getDominio()),
+                toDominioRef(entity),
                 entity.getDataCaricamento(),
                 stato,
                 FormatoTracciato.fromValue(entity.getFormato()));
@@ -135,7 +135,17 @@ public class TracciatoMapper {
         }
     }
 
-    private static DominioRef toDominioRef(Dominio dominio) {
+    /**
+     * {@code tracciati.cod_dominio} non ha FK verso {@code domini}: un codice
+     * assente lascia {@code dominio} a null. Si espone il solo codice, senza
+     * ragione sociale, invece di far fallire l'intera pagina dell'elenco.
+     */
+    private static DominioRef toDominioRef(Tracciato entity) {
+        Dominio dominio = entity.getDominio();
+        if (dominio == null) {
+            log.warn("tracciato id={} riferisce il dominio '{}' assente dall'anagrafica", entity.getId(), entity.getCodDominio());
+            return new DominioRef(entity.getCodDominio());
+        }
         DominioRef ref = new DominioRef(dominio.getCodDominio());
         ref.setRagioneSociale(dominio.getRagioneSociale());
         return ref;

@@ -28,7 +28,11 @@ import jakarta.persistence.Table;
  * <p>{@code cod_dominio} e' l'unica colonna di legame al dominio (la tabella
  * non ha un {@code id_dominio} numerico come {@code fr}): la relazione verso
  * {@link Dominio} e' quindi sulla colonna naturale univoca {@code cod_dominio}
- * (vincolo {@code unique_domini_1}), non su una FK tecnica.
+ * (vincolo {@code unique_domini_1}), non su una FK tecnica. Senza FK la
+ * colonna puo' contenere un codice assente da {@code domini}: in quel caso
+ * Hibernate lascia {@code dominio} a null (l'associazione su colonna non-PK
+ * viene risolta subito, senza proxy), e il codice resta leggibile da
+ * {@link #getCodDominio()}.
  */
 @Entity
 @Table(name = "tracciati")
@@ -43,6 +47,10 @@ public class Tracciato {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cod_dominio", referencedColumnName = "cod_dominio", nullable = false)
     private Dominio dominio;
+
+    /** Stessa colonna di {@link #dominio}, in sola lettura: valorizzata anche se il dominio non esiste. */
+    @Column(name = "cod_dominio", insertable = false, updatable = false)
+    private String codDominio;
 
     @Column(name = "cod_tipo_versamento", length = 35)
     private String codTipoVersamento;
@@ -99,6 +107,15 @@ public class Tracciato {
 
     public void setDominio(Dominio dominio) {
         this.dominio = dominio;
+    }
+
+    public String getCodDominio() {
+        return codDominio;
+    }
+
+    /** Null se {@code cod_dominio} non trova corrispondenza in {@code domini}. */
+    public Long getIdDominio() {
+        return dominio != null ? dominio.getId() : null;
     }
 
     public String getCodTipoVersamento() {
