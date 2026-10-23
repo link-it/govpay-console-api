@@ -60,7 +60,7 @@ public class TracciatoSearchService {
         OperatoreCorrente operatore = currentOperatorService.get();
         Tracciato tracciato = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Tracciato non trovato: " + id));
-        if (!it.govpay.console.security.DominioVisibilita.isVisibile(tracciato.getDominio().getId(), operatore)) {
+        if (!it.govpay.console.security.DominioVisibilita.isVisibile(tracciato.getIdDominio(), operatore)) {
             // 404 anti-leak: indistinguibile da "id sconosciuto".
             throw new NotFoundException("Tracciato non trovato: " + id);
         }

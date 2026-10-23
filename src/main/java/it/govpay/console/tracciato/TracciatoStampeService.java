@@ -58,7 +58,7 @@ public class TracciatoStampeService {
         OperatoreCorrente operatore = currentOperatorService.get();
         Tracciato tracciato = tracciatoRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Tracciato non trovato: " + id));
-        if (!DominioVisibilita.isVisibile(tracciato.getDominio().getId(), operatore)) {
+        if (!DominioVisibilita.isVisibile(tracciato.getIdDominio(), operatore)) {
             throw new NotFoundException("Tracciato non trovato: " + id);
         }
 

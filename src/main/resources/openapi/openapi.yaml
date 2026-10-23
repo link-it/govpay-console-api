@@ -7496,8 +7496,10 @@ components:
     DominioRef:
       type: object
       description: |
-        Riferimento a un dominio. In lettura `ragioneSociale` e' sempre
-        valorizzata dal server; in scrittura e' significativo solo `idDominio`
+        Riferimento a un dominio. In lettura `ragioneSociale` e' valorizzata
+        dal server, salvo quando il codice riferito non e' presente
+        nell'anagrafica dei domini (es. un tracciato registrato dal core su un
+        dominio inesistente); in scrittura e' significativo solo `idDominio`
         (la label, se presente, viene ignorata).
       required:
         - idDominio
