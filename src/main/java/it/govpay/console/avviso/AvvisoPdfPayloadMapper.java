@@ -16,6 +16,7 @@ import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.LinguaSecondaria;
+import it.govpay.console.web.BadRequestException;
 import it.govpay.stampe.client.model.Amount;
 import it.govpay.stampe.client.model.Creditor;
 import it.govpay.stampe.client.model.Debtor;
@@ -93,6 +94,12 @@ public class AvvisoPdfPayloadMapper {
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
             String causaleTradotta = proprieta != null ? proprieta.getLinguaSecondariaCausale() : null;
+            if (causaleTradotta == null) {
+                throw new BadRequestException(
+                        "la pendenza non ha una causale tradotta configurata "
+                                + "(proprieta.linguaSecondariaCausale): impossibile generare l'avviso bilingue.",
+                        "linguaSecondaria");
+            }
             String informativaImportoTradotta = proprieta != null
                     ? proprieta.getLinguaSecondariaInformativaImportoAvviso()
                     : null;
@@ -200,10 +207,20 @@ public class AvvisoPdfPayloadMapper {
      * non troncarli farebbe fallire l'intero PDF con un 400.
      */
     private static String tronca(String value, int max) {
-        if (value == null || value.length() <= max) {
-            return value;
+        return value != null ? troncaObbligatorio(value, max) : null;
+    }
+
+    /**
+     * Per i campi obbligatori del contratto ({@code creditor.businessName},
+     * {@code debtor.fullName}): un valore assente diventa stringa vuota invece di
+     * {@code null}. Gli opzionali passano da {@link #tronca}, che conserva il
+     * {@code null}: per l'IBAN postale l'assenza attiva i fallback di {@code govpay-stampe}.
+     */
+    private static String troncaObbligatorio(String value, int max) {
+        if (value == null) {
+            return "";
         }
-        return value.substring(0, max);
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     /**
@@ -231,9 +248,12 @@ public class AvvisoPdfPayloadMapper {
      * Costruisce {@link NoticeMetadataSecondLanguage} con {@code bilinguism=true}, la lingua
      * selezionata, la causale tradotta se configurata ({@code proprieta.linguaSecondariaCausale}
      * — stesso campo del legacy) e la nota-importo tradotta se configurata
-     * ({@code proprieta.linguaSecondariaInformativaImportoAvviso}). Se non configurati,
-     * {@code title}/{@code informativaImporto} restano {@code null}: nessun fallback sul testo
-     * italiano, per non mostrare testo non tradotto etichettato come lingua secondaria.
+     * ({@code proprieta.linguaSecondariaInformativaImportoAvviso}). Nessun fallback sul testo
+     * italiano, per non mostrare testo non tradotto etichettato come lingua secondaria:
+     * {@code informativaImporto} non configurata resta {@code null}, mentre {@code title} e'
+     * richiesto dallo schema di govpay-stampe e senza causale tradotta l'avviso bilingue e'
+     * rifiutato con un 400 in {@link #toPaymentNotice}, invece di lasciare che govpay-stampe
+     * lo rifiuti a sua volta e far arrivare al chiamante un 502 generico.
      *
      * <p>{@code informativaImporto} qui viene sempre passato cosi' com'e': e' govpay-stampe-api
      * (non questo mapper) a leggerlo solo se {@code PaymentNotice.informativaImporto} e'
@@ -253,7 +273,7 @@ public class AvvisoPdfPayloadMapper {
         Creditor c = new Creditor();
         if (dominio != null) {
             c.setFiscalCode(dominio.getCodDominio());
-            c.setBusinessName(tronca(dominio.getRagioneSociale(), MAX_BUSINESS_NAME));
+            c.setBusinessName(troncaObbligatorio(dominio.getRagioneSociale(), MAX_BUSINESS_NAME));
             c.setCbillCode(dominio.getCbill());
             // Autorizzazione poste dell'ente: govpay-stampe la usa come fallback
             // quando l'IBAN postale non ne porta una propria.
@@ -272,7 +292,7 @@ public class AvvisoPdfPayloadMapper {
     private static Debtor mapDebtor(Versamento v) {
         Debtor d = new Debtor();
         d.setFiscalCode(v.getDebitoreIdentificativo());
-        d.setFullName(tronca(v.getDebitoreAnagrafica(), MAX_FULL_NAME));
+        d.setFullName(troncaObbligatorio(v.getDebitoreAnagrafica(), MAX_FULL_NAME));
         if (StringUtils.hasText(v.getDebitoreIndirizzo())) {
             StringBuilder line1 = new StringBuilder(v.getDebitoreIndirizzo());
             if (StringUtils.hasText(v.getDebitoreCivico())) {

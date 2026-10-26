@@ -248,7 +248,7 @@ class AvvisoIntegrationTest {
     @Test
     void returnsPdfWhenAcceptIsPdf() throws Exception {
         newPendenzaConAvviso("PEND-PDF", "012345678901234567");
-        byte[] fakePdf = new byte[]{'%', 'P', 'D', 'F', '-', '1', '.', '4'};
+        byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
         doAnswer(writePdf(fakePdf)).when(stampeClient).streamPaymentNotice(any(), any());
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-PDF/avviso")
@@ -307,7 +307,7 @@ class AvvisoIntegrationTest {
         v.setCodRata("R02");
         versamentoRepository.save(v);
 
-        byte[] fakePdf = new byte[]{'%', 'P', 'D', 'F', '-', '1', '.', '4'};
+        byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
         doAnswer(writePdf(fakePdf)).when(stampeClient).streamPaymentNotice(any(), any());
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-DOC/avviso")
