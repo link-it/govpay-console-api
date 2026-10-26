@@ -26,7 +26,13 @@ public class CursorSupportInterceptor implements HandlerInterceptor {
 
     static final String CURSOR = "cursor";
 
+    /**
+     * Restituisce sempre {@code true}: il rifiuto e' un'eccezione, non {@code false}, che
+     * interromperebbe la catena senza corpo di errore. La firma e' imposta da
+     * {@link HandlerInterceptor}.
+     */
     @Override
+    @SuppressWarnings("java:S3516")
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         if (!request.getParameterMap().containsKey(CURSOR)) {
             return true;

@@ -15,6 +15,7 @@ import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.LinguaSecondaria;
+import it.govpay.console.web.BadRequestException;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.PaymentNotice;
 import tools.jackson.databind.json.JsonMapper;
@@ -339,10 +340,12 @@ class AvvisoPdfPayloadMapperTest {
     }
 
     @Test
-    void secondLanguageTitleAssenteSenzaCausaleTradottaInProprieta() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), LinguaSecondaria.EN);
+    void secondLanguageRifiutataSenzaCausaleTradottaInProprieta() {
+        Versamento v = versamento();
 
-        assertThat(notice.getSecondLanguage().getTitle()).isNull();
+        assertThatThrownBy(() -> mapper.toPaymentNotice(v, LinguaSecondaria.EN))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("causale tradotta");
     }
 
     @Test
@@ -357,7 +360,10 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void secondLanguageInformativaImportoAssenteSenzaProprieta() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), LinguaSecondaria.EN);
+        Versamento v = versamento();
+        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
 
         assertThat(notice.getSecondLanguage().getInformativaImporto()).isNull();
     }
@@ -365,7 +371,8 @@ class AvvisoPdfPayloadMapperTest {
     @Test
     void secondLanguageInformativaImportoLettaDaProprieta() {
         Versamento v = versamento();
-        v.setProprieta("{\"linguaSecondariaInformativaImportoAvviso\": \"Custom text\"}");
+        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\", "
+                + "\"linguaSecondariaInformativaImportoAvviso\": \"Custom text\"}");
 
         PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
 

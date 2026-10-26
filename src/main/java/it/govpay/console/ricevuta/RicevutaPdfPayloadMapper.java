@@ -1,5 +1,6 @@
 package it.govpay.console.ricevuta;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -67,6 +68,7 @@ public class RicevutaPdfPayloadMapper {
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private static final String COD_UO_ENTE_CREDITORE = "EC";
+    private static final String DESCRIZIONE_VOCE_DEFAULT = "Voce di pagamento";
 
     /**
      * Limiti del contratto stampe ({@code govpay-stampe.yaml}): le colonne sorgente sono
@@ -97,7 +99,7 @@ public class RicevutaPdfPayloadMapper {
         receipt.setCreditorLogo(creditorLogoOf(d));
         receipt.setPagopaLogo(pagopaLogoBase64);
         receipt.setPaymentSubject(tronca(v != null && v.getCausaleVersamento() != null
-                ? CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()) : "", MAX_OGGETTO));
+                ? CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()) : null, MAX_OGGETTO));
         receipt.setOrganization(mapOrganization(d));
         receipt.setPayer(dati.payer());
         receipt.setPsp(tronca(pspOf(rpt), MAX_PSP));
@@ -122,8 +124,8 @@ public class RicevutaPdfPayloadMapper {
 
     private ReceiptOrganization mapOrganization(Dominio d) {
         ReceiptOrganization o = new ReceiptOrganization();
-        o.setFiscalCode(tronca(d != null ? d.getCodDominio() : "", MAX_FISCAL_CODE));
-        o.setBusinessName(tronca(d != null ? d.getRagioneSociale() : "", MAX_NOME_INDIRIZZO));
+        o.setFiscalCode(tronca(d != null ? d.getCodDominio() : null, MAX_FISCAL_CODE));
+        o.setBusinessName(tronca(d != null ? d.getRagioneSociale() : null, MAX_NOME_INDIRIZZO));
         UnitaOperativa enteCreditore = d != null
                 ? unitaOperativaRepository.findByDominio_IdAndCodUo(d.getId(), COD_UO_ENTE_CREDITORE).orElse(null)
                 : null;
@@ -160,7 +162,7 @@ public class RicevutaPdfPayloadMapper {
             return "N/D";
         }
         boolean mezzanotteEsatta = d.getHour() == 0 && d.getMinute() == 0 && d.getSecond() == 0;
-        return mezzanotteEsatta ? d.format(DATE_DDMMYYYY) : d.format(DATETIME_DDMMYYYY_HHMM);
+        return d.format(mezzanotteEsatta ? DATE_DDMMYYYY : DATETIME_DDMMYYYY_HHMM);
     }
 
     private static String formatDataApplicativa(LocalDate d) {
@@ -274,9 +276,8 @@ public class RicevutaPdfPayloadMapper {
         }
         String cf = soggetto.getIdentificativoUnivocoPagatore() != null
                 ? soggetto.getIdentificativoUnivocoPagatore().getCodiceIdentificativoUnivoco() : null;
-        p.setFiscalCode(tronca(cf != null ? cf : "", MAX_FISCAL_CODE));
-        p.setFullName(tronca(soggetto.getAnagraficaPagatore() != null ? soggetto.getAnagraficaPagatore() : "",
-                MAX_NOME_INDIRIZZO));
+        p.setFiscalCode(tronca(cf, MAX_FISCAL_CODE));
+        p.setFullName(tronca(soggetto.getAnagraficaPagatore(), MAX_NOME_INDIRIZZO));
         p.setAddress(tronca(buildAddressLine(soggetto.getIndirizzoPagatore(), soggetto.getCivicoPagatore()),
                 MAX_NOME_INDIRIZZO));
         p.setLocation(tronca(buildLocationLine(soggetto.getCapPagatore(), soggetto.getLocalitaPagatore(),
@@ -296,8 +297,8 @@ public class RicevutaPdfPayloadMapper {
         }
         String cf = soggetto.getUniqueIdentifier() != null
                 ? soggetto.getUniqueIdentifier().getEntityUniqueIdentifierValue() : null;
-        p.setFiscalCode(tronca(cf != null ? cf : "", MAX_FISCAL_CODE));
-        p.setFullName(tronca(soggetto.getFullName() != null ? soggetto.getFullName() : "", MAX_NOME_INDIRIZZO));
+        p.setFiscalCode(tronca(cf, MAX_FISCAL_CODE));
+        p.setFullName(tronca(soggetto.getFullName(), MAX_NOME_INDIRIZZO));
         p.setAddress(tronca(buildAddressLine(soggetto.getStreetName(), soggetto.getCivicNumber()),
                 MAX_NOME_INDIRIZZO));
         p.setLocation(tronca(buildLocationLine(soggetto.getPostalCode(), soggetto.getCity(),
@@ -316,11 +317,15 @@ public class RicevutaPdfPayloadMapper {
         return sb.toString();
     }
 
+    /**
+     * Tutti i campi stringa di {@link Receipt} sono obbligatori nel contratto stampe:
+     * un valore assente diventa stringa vuota, come per gli altri campi del payload.
+     */
     private static String tronca(String value, int max) {
-        if (value == null || value.length() <= max) {
-            return value;
+        if (value == null) {
+            return "";
         }
-        return value.substring(0, max);
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     private static String buildLocationLine(String cap, String localita, String provincia) {
@@ -346,6 +351,17 @@ public class RicevutaPdfPayloadMapper {
         return importo == 0.0 ? ReceiptItemStatus.NOT_EXECUTED : ReceiptItemStatus.EXECUTED;
     }
 
+    /** Voce comune ai tre formati di RT: causale assente → descrizione generica, importo assente → zero. */
+    private static ReceiptItem item(String causale, String iur, BigDecimal importoPagato) {
+        double importo = importoPagato != null ? importoPagato.doubleValue() : 0.0;
+        ReceiptItem item = new ReceiptItem();
+        item.setDescription(tronca(causale != null ? causale : DESCRIZIONE_VOCE_DEFAULT, MAX_OGGETTO));
+        item.setIur(tronca(iur, MAX_IDENTIFICATIVO));
+        item.setAmount(importo);
+        item.setStatus(statusDaImporto(importo));
+        return item;
+    }
+
     private static List<ReceiptItem> itemsDaRT(RT rt) {
         List<ReceiptItem> items = new ArrayList<>();
         List<CtDatiSingoloPagamentoRT> voci = rt.getDatiPagamento() != null
@@ -354,15 +370,8 @@ public class RicevutaPdfPayloadMapper {
             return items;
         }
         for (CtDatiSingoloPagamentoRT voce : voci) {
-            double importo = voce.getSingoloImportoPagato() != null
-                    ? voce.getSingoloImportoPagato().doubleValue() : 0.0;
-            ReceiptItem item = new ReceiptItem();
-            item.setDescription(tronca(voce.getCausaleVersamento() != null
-                    ? voce.getCausaleVersamento() : "Voce di pagamento", MAX_OGGETTO));
-            item.setIur(tronca(voce.getIdentificativoUnivocoRiscossione(), MAX_IDENTIFICATIVO));
-            item.setAmount(importo);
-            item.setStatus(statusDaImporto(importo));
-            items.add(item);
+            items.add(item(voce.getCausaleVersamento(), voce.getIdentificativoUnivocoRiscossione(),
+                    voce.getSingoloImportoPagato()));
         }
         return items;
     }
@@ -374,15 +383,8 @@ public class RicevutaPdfPayloadMapper {
             return items;
         }
         for (CtTransferPA transfer : receipt.getTransferList().getTransfers()) {
-            double importo = transfer.getTransferAmount() != null
-                    ? transfer.getTransferAmount().doubleValue() : 0.0;
-            ReceiptItem item = new ReceiptItem();
-            item.setDescription(tronca(transfer.getRemittanceInformation() != null
-                    ? transfer.getRemittanceInformation() : "Voce di pagamento", MAX_OGGETTO));
-            item.setIur(tronca(receipt.getReceiptId(), MAX_IDENTIFICATIVO));
-            item.setAmount(importo);
-            item.setStatus(statusDaImporto(importo));
-            items.add(item);
+            items.add(item(transfer.getRemittanceInformation(), receipt.getReceiptId(),
+                    transfer.getTransferAmount()));
         }
         return items;
     }
@@ -393,15 +395,8 @@ public class RicevutaPdfPayloadMapper {
             return items;
         }
         for (CtTransferPAReceiptV2 transfer : receipt.getTransferList().getTransfers()) {
-            double importo = transfer.getTransferAmount() != null
-                    ? transfer.getTransferAmount().doubleValue() : 0.0;
-            ReceiptItem item = new ReceiptItem();
-            item.setDescription(tronca(transfer.getRemittanceInformation() != null
-                    ? transfer.getRemittanceInformation() : "Voce di pagamento", MAX_OGGETTO));
-            item.setIur(tronca(receipt.getReceiptId(), MAX_IDENTIFICATIVO));
-            item.setAmount(importo);
-            item.setStatus(statusDaImporto(importo));
-            items.add(item);
+            items.add(item(transfer.getRemittanceInformation(), receipt.getReceiptId(),
+                    transfer.getTransferAmount()));
         }
         return items;
     }
