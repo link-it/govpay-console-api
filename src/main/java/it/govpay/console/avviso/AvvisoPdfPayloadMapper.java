@@ -100,10 +100,8 @@ public class AvvisoPdfPayloadMapper {
                                 + "(proprieta.linguaSecondariaCausale): impossibile generare l'avviso bilingue.",
                         "linguaSecondaria");
             }
-            String informativaImportoTradotta = proprieta != null
-                    ? proprieta.getLinguaSecondariaInformativaImportoAvviso()
-                    : null;
-            notice.setSecondLanguage(buildSecondLanguage(secondaria, causaleTradotta, informativaImportoTradotta));
+            notice.setSecondLanguage(buildSecondLanguage(secondaria, causaleTradotta,
+                    proprieta.getLinguaSecondariaInformativaImportoAvviso()));
         }
         return notice;
     }
