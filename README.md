@@ -386,7 +386,7 @@ Variabili d'ambiente dell'immagine, oltre alle proprietà Spring Boot in forma d
 | `GOVPAY_CONSOLE_API_JVM_MAX_DIRECT_MEMORY_SIZE` | no | - | `-XX:MaxDirectMemorySize` della JVM |
 | `JAVA_OPTS` | no | - | Opzioni aggiuntive della JVM |
 
-L'entrypoint ricava da `GOVPAY_DB_TYPE` driver, dialetto e URL JDBC, e imposta il pool e i timeout del container indicati in [Database](#database). Il log di avvio dell'entrypoint è in `/tmp/entrypoint_debug.log` dentro il container. Il fuso orario del container è `Europe/Rome` (`TZ`).
+L'entrypoint ricava da `GOVPAY_DB_TYPE` driver, dialetto e URL JDBC, e imposta il pool e i timeout del container indicati in [Database](#database). I messaggi di avvio dell'entrypoint sono nel log del container (`docker logs`). Il fuso orario del container è `Europe/Rome` (`TZ`).
 
 Costruzione dell'immagine in locale, scansione delle vulnerabilità e pacchetti inclusi sono descritti in [docker/SCANSIONE.md](docker/SCANSIONE.md); i driver JDBC in [docker/jdbc-drivers/README.md](docker/jdbc-drivers/README.md).
 

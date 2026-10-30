@@ -9,10 +9,8 @@
 
 set -e
 
-# Debug di esecuzione (come govpay-docker)
-exec 6<> /tmp/entrypoint_debug.log
-exec 2>&6
-set -x
+# Nessun tracing (set -x): scriverebbe nel log i valori delle variabili,
+# compresa GOVPAY_DB_PASSWORD. Lo stderr resta quello del container.
 
 # Funzioni di logging
 log_info() { echo -e "\033[0;32m[INFO]\033[0m $(date '+%Y-%m-%d %H:%M:%S') - $1"; }
