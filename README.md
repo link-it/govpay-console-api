@@ -399,7 +399,7 @@ curl http://localhost:9090/actuator/health       # stato, usato anche dalle prob
 curl http://localhost:9090/actuator/prometheus   # metriche in formato Prometheus
 ```
 
-Sulla stessa porta è esposto anche `loggers`, che cambia i livelli di log del solo nodo interrogato: richiede le credenziali di un operatore, ma non verifica le sue ACL, quindi la porta di management va comunque tenuta su una rete interna. Per cambiare i livelli su tutti i nodi si usa l'API autenticata `/admin/logging/loggers` sulla porta delle API, che richiede il diritto sul servizio "Configurazione e manutenzione" e salva i livelli nella tabella `configurazione`:
+Sulla stessa porta è esposto anche `loggers`, che cambia i livelli di log del solo nodo interrogato: richiede un operatore autenticato con il diritto sul servizio "Configurazione e manutenzione" (lettura per consultare, scrittura per modificare), altrimenti risponde `401` o `403`. La porta di management va comunque tenuta su una rete interna, perché `health` e `prometheus` sono anonimi. Per cambiare i livelli su tutti i nodi si usa l'API autenticata `/admin/logging/loggers` sulla porta delle API, che richiede il diritto sul servizio "Configurazione e manutenzione" e salva i livelli nella tabella `configurazione`:
 
 ```bash
 curl -u <operatore>:<password> http://localhost:8080/admin/logging/loggers
