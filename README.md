@@ -85,6 +85,7 @@ Le proprietà si impostano in `application.properties`, da riga di comando (`-D<
 | Proprietà | Variabile | Default | Descrizione |
 |-----------|-----------|---------|-------------|
 | `server.port` | `SERVER_PORT` | `8080` | Porta HTTP delle API |
+| `server.forward-headers-strategy` | `SERVER_FORWARD_HEADERS_STRATEGY` | `native` | Usa gli header `X-Forwarded-*` solo se arrivano da un proxy fidato (`server.tomcat.remoteip.internal-proxies`, di default le reti private). Serve al limite dei tentativi di login per conoscere l'IP reale del client |
 | `console.time-zone` | `CONSOLE_TIME_ZONE` | `Europe/Rome` | Fuso orario delle date nelle risposte JSON |
 | `govpay.console.cluster-id` | `CLUSTER_ID` | `console-api` | Identificativo del nodo negli eventi inviati al GDE |
 | `spring.mvc.date-format` | - | `yyyy-MM-dd` | Formato delle date nei parametri |
