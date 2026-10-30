@@ -1,7 +1,7 @@
 package it.govpay.console.logging;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -38,39 +38,39 @@ class LoggersEndpointAclWebExtensionTest {
     }
 
     @Test
-    @DisplayName("Lettura senza diritto: 403 e nessuna chiamata all'endpoint")
+    @DisplayName("Lettura senza diritto: negata e nessuna chiamata all'endpoint")
     void letturaNegata() {
         doThrow(new AccessDeniedException("negato")).when(aclAuthorizer)
                 .requireLettura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
-        assertEquals(403, extension.loggers().getStatus());
-        assertEquals(403, extension.loggerLevels("it.govpay").getStatus());
+        assertThrows(AccessDeniedException.class, () -> extension.loggers());
+        assertThrows(AccessDeniedException.class, () -> extension.loggerLevels("it.govpay"));
         verify(delegate, never()).loggers();
         verify(delegate, never()).loggerLevels("it.govpay");
     }
 
     @Test
-    @DisplayName("Lettura con diritto: 200 con la risposta dell'endpoint, 404 per un logger inesistente")
+    @DisplayName("Lettura con diritto: risposta dell'endpoint")
     void letturaConsentita() {
         LoggersEndpoint.LoggersDescriptor descriptor = mock(LoggersEndpoint.LoggersDescriptor.class);
         when(delegate.loggers()).thenReturn(descriptor);
-        assertEquals(200, extension.loggers().getStatus());
-        assertSame(descriptor, extension.loggers().getBody());
-        assertEquals(404, extension.loggerLevels("inesistente").getStatus());
+        assertSame(descriptor, extension.loggers());
+        verify(aclAuthorizer).requireLettura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
     }
 
     @Test
-    @DisplayName("Scrittura senza diritto: 403 e livello non modificato")
+    @DisplayName("Scrittura senza diritto: negata e livello non modificato")
     void scritturaNegata() {
         doThrow(new AccessDeniedException("negato")).when(aclAuthorizer)
                 .requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
-        assertEquals(403, extension.configureLogLevel("it.govpay", LogLevel.DEBUG).getStatus());
+        assertThrows(AccessDeniedException.class, () -> extension.configureLogLevel("it.govpay", LogLevel.DEBUG));
         verify(delegate, never()).configureLogLevel("it.govpay", LogLevel.DEBUG);
     }
 
     @Test
-    @DisplayName("Scrittura con diritto: 204 e livello modificato")
+    @DisplayName("Scrittura con diritto: livello modificato")
     void scritturaConsentita() {
-        assertEquals(204, extension.configureLogLevel("it.govpay", LogLevel.DEBUG).getStatus());
+        extension.configureLogLevel("it.govpay", LogLevel.DEBUG);
+        verify(aclAuthorizer).requireScrittura(AclServizio.CONFIGURAZIONE_E_MANUTENZIONE);
         verify(delegate).configureLogLevel("it.govpay", LogLevel.DEBUG);
     }
 }
