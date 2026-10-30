@@ -51,7 +51,7 @@ Storico delle modifiche nel [ChangeLog](ChangeLog).
 | [govpay-gde-api](https://github.com/link-it/govpay-gde-api) | runtime | no | Giornale degli Eventi: la console ne legge gli eventi (`GET /eventi`) e gli invia gli eventi delle proprie chiamate (`POST /eventi`, componente `API_BACKOFFICE`). URL e credenziali sono nel connettore `servizioGDE` della tabella `configurazione`, gestito da `/impostazioni/servizioGDE`. Senza connettore abilitato `/eventi` risponde `503` |
 | [govpay-stampe-api](https://github.com/link-it/govpay-stampe-api) | runtime | no | Genera i PDF di avvisi e ricevute (`app.stampe.base-url`). Senza URL le stampe rispondono `503` |
 | Servizio paForNode di GovPay | runtime | no | Riceve, come `paSendRTV2`, le ricevute caricate a mano con `POST /ricevute` (`app.pafornode.url`): `api-pagopa` del monolite o [govpay-pafornode-api](https://github.com/link-it/govpay-pafornode-api) |
-| Batch GovPay | runtime | no | Avviati e consultati da `/operazioni` tramite la loro API `/api/batch`, se censiti in `govpay.operazioni.catalogo`: di default [govpay-iban-batch](https://github.com/link-it/govpay-iban-batch) (`IBAN_CHECK`), `EC_SYNC` e [govpay-rt-batch](https://github.com/link-it/govpay-rt-batch) (`RECUPERO_RT`, usato anche da `POST /ricevute/recuperi`). Con la voce `ELABORAZIONE_RICONCILIAZIONI` nel catalogo, ogni nuova riconciliazione avvia il batch corrispondente |
+| Batch GovPay | runtime | no | Avviati e consultati da `/operazioni` tramite la loro API `/api/batch`, se censiti in `govpay.operazioni.catalogo`: di default [govpay-iban-batch](https://github.com/link-it/govpay-iban-batch) (`IBAN_CHECK`: IBAN e anagrafica degli enti creditori da pagoPA) e [govpay-rt-batch](https://github.com/link-it/govpay-rt-batch) (`RECUPERO_RT`, usato anche da `POST /ricevute/recuperi`). Con la voce `ELABORAZIONE_RICONCILIAZIONI` nel catalogo, ogni nuova riconciliazione avvia il batch corrispondente |
 | [govpay-tracciati-batch](https://github.com/link-it/govpay-tracciati-batch) | runtime | no | Elabora i tracciati di pendenze caricati con `POST /pendenze/tracciati` |
 | Prometheus federato | runtime | no | Fonte dei dati di `/metriche/sla` (`govpay.prometheus.url`) |
 
@@ -178,23 +178,20 @@ I driver JDBC non sono inclusi nel jar: vedi [Esecuzione](#esecuzione).
 | `app.operazioni.trigger.async` | - | `true` | Avvio asincrono del batch delle riconciliazioni dopo il salvataggio |
 | `govpay.client.cache.enabled` | - | `false` | Tiene in cache i connettori letti da database; l'operazione `RESET_CACHE` la svuota |
 
-Catalogo di default, da adattare ai nomi dei servizi dell'installazione (le voci di batch non installati restano visibili, senza dati):
+Catalogo di default, con gli host uguali ai nomi delle immagini dei batch e la porta su cui rispondono nel container (le voci di batch non installati restano visibili, senza dati):
 
 ```properties
 govpay.operazioni.catalogo[0].id=IBAN_CHECK
-govpay.operazioni.catalogo[0].url=http://iban-batch:8080/api/batch
+govpay.operazioni.catalogo[0].url=http://govpay-iban-batch:10001/api/batch
 govpay.operazioni.catalogo[0].abilitata=true
 govpay.operazioni.catalogo[1].id=RESET_CACHE
 govpay.operazioni.catalogo[1].abilitata=true
-govpay.operazioni.catalogo[2].id=EC_SYNC
-govpay.operazioni.catalogo[2].url=http://ec-sync-batch:8080/api/batch
+govpay.operazioni.catalogo[2].id=RECUPERO_RT
+govpay.operazioni.catalogo[2].url=http://govpay-rt-batch:10001/api/batch
 govpay.operazioni.catalogo[2].abilitata=true
-govpay.operazioni.catalogo[3].id=RECUPERO_RT
-govpay.operazioni.catalogo[3].url=http://govpay-rt-batch:8080/api/batch
-govpay.operazioni.catalogo[3].abilitata=true
 ```
 
-Ogni voce si può sovrascrivere anche in forma di variabile d'ambiente, es. `GOVPAY_OPERAZIONI_CATALOGO_0_URL=http://govpay-iban-batch:8080/api/batch`.
+Ogni voce si può sovrascrivere anche in forma di variabile d'ambiente, es. `GOVPAY_OPERAZIONI_CATALOGO_0_URL=http://iban-batch.interno:10001/api/batch`.
 
 ### Giornale degli Eventi e audit
 

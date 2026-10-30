@@ -50,7 +50,7 @@ class OperazioneEsecuzioniControllerIntegrationTest {
 
     private static final String PRINCIPAL = "operatore1";
     private static final String PASSWORD = "secret";
-    private static final String IBAN_URL = "http://iban-batch:8080/api/batch";
+    private static final String IBAN_URL = "http://govpay-iban-batch:10001/api/batch";
 
     @Autowired
     private MockMvc mvc;
