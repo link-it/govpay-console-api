@@ -32,6 +32,8 @@ Gruppi di operazioni esposti (specifica in [src/main/resources/openapi/openapi.y
 | Operazioni | `/operazioni` | Catalogo dei batch, avvio manuale ed esecuzioni |
 | Metriche | `/metriche/sla` | Indicatori di rispetto degli SLA pagoPA, letti da Prometheus |
 
+Le API rispondono sulla radice del servizio (con il war, sul context path dell'application server). Il reverse proxy dell'immagine di [govpay-console](https://github.com/link-it/govpay-console) inoltra di default verso il prefisso `/govpay/console-api`, il secondo server dichiarato nella specifica: se la console punta direttamente a questo servizio, impostare nella console `GOVPAY_API_BACKEND_PATH=/`.
+
 Fuori dalla specifica OpenAPI ci sono `GET /openapi/openapi.yaml` (la specifica stessa) e `/admin/logging/loggers`, per cambiare i livelli di log a caldo.
 
 **Autenticazione e autorizzazione.** L'autenticazione è fornita da [govpay-common-auth](https://github.com/link-it/govpay-common-auth). Sono attivi di default Basic (`Authorization: Basic` a ogni richiesta) e FORM (`POST /auth/login` con credenziali JSON, poi sessione via cookie e token CSRF `XSRF-TOKEN`/`X-XSRF-TOKEN`), entrambi verificati sulle utenze degli operatori nel database di GovPay. Gli altri metodi della libreria (LDAP, SSL, SSL da header, header, API key, SPID, OAuth2) si attivano con le proprietà `govpay.auth.<metodo>.*`. Ogni operazione verifica poi le ACL dell'operatore (servizio e diritto di lettura o scrittura) e la visibilità sui domini e sui tipi pendenza. Le operazioni di scrittura e le consultazioni dei dati sensibili sono registrate nella tabella `gp_audit`.
