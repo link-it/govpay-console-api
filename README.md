@@ -83,7 +83,7 @@ Le proprietà si impostano in `application.properties`, da riga di comando (`-D<
 | Proprietà | Variabile | Default | Descrizione |
 |-----------|-----------|---------|-------------|
 | `server.port` | `SERVER_PORT` | `8080` | Porta HTTP delle API |
-| `console.time-zone` | - | `Europe/Rome` | Fuso orario delle date nelle risposte JSON |
+| `console.time-zone` | `CONSOLE_TIME_ZONE` | `Europe/Rome` | Fuso orario delle date nelle risposte JSON |
 | `govpay.console.cluster-id` | `CLUSTER_ID` | `console-api` | Identificativo del nodo negli eventi inviati al GDE |
 | `spring.mvc.date-format` | - | `yyyy-MM-dd` | Formato delle date nei parametri |
 | `spring.mvc.datetime-format` | - | `yyyy-MM-dd'T'HH:mm:ssZZZ` | Formato di data e ora nei parametri |
@@ -377,6 +377,7 @@ Variabili d'ambiente dell'immagine, oltre alle proprietà Spring Boot in forma d
 | `GOVPAY_API_STAMPE_CONNECT_TIMEOUT_MS` | no | `5000` | Timeout di connessione verso govpay-stampe (diventa `STAMPE_CONNECT_TIMEOUT_MS`) |
 | `GOVPAY_API_STAMPE_READ_TIMEOUT_MS` | no | `30000` | Timeout di lettura verso govpay-stampe (diventa `STAMPE_READ_TIMEOUT_MS`) |
 | `GOVPAY_CONSOLE_API_CLUSTER_ID` | no | `console-api` | Identificativo del nodo negli eventi GDE (diventa `CLUSTER_ID`) |
+| `CONSOLE_TIME_ZONE` | no | `Europe/Rome` | Fuso orario delle date nelle risposte JSON |
 | `SERVER_PORT` | no | `8080` | Porta HTTP delle API |
 | `MANAGEMENT_SERVER_PORT` | no | `9090` | Porta degli endpoint actuator |
 | `GOVPAY_CONSOLE_API_JVM_MAX_RAM_PERCENTAGE` | no | `80` | `-XX:MaxRAMPercentage` della JVM |

@@ -53,13 +53,13 @@ RUN chown -R govpay:0 /usr/local/bin/entrypoint.sh ${GOVPAY_CONSOLE_API_HOME} ${
 
 USER govpay
 
-ENV CONSOLE_API_TIME_ZONE=Europe/Rome \
+# CONSOLE_TIME_ZONE e' la forma a variabile di console.time-zone (fuso orario
+# delle date nelle risposte JSON).
+ENV CONSOLE_TIME_ZONE=Europe/Rome \
     SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=20000 \
     SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=10000 \
     SPRING_DATASOURCE_HIKARI_MAX_LIFETIME=600000 \
-    LOGGING_FILE_NAME=${GOVPAY_CONSOLE_API_LOGDIR}/govpay-console-api.log \
-    LOGGING_DIRECTORYPATH=${GOVPAY_CONSOLE_API_LOGDIR} \
-    LOGGING_FILEPREFIX=govpay-console-api
+    LOGGING_FILE_NAME=${GOVPAY_CONSOLE_API_LOGDIR}/govpay-console-api.log
 
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
