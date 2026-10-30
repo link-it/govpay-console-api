@@ -66,10 +66,10 @@ mvn clean install -P jar     # fat jar, per esecuzione standalone e container (p
 mvn clean install -P war     # war, per il deploy su application server
 ```
 
-Il profilo sceglie il packaging; il risultato è in `target/govpay-console-api.jar` o `target/govpay-console-api.war`. Il codice delle API, del client di govpay-stampe e dei modelli pagoPA (RPT/RT, paForNode, BizEvents) è generato in fase di build dalle specifiche in `src/main/resources/openapi` e `src/main/resources/xsd`. La build esegue i test e l'analisi OWASP Dependency-Check delle dipendenze. L'analisi è configurata due volte, nel `pom.xml` del progetto (proprietà `owasp`) e in `govpay-bom` (proprietà `owasp.phase`): per escluderla, per esempio in sviluppo, vanno disattivate entrambe:
+Il profilo sceglie il packaging; il risultato è in `target/govpay-console-api.jar` o `target/govpay-console-api.war`. Il codice delle API, del client di govpay-stampe e dei modelli pagoPA (RPT/RT, paForNode, BizEvents) è generato in fase di build dalle specifiche in `src/main/resources/openapi` e `src/main/resources/xsd`. La build esegue i test e l'analisi OWASP Dependency-Check delle dipendenze (esecuzione definita in `govpay-bom`); per escludere l'analisi OWASP, per esempio in sviluppo:
 
 ```bash
-mvn clean install -P jar -Dowasp=none -Dowasp.phase=none
+mvn clean install -P jar -Dowasp.phase=none
 ```
 
 Con il profilo `dist` (`mvn clean install -P jar,dist`) si ottiene anche `target/sql.zip`, con lo script `console-api-schema.sql` per PostgreSQL, MySQL, Oracle, SQL Server e HSQL.
