@@ -43,8 +43,8 @@ class OperazioniControllerIntegrationTest {
 
     private static final String PRINCIPAL = "operatore1";
     private static final String PASSWORD = "secret";
-    private static final String IBAN_URL = "http://iban-batch:8080/api/batch";
-    private static final String EC_SYNC_URL = "http://ec-sync-batch:8080/api/batch";
+    private static final String IBAN_URL = "http://govpay-iban-batch:10001/api/batch";
+    private static final String RECUPERO_RT_URL = "http://govpay-rt-batch:10001/api/batch";
 
     @Autowired
     private MockMvc mvc;
@@ -93,7 +93,7 @@ class OperazioniControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("IBAN_CHECK"))
                 .andExpect(jsonPath("$[1].id").value("RESET_CACHE"))
-                .andExpect(jsonPath("$[2].id").value("EC_SYNC"));
+                .andExpect(jsonPath("$[2].id").value("RECUPERO_RT"));
     }
 
     /**
@@ -165,13 +165,13 @@ class OperazioniControllerIntegrationTest {
 
     @Test
     void microservizioNonRaggiungibile_vieneMostratoDegradatoSenzaFarFallireIlCatalogo() throws Exception {
-        when(client.info(EC_SYNC_URL)).thenThrow(new OperazioneTriggerNonRaggiungibileException("giu'", new RuntimeException()));
+        when(client.info(RECUPERO_RT_URL)).thenThrow(new OperazioneTriggerNonRaggiungibileException("giu'", new RuntimeException()));
 
         mvc.perform(get("/operazioni").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("IBAN_CHECK"))
-                .andExpect(jsonPath("$[2].id").value("EC_SYNC"))
-                .andExpect(jsonPath("$[2].nome").value("EC_SYNC"))
+                .andExpect(jsonPath("$[2].id").value("RECUPERO_RT"))
+                .andExpect(jsonPath("$[2].nome").value("RECUPERO_RT"))
                 .andExpect(jsonPath("$[2].ultimaEsecuzione").value((Object) null));
     }
 }

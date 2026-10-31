@@ -13,7 +13,12 @@ info:
     url: 'https://github.com/link-it/govpay-console-api/blob/master/LICENSE'
 
 servers:
+  # Il servizio (jar, container o war) espone le API sulla radice del proprio
+  # context path: il primo server e' quello usato da Swagger UI.
+  - url: /
+    description: Servizio esposto direttamente
   - url: /govpay/console-api
+    description: Dietro il reverse proxy dell'installazione GovPay (prefisso di default del proxy di govpay-console)
 
 tags:
   - name: Pendenze

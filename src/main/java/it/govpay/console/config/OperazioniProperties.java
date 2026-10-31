@@ -44,7 +44,7 @@ public class OperazioniProperties {
         private String id;
         /**
          * Base URL {@code /api/batch} del microservizio proprietario del job
-         * (es. {@code http://iban-batch:8080/api/batch}, govpay-common
+         * (es. {@code http://govpay-iban-batch:10001/api/batch}, govpay-common
          * {@code AbstractBatchController}): nome/descrizione/schedulazione/
          * esecuzioni si leggono tutte da qui. Assente per operazioni non
          * batch-backed, dispatchate localmente via {@link it.govpay.console.operazioni.OperazioneLocaleHandler}.
