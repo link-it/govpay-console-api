@@ -9100,7 +9100,11 @@ components:
             $ref: '#/components/schemas/RuoloRef'
         acl:
           type: array
-          description: ACL appiattite dell'utenza (servizio + autorizzazioni R/W).
+          description: |
+            ACL effettive dell'utenza: quelle assegnate direttamente e quelle
+            dei suoi ruoli, accorpate in una voce per servizio con l'unione
+            delle autorizzazioni R/W. `ruolo` e' valorizzato solo se la voce
+            deriva da un unico ruolo.
           items:
             $ref: '#/components/schemas/Acl'
         preferenze:

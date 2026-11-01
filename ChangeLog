@@ -1,3 +1,14 @@
+2026-11-01  Giuliano Pintori <pintori@link.it>
+
+	* [Profilo] Issue #122 GET /profilo non restituisce le ACL ereditate dai ruoli.
+	Le acl del profilo erano lette solo tra quelle assegnate direttamente
+	all'utenza, mentre l'autorizzazione degli endpoint considerava anche quelle
+	dei ruoli: un operatore configurato con i soli ruoli riceveva acl vuote e la
+	console nascondeva le sezioni protette. Il calcolo delle ACL effettive e' ora
+	unico (AclEffettive) per il profilo e per AclAuthorizer. Il profilo accorpa
+	le ACL in una voce per servizio, nell'ordine del core, con l'unione dei
+	diritti R/W; ruolo e' valorizzato solo se la voce deriva da un unico ruolo.
+
 2026-10-22  Giuliano Pintori <pintori@link.it>
 
 	* [Tracciati] Issue #84 GET /pendenze/tracciati restituisce 500 se un tracciato riferisce un dominio non censito.

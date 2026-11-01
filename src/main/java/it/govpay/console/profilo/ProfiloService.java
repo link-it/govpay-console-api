@@ -1,10 +1,15 @@
 package it.govpay.console.profilo;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,12 +32,12 @@ import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.Profilo;
 import it.govpay.console.model.RuoloRef;
 import it.govpay.console.model.TipoPendenzaRef;
-import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.DominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaRepository;
+import it.govpay.console.security.AclEffettive;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -51,7 +56,8 @@ import tools.jackson.databind.node.ObjectNode;
  *       layer, con singolo placeholder {@code {id:"*", desc:"Tutti"}}
  *       quando l'utenza ha autorizzazione "star" (visibilita' totale);</li>
  *   <li>{@code ruoli} dal CSV {@code utenze.ruoli};</li>
- *   <li>{@code acl} appiattite per servizio + diritti R/W.</li>
+ *   <li>{@code acl} effettive (dirette e dei ruoli), una voce per servizio con
+ *       l'unione dei diritti R/W.</li>
  * </ul>
  *
  * <p>{@code autenticazione} non viene settato qui: e' compito del chiamante
@@ -74,7 +80,7 @@ public class ProfiloService {
     private final DominioRepository dominioRepository;
     private final UnitaOperativaRepository unitaOperativaRepository;
     private final TipoVersamentoRepository tipoVersamentoRepository;
-    private final AclRepository aclRepository;
+    private final AclEffettive aclEffettive;
     private final OperatoreRepository operatoreRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
@@ -84,7 +90,7 @@ public class ProfiloService {
                           DominioRepository dominioRepository,
                           UnitaOperativaRepository unitaOperativaRepository,
                           TipoVersamentoRepository tipoVersamentoRepository,
-                          AclRepository aclRepository,
+                          AclEffettive aclEffettive,
                           OperatoreRepository operatoreRepository,
                           AuditService auditService,
                           ObjectMapper objectMapper) {
@@ -93,7 +99,7 @@ public class ProfiloService {
         this.dominioRepository = dominioRepository;
         this.unitaOperativaRepository = unitaOperativaRepository;
         this.tipoVersamentoRepository = tipoVersamentoRepository;
-        this.aclRepository = aclRepository;
+        this.aclEffettive = aclEffettive;
         this.operatoreRepository = operatoreRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
@@ -122,7 +128,7 @@ public class ProfiloService {
         profilo.setDomini(buildDomini(operatore));
         profilo.setTipiPendenza(buildTipiPendenza(operatore));
         profilo.setRuoli(buildRuoli(utenza));
-        profilo.setAcl(buildAcl(operatore.idUtenza()));
+        profilo.setAcl(buildAcl(utenza));
         // Il campo del modello generato si autoinizializza a `new HashMap<>()` (non
         // null): settarlo esplicitamente a null e' necessario per farlo sparire dal
         // JSON (spring.jackson.default-property-inclusion=non_absent), non solo per
@@ -253,10 +259,24 @@ public class ProfiloService {
                 .toList();
     }
 
-    private List<Acl> buildAcl(long idUtenza) {
-        return aclRepository.findByIdUtenza(idUtenza).stream()
-                .map(ProfiloService::toAcl)
-                .filter(java.util.Objects::nonNull)
+    /**
+     * Come {@code Utenza.getAclsProfilo()} del core: ACL dirette e dei ruoli accorpate in
+     * una voce per servizio, nell'ordine dell'enum. A differenza del core, che tiene la
+     * voce con piu' diritti, i diritti sono uniti: {@code R} da un ruolo e {@code W} da
+     * un altro danno {@code RW}, come in {@code AclAuthorizer}. {@code ruolo} e'
+     * valorizzato solo se la voce deriva da un unico ruolo.
+     */
+    private List<Acl> buildAcl(Utenza utenza) {
+        Map<AclServizio, List<it.govpay.console.entity.Acl>> perServizio = new EnumMap<>(AclServizio.class);
+        for (it.govpay.console.entity.Acl entity : aclEffettive.di(utenza)) {
+            AclServizio servizio = SERVIZIO_LOOKUP.get(entity.getServizio());
+            if (servizio != null) { // servizio fuori dall'enum noto → skip
+                perServizio.computeIfAbsent(servizio, k -> new ArrayList<>()).add(entity);
+            }
+        }
+        return perServizio.entrySet().stream()
+                .map(e -> toAcl(e.getKey(), e.getValue()))
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -280,15 +300,20 @@ public class ProfiloService {
         return ref;
     }
 
-    private static Acl toAcl(it.govpay.console.entity.Acl entity) {
-        AclServizio servizio = SERVIZIO_LOOKUP.get(entity.getServizio());
-        if (servizio == null) {
-            return null; // servizio fuori dall'enum noto → skip
+    private static Acl toAcl(AclServizio servizio, List<it.govpay.console.entity.Acl> entities) {
+        Set<Acl.AutorizzazioniEnum> diritti = EnumSet.noneOf(Acl.AutorizzazioniEnum.class);
+        Set<String> ruoli = new HashSet<>();
+        for (it.govpay.console.entity.Acl entity : entities) {
+            diritti.addAll(DirittiCodec.parse(entity.getDiritti()));
+            ruoli.add(entity.getRuolo());
+        }
+        if (diritti.isEmpty()) {
+            return null; // nessun diritto R/W → voce non valida per lo schema (minItems 1)
         }
         Acl acl = new Acl();
         acl.setServizio(servizio);
-        acl.setAutorizzazioni(DirittiCodec.parse(entity.getDiritti()));
-        acl.setRuolo(entity.getRuolo());
+        acl.setAutorizzazioni(new ArrayList<>(diritti));
+        acl.setRuolo(ruoli.size() == 1 ? ruoli.iterator().next() : null);
         return acl;
     }
 }
