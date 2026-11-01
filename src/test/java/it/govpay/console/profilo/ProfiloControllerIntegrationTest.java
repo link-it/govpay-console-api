@@ -1,5 +1,7 @@
 package it.govpay.console.profilo;
 
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -375,5 +377,73 @@ class ProfiloControllerIntegrationTest {
         return gpAuditRepository.findAll().stream()
                 .filter(a -> azione.equals(a.getTipoOggetto()))
                 .count();
+    }
+
+    /**
+     * Issue #122: un operatore configurato con i soli ruoli riceveva {@code acl: []} e la
+     * console nascondeva tutte le sezioni protette, mentre gli endpoint lo autorizzavano.
+     */
+    @Test
+    void aclIncludonoQuelleDeiRuoli() throws Exception {
+        nuovaUtenza("solo-ruoli", "Amministratore");
+        aclRuolo("Amministratore", "Pendenze", "R");
+        aclRuolo("Amministratore", "Pagamenti", "RW");
+
+        mvc.perform(get("/profilo").with(httpBasic("solo-ruoli", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acl", hasSize(2)))
+                .andExpect(jsonPath("$.acl[0].servizio", is("Pagamenti")))
+                .andExpect(jsonPath("$.acl[0].autorizzazioni", contains("R", "W")))
+                .andExpect(jsonPath("$.acl[0].ruolo", is("Amministratore")))
+                .andExpect(jsonPath("$.acl[1].servizio", is("Pendenze")))
+                .andExpect(jsonPath("$.acl[1].autorizzazioni", contains("R")))
+                .andExpect(jsonPath("$.acl[1].ruolo", is("Amministratore")));
+    }
+
+    /**
+     * ACL dirette e di ruolo sullo stesso servizio: una sola voce con l'unione dei diritti,
+     * senza {@code ruolo} perche' non deriva da un ruolo solo. Un ruolo del CSV senza ACL
+     * di definizione e' ignorato.
+     */
+    @Test
+    void aclMisteAccorpatePerServizioConUnioneDeiDiritti() throws Exception {
+        Utenza utenza = nuovaUtenza("acl-miste", "Operatore, Inesistente");
+        Acl diretta = new Acl();
+        diretta.setIdUtenza(utenza.getId());
+        diretta.setServizio("Pendenze");
+        diretta.setDiritti("R");
+        aclRepository.save(diretta);
+        aclRuolo("Operatore", "Pendenze", "W");
+        aclRuolo("Operatore", "Rendicontazioni e Incassi", "R");
+
+        mvc.perform(get("/profilo").with(httpBasic("acl-miste", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acl", hasSize(2)))
+                .andExpect(jsonPath("$.acl[0].servizio", is("Pendenze")))
+                .andExpect(jsonPath("$.acl[0].autorizzazioni", contains("R", "W")))
+                .andExpect(jsonPath("$.acl[0].ruolo").doesNotExist())
+                .andExpect(jsonPath("$.acl[1].servizio", is("Rendicontazioni e Incassi")))
+                .andExpect(jsonPath("$.acl[1].autorizzazioni", contains("R")))
+                .andExpect(jsonPath("$.acl[1].ruolo", is("Operatore")));
+    }
+
+    private Utenza nuovaUtenza(String principal, String ruoli) {
+        Utenza utenza = new Utenza();
+        utenza.setPrincipal(principal);
+        utenza.setPrincipalOriginale(principal);
+        utenza.setPassword(encoder.encode(PASSWORD));
+        utenza.setAbilitato(true);
+        utenza.setAutorizzazioneDominiStar(true);
+        utenza.setAutorizzazioneTipiVersStar(true);
+        utenza.setRuoli(ruoli);
+        return utenzaRepository.save(utenza);
+    }
+
+    private void aclRuolo(String ruolo, String servizio, String diritti) {
+        Acl acl = new Acl();
+        acl.setRuolo(ruolo);
+        acl.setServizio(servizio);
+        acl.setDiritti(diritti);
+        aclRepository.save(acl);
     }
 }

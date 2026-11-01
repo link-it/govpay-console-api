@@ -1,8 +1,5 @@
 package it.govpay.console.security;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -11,27 +8,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.common.DirittiCodec;
-import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.model.AclServizio;
-import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
 /**
  * Verifica i diritti ACL dell'utenza autenticata. Un diritto su un servizio
- * e' concesso se compare in una ACL diretta dell'utenza oppure in una ACL di
- * definizione ({@code id_utenza IS NULL}) di uno dei suoi ruoli, come nel
- * merge fatto dal core.
+ * e' concesso se compare in una delle sue {@link AclEffettive ACL effettive}:
+ * dirette o di uno dei suoi ruoli.
  */
 @Service
 public class AclAuthorizer {
 
     private final UtenzaRepository utenzaRepository;
-    private final AclRepository aclRepository;
+    private final AclEffettive aclEffettive;
 
-    public AclAuthorizer(UtenzaRepository utenzaRepository, AclRepository aclRepository) {
+    public AclAuthorizer(UtenzaRepository utenzaRepository, AclEffettive aclEffettive) {
         this.utenzaRepository = utenzaRepository;
-        this.aclRepository = aclRepository;
+        this.aclEffettive = aclEffettive;
     }
 
     /**
@@ -56,7 +50,7 @@ public class AclAuthorizer {
 
     private void require(AclServizio servizio, it.govpay.console.model.Acl.AutorizzazioniEnum diritto, String label) {
         Utenza utenza = utenzaAutenticata();
-        boolean autorizzata = aclDellUtenza(utenza).stream()
+        boolean autorizzata = aclEffettive.di(utenza).stream()
                 .anyMatch(acl -> servizio.getValue().equals(acl.getServizio())
                         && DirittiCodec.parse(acl.getDiritti()).contains(diritto));
         if (!autorizzata) {
@@ -75,19 +69,5 @@ public class AclAuthorizer {
         return utenzaRepository.findByPrincipal(authentication.getName())
                 .orElseThrow(() -> new IllegalStateException(
                         "Principal autenticato non trovato in utenze: " + authentication.getName()));
-    }
-
-    private List<Acl> aclDellUtenza(Utenza utenza) {
-        List<Acl> acls = new ArrayList<>(aclRepository.findByIdUtenza(utenza.getId()));
-        String csv = utenza.getRuoli();
-        if (csv != null && !csv.isBlank()) {
-            for (String ruolo : csv.split(",")) {
-                String trimmed = ruolo.trim();
-                if (!trimmed.isEmpty()) {
-                    acls.addAll(aclRepository.findByRuoloAndIdUtenzaIsNull(trimmed));
-                }
-            }
-        }
-        return acls;
     }
 }
