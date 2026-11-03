@@ -1,3 +1,12 @@
+2026-11-03  Giuliano Pintori <pintori@link.it>
+
+	* [CI] Il report OWASP Dependency-Check torna negli artifact della build e
+	nello zip dei report di release. La configurazione del plugin nel pom
+	scriveva il report nella cartella indicata da owasp.output.dir
+	(./dependency-check-report, passata dal workflow), mentre l'upload lo
+	cerca in target/. Tolti <formats> e <outputDirectory>: valgono format ALL
+	e la cartella target/ di govpay-bom, come negli altri progetti.
+
 2026-11-01  Giuliano Pintori <pintori@link.it>
 
 	* [Profilo] Issue #122 GET /profilo non restituisce le ACL ereditate dai ruoli.
