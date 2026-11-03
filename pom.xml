@@ -607,8 +607,6 @@
                     <ossIndexUsername>${ossIndexUsername}</ossIndexUsername>
                     <ossIndexPassword>${ossIndexPassword}</ossIndexPassword>
                     <dataDirectory>${dataDirectory}</dataDirectory>
-                    <formats>${owasp.format}</formats>
-                    <outputDirectory>${owasp.output.dir}</outputDirectory>
                 </configuration>
                 <!-- Nessuna esecuzione locale: l'analisi gira con l'esecuzione
                      check-owasp di govpay-bom (fase ${owasp.phase}, disattivabile
