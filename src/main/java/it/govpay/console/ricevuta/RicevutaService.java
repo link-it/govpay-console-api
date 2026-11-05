@@ -6,6 +6,8 @@ import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,13 +20,21 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.common.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.StampeClient;
+import it.govpay.console.entity.Incasso;
+import it.govpay.console.entity.Pagamento;
+import it.govpay.console.entity.Rendicontazione;
 import it.govpay.console.entity.Rpt;
 import it.govpay.console.entity.Versamento;
+import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.model.RicevutaSummary;
+import it.govpay.console.repository.IncassoRepository;
+import it.govpay.console.repository.PagamentoRepository;
+import it.govpay.console.repository.RendicontazioneRepository;
 import it.govpay.console.repository.RptRepository;
 import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.ricevuta.pagopa.RptRtJsonConverter;
+import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.VersamentoVisibilita;
@@ -67,6 +77,11 @@ public class RicevutaService {
     private final AuditService auditService;
     private final RptRtJsonConverter rptRtJsonConverter;
     private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
+    private final PagamentoRepository pagamentoRepository;
+    private final RendicontazioneRepository rendicontazioneRepository;
+    private final IncassoRepository incassoRepository;
+    private final AclAuthorizer aclAuthorizer;
+    private final VoceRicevutaMapper voceRicevutaMapper;
 
     public RicevutaService(RptRepository rptRepository,
                            VersamentoRepository versamentoRepository,
@@ -76,7 +91,12 @@ public class RicevutaService {
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,
                            RptRtJsonConverter rptRtJsonConverter,
-                           ExternalCallMetricsRecorder externalCallMetricsRecorder) {
+                           ExternalCallMetricsRecorder externalCallMetricsRecorder,
+                           PagamentoRepository pagamentoRepository,
+                           RendicontazioneRepository rendicontazioneRepository,
+                           IncassoRepository incassoRepository,
+                           AclAuthorizer aclAuthorizer,
+                           VoceRicevutaMapper voceRicevutaMapper) {
         this.rptRepository = rptRepository;
         this.versamentoRepository = versamentoRepository;
         this.ricevutaMapper = ricevutaMapper;
@@ -86,6 +106,11 @@ public class RicevutaService {
         this.auditService = auditService;
         this.rptRtJsonConverter = rptRtJsonConverter;
         this.externalCallMetricsRecorder = externalCallMetricsRecorder;
+        this.pagamentoRepository = pagamentoRepository;
+        this.rendicontazioneRepository = rendicontazioneRepository;
+        this.incassoRepository = incassoRepository;
+        this.aclAuthorizer = aclAuthorizer;
+        this.voceRicevutaMapper = voceRicevutaMapper;
     }
 
     /**
@@ -110,9 +135,36 @@ public class RicevutaService {
                             + ", idRicevuta=" + idRicevuta);
         }
         Ricevuta dto = ricevutaMapper.toRicevuta(rpt);
+        popolaVoci(dto, rpt);
         auditService.registra(AZIONE_AUDIT_VISUALIZZA, rpt.getId(),
                 auditDettaglio(idDominio, iuv, idRicevuta, "ricevuta"), operatore, request);
         return dto;
+    }
+
+    /**
+     * {@code Ricevuta.voci[]}: omesso (campo {@code null}, non un array
+     * vuoto) se l'operatore non ha il diritto di lettura su "Rendicontazioni
+     * e Incassi".
+     */
+    private void popolaVoci(Ricevuta dto, Rpt rpt) {
+        if (!aclAuthorizer.haLettura(AclServizio.RENDICONTAZIONI_E_INCASSI)) {
+            dto.setVoci(null);
+            return;
+        }
+        List<Pagamento> pagamenti = pagamentoRepository.findByIdRptOrderByIndiceDatiAsc(rpt.getId());
+        if (pagamenti.isEmpty()) {
+            dto.setVoci(List.of());
+            return;
+        }
+        List<Long> idPagamenti = pagamenti.stream().map(Pagamento::getId).toList();
+        Map<Long, List<Rendicontazione>> rendicontazioniByIdPagamento = rendicontazioneRepository
+                .findCorrentiByIdPagamentoIn(idPagamenti).stream()
+                .collect(Collectors.groupingBy(Rendicontazione::getIdPagamento));
+        List<Long> idIncassi = pagamenti.stream().map(Pagamento::getIdIncasso).filter(Objects::nonNull).toList();
+        Map<Long, Incasso> incassiById = idIncassi.isEmpty() ? Map.of()
+                : incassoRepository.findAllById(idIncassi).stream()
+                        .collect(Collectors.toMap(Incasso::getId, incasso -> incasso));
+        dto.setVoci(voceRicevutaMapper.toVoci(pagamenti, rendicontazioniByIdPagamento, incassiById));
     }
 
     private static Map<String, Object> auditDettaglio(String idDominio, String iuv,

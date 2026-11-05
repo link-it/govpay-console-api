@@ -48,15 +48,27 @@ public class AclAuthorizer {
         require(servizio, it.govpay.console.model.Acl.AutorizzazioniEnum.R, "lettura");
     }
 
+    /**
+     * Verifica non bloccante del diritto di lettura sul servizio indicato:
+     * restituisce {@code false} invece di lanciare {@link AccessDeniedException}.
+     */
+    @Transactional(readOnly = true)
+    public boolean haLettura(AclServizio servizio) {
+        return autorizzato(servizio, it.govpay.console.model.Acl.AutorizzazioniEnum.R);
+    }
+
     private void require(AclServizio servizio, it.govpay.console.model.Acl.AutorizzazioniEnum diritto, String label) {
-        Utenza utenza = utenzaAutenticata();
-        boolean autorizzata = aclEffettive.di(utenza).stream()
-                .anyMatch(acl -> servizio.getValue().equals(acl.getServizio())
-                        && DirittiCodec.parse(acl.getDiritti()).contains(diritto));
-        if (!autorizzata) {
-            throw new AccessDeniedException("L'utenza '" + utenza.getPrincipal()
+        if (!autorizzato(servizio, diritto)) {
+            throw new AccessDeniedException("L'utenza '" + utenzaAutenticata().getPrincipal()
                     + "' non dispone del diritto di " + label + " sul servizio '" + servizio.getValue() + "'.");
         }
+    }
+
+    private boolean autorizzato(AclServizio servizio, it.govpay.console.model.Acl.AutorizzazioniEnum diritto) {
+        Utenza utenza = utenzaAutenticata();
+        return aclEffettive.di(utenza).stream()
+                .anyMatch(acl -> servizio.getValue().equals(acl.getServizio())
+                        && DirittiCodec.parse(acl.getDiritti()).contains(diritto));
     }
 
     private Utenza utenzaAutenticata() {
