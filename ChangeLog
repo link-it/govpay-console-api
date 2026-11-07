@@ -1,3 +1,12 @@
+2026-11-07  Giuliano Pintori <pintori@link.it>
+
+	* [Sicurezza] Issue #128 Cookie di sessione senza SameSite (alert ZAP 10054).
+	JSESSIONID e XSRF-TOKEN ora dichiarano SameSite=Lax, configurabile con
+	server.servlet.session.cookie.same-site (SESSION_COOKIE_SAME_SITE). Il
+	cookie CSRF, scritto dal CookieCsrfTokenRepository di govpay-common-auth,
+	riceve lo stesso valore tramite un CookieSameSiteSupplier. Lax e non
+	Strict, per non interrompere il rientro dai metodi di login esterni.
+
 2026-11-03  Giuliano Pintori <pintori@link.it>
 
 	* [CI] Il report OWASP Dependency-Check torna negli artifact della build e
