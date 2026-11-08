@@ -8,13 +8,14 @@
 
 name: Java CI with Maven
 
+# 3.11: ramo di lavoro del passaggio a GovPay 3.11 (issue #133).
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "3.11" ]
     tags:
       - '*'  # Trigger per tutti i tag
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "3.11" ]
 
 permissions:
   contents: write
@@ -317,7 +318,7 @@ jobs:
             "${WORKSPACE}/sbom/cyclonedx/bom.cdx.json" \
             "GovPay-Backend"
 
-  # ── Immagine Docker di sviluppo (solo push su main, solo SNAPSHOT) ────
+  # ── Immagine Docker di sviluppo (solo push su main e 3.11, solo SNAPSHOT) ──
   # Serve a eseguire i test di integrazione prima di un rilascio: pubblica su
   # un repo separato (linkitaly/govpay-console-api-dev) cosi' una SNAPSHOT non
   # finisce mai nel repo delle immagini di produzione.
@@ -325,10 +326,12 @@ jobs:
   # scarica il jar da una GitHub release, che per una SNAPSHOT non esiste.
   # Sulle pull request l'immagine viene costruita e scansionata ma non
   # pubblicata: il gate si vede gia' in revisione, prima del merge.
+  # Il tag dell'immagine e' la versione del pom: su 3.11 e' diversa da main
+  # (1.1.0-SNAPSHOT), cosi' le due immagini non si sovrascrivono.
   docker-dev:
     runs-on: ubuntu-latest
     needs: build
-    if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || github.event_name == 'pull_request' }}
+    if: ${{ (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == '3.11')) || github.event_name == 'pull_request' }}
     # security-events: report SARIF della scansione dell'immagine.
     permissions:
       contents: read
