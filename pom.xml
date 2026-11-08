@@ -286,10 +286,12 @@
             <artifactId>freemarker</artifactId>
         </dependency>
 
-        <!-- JsonPath for JSON extraction -->
+        <!-- JsonPath: usato solo nelle asserzioni jsonPath() dei test; fuori dal
+             runtime per non portare nel pacchetto json-smart e asm -->
         <dependency>
             <groupId>com.jayway.jsonpath</groupId>
             <artifactId>json-path</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- Apache Commons Codec: SHA-512 / MD5 Unix crypt per GovpayPasswordEncoder -->
