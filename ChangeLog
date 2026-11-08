@@ -1,5 +1,12 @@
 2026-11-08  Giuliano Pintori <pintori@link.it>
 
+	* [Release] Ramo 3.11: passaggio della console a GovPay 3.11 e al
+	modello v3 delle pendenze di govpay-common-pendenze (issue #133).
+	Versione del progetto 1.1.0-SNAPSHOT; il README dichiara lo schema
+	del core alla patch 3.11.0 o successiva.
+
+2026-11-08  Giuliano Pintori <pintori@link.it>
+
 	* [CI] La pipeline gira anche sul ramo 3.11, ramo di lavoro del
 	passaggio a GovPay 3.11 (issue #133): build su push e pull request
 	verso 3.11, e docker-dev pubblica l'immagine di sviluppo anche al push
