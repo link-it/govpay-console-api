@@ -87,6 +87,16 @@ class SessionCookieIntegrationTest {
         assertThat(cookie(cookies, "XSRF-TOKEN")).containsIgnoringCase("SameSite=Lax");
     }
 
+    @Test
+    void richiestaAnonimaNonCreaLaSessione() throws Exception {
+        HttpResponse<String> response = client.send(
+                HttpRequest.newBuilder(uri("/oauth2/authorize?returnUrl=%2Fdashboard")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.headers().allValues("Set-Cookie")).noneMatch(c -> c.startsWith("JSESSIONID="));
+    }
+
     private URI uri(String path) {
         return URI.create("http://localhost:" + port + path);
     }

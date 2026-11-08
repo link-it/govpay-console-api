@@ -24,7 +24,7 @@
         <govpay-common.version>2.0.4-SNAPSHOT</govpay-common.version>
 
         <!-- govpay-common-auth (not in BOM) -->
-        <govpay-common-auth.version>1.0.0</govpay-common-auth.version>
+        <govpay-common-auth.version>1.0.2-SNAPSHOT</govpay-common-auth.version>
 
         <!-- mime-util (not in BOM) -->
         <mime-util.version>2.1.3</mime-util.version>
