@@ -44,7 +44,7 @@ Storico delle modifiche nel [ChangeLog](ChangeLog).
 
 | Componente | Quando serve | Obbligatorio | Ruolo |
 |------------|--------------|--------------|-------|
-| Database di GovPay | runtime | sì | Legge e scrive anagrafiche e configurazione (`intermediari`, `stazioni`, `domini`, `uo`, `iban_accredito`, `tributi`, `tipi_tributo`, `tipi_versamento`, `tipi_vers_domini`, `applicazioni`, `operatori`, `utenze`, `utenze_domini`, `utenze_tipo_vers`, `acl`, `connettori`, `jppa_config`, `configurazione`), `tracciati`, `incassi` e `gp_audit`; legge `versamenti`, `singoli_versamenti`, `pagamenti`, `rpt`, `documenti`, `operazioni`, `fr` e `rendicontazioni`. Lo schema è quello del core, alla patch 3.10.0 o successiva: la console non lo crea |
+| Database di GovPay | runtime | sì | Legge e scrive anagrafiche e configurazione (`intermediari`, `stazioni`, `domini`, `uo`, `iban_accredito`, `tributi`, `tipi_tributo`, `tipi_versamento`, `tipi_vers_domini`, `applicazioni`, `operatori`, `utenze`, `utenze_domini`, `utenze_tipo_vers`, `acl`, `connettori`, `jppa_config`, `configurazione`), `tracciati`, `incassi` e `gp_audit`; legge `versamenti`, `singoli_versamenti`, `pagamenti`, `rpt`, `documenti`, `operazioni`, `fr` e `rendicontazioni`. Lo schema è quello del core, alla patch 3.11.0 o successiva: la console non lo crea |
 | Tabelle proprie | runtime | sì | `pagopa_ec_cache`, `pagopa_iban_cache` (scritte da `govpay-iban-batch`) e `rt_recuperi`, create dallo script `console-api-schema.sql` del pacchetto `sql.zip`, da applicare dopo lo schema del core |
 | [govpay-bom](https://github.com/link-it/govpay-bom) | build | sì | Parent Maven: versioni delle dipendenze e dei plugin, profilo `dist` |
 | [govpay-common](https://github.com/link-it/govpay-common) | build | sì | Libreria comune: connettori da database, client e invio degli eventi al GDE, transaction id e livelli di log da database, metriche |
@@ -318,7 +318,7 @@ I driver JDBC **non sono inclusi** nel fat jar e vanno forniti a runtime. Creare
 
 ### Schema del database
 
-La console usa lo schema del core GovPay, aggiornato alla patch 3.10.0 o successiva, più le tabelle proprie dello script `console-api-schema.sql` del dialetto in uso (in `src/main/resources/db/sql/<dialetto>/`, nel pacchetto `sql.zip` della release e in `/opt/sql` dell'immagine di sviluppo). Con `spring.jpa.hibernate.ddl-auto=validate` l'avvio fallisce se manca una tabella o una colonna.
+La console usa lo schema del core GovPay, aggiornato alla patch 3.11.0 o successiva, più le tabelle proprie dello script `console-api-schema.sql` del dialetto in uso (in `src/main/resources/db/sql/<dialetto>/`, nel pacchetto `sql.zip` della release e in `/opt/sql` dell'immagine di sviluppo). Con `spring.jpa.hibernate.ddl-auto=validate` l'avvio fallisce se manca una tabella o una colonna.
 
 ### Jar standalone
 
