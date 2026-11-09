@@ -1,3 +1,10 @@
+2026-11-09  Giuliano Pintori <pintori@link.it>
+
+	* [Release] Ramo 3.11.x: dipendenze GovPay della linea 3.11
+	Su 3.11.x il parent govpay-bom passa a 2.1.0-SNAPSHOT e le librerie
+	GovPay alle versioni della linea 3.11, cosi' le SNAPSHOT non si
+	mescolano con quelle di 3.10.x.
+
 2026-11-08  Giuliano Pintori <pintori@link.it>
 
 	* [Release] Ramo 3.11: passaggio della console a GovPay 3.11 e al
