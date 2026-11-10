@@ -1,3 +1,15 @@
+2026-11-10  Giuliano Pintori <pintori@link.it>
+
+	* [Funzionalita'] Nuovo campo pagamentoSito del dominio
+	(link-it/govpay-pendenze-api#13): indica se l'ente consente il
+	pagamento degli avvisi dal proprio sito, e govpay-pendenze-api lo
+	riporta nella stampa dell'avviso ("oppure sul sito di <ente>").
+	Mappa la colonna domini.pagamento_sito della patch 3.11.0 di GovPay.
+	Facoltativo in creazione e sostituzione, false se assente; modificabile
+	anche con PATCH; restituito nel dettaglio del dominio.
+	Verifica: test di creazione con e senza il campo, con un valore non
+	booleano (400), di sostituzione senza il campo (torna false) e di PATCH.
+
 2026-11-09  Giuliano Pintori <pintori@link.it>
 
 	* [Release] Ramo 3.11.x: dipendenze GovPay della linea 3.11

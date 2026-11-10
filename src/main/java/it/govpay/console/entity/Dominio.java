@@ -11,6 +11,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.ColumnDefault;
+
 @Entity
 @Table(name = "domini")
 @SequenceGenerator(name = "seq_domini", sequenceName = "seq_domini", allocationSize = 1)
@@ -41,6 +43,14 @@ public class Dominio {
 
     @Column(name = "scarica_fr")
     private Boolean scaricaFr;
+
+    /**
+     * Colonna NOT NULL DEFAULT false della patch 3.11.0: un dominio nuovo parte da false.
+     * {@code @ColumnDefault} riporta il default anche nello schema generato dei test.
+     */
+    @Column(name = "pagamento_sito", nullable = false)
+    @ColumnDefault("false")
+    private Boolean pagamentoSito = Boolean.FALSE;
 
     @Column(name = "segregation_code")
     private Integer segregationCode;
@@ -162,6 +172,14 @@ public class Dominio {
 
     public void setScaricaFr(Boolean scaricaFr) {
         this.scaricaFr = scaricaFr;
+    }
+
+    public Boolean getPagamentoSito() {
+        return pagamentoSito;
+    }
+
+    public void setPagamentoSito(Boolean pagamentoSito) {
+        this.pagamentoSito = pagamentoSito;
     }
 
     public Integer getSegregationCode() {

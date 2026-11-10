@@ -8,5 +8,5 @@ package it.govpay.console.dominio;
  */
 public record DatiDominio(String ragioneSociale, String gln, String cbill, String iuvPrefix,
         String autStampaPoste, Integer auxDigit, Integer segregationCode, String tassonomia,
-        Boolean intermediato, Boolean scaricaFr, Boolean abilitato, String idStazione) {
+        Boolean intermediato, Boolean scaricaFr, Boolean pagamentoSito, Boolean abilitato, String idStazione) {
 }

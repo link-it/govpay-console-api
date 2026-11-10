@@ -652,7 +652,78 @@ class DominioControllerIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void createWithPagamentoSitoPersistsIt() throws Exception {
+        String body = """
+                {"idDominio":"12345678912","ragioneSociale":"Comune Sito","gln":"0011223344556",
+                 "idStazione":"STAZ01","abilitato":true,"scaricaFr":true,"pagamentoSito":true}""";
+        mvc.perform(post("/domini").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pagamentoSito", is(true)));
+
+        org.assertj.core.api.Assertions.assertThat(
+                dominioRepository.findByCodDominio("12345678912").orElseThrow().getPagamentoSito()).isTrue();
+    }
+
+    @Test
+    void createWithoutPagamentoSitoDefaultsToFalse() throws Exception {
+        String body = """
+                {"idDominio":"12345678913","ragioneSociale":"Comune Senza Sito","gln":"0011223344556",
+                 "idStazione":"STAZ01","abilitato":true,"scaricaFr":true}""";
+        mvc.perform(post("/domini").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pagamentoSito", is(false)));
+    }
+
+    @Test
+    void createWithNonBooleanPagamentoSitoReturns400() throws Exception {
+        String body = """
+                {"idDominio":"12345678914","ragioneSociale":"X","gln":"0011223344556",
+                 "idStazione":"STAZ01","abilitato":true,"scaricaFr":true,"pagamentoSito":"boh"}""";
+        mvc.perform(post("/domini").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Sostituzione completa: senza il campo l'ente torna a non consentire il pagamento dal sito. */
+    @Test
+    void replaceWithoutPagamentoSitoResetsItToFalse() throws Exception {
+        String body = """
+                {"ragioneSociale":"Comune Alfa","gln":"1234567890123","idStazione":"STAZ01","abilitato":true,"scaricaFr":true,
+                 "pagamentoSito":true}""";
+        mvc.perform(put("/domini/12345678901").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", currentEtag("12345678901"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagamentoSito", is(true)));
+
+        String senza = """
+                {"ragioneSociale":"Comune Alfa","gln":"1234567890123","idStazione":"STAZ01","abilitato":true,"scaricaFr":true}""";
+        mvc.perform(put("/domini/12345678901").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", currentEtag("12345678901"))
+                        .contentType(MediaType.APPLICATION_JSON).content(senza))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagamentoSito", is(false)));
+    }
+
     // --- Patch ---
+
+    @Test
+    void patchReplacePagamentoSito() throws Exception {
+        String etag = currentEtag("12345678901");
+        String p = """
+                [{"op":"replace","path":"/pagamentoSito","value":true}]""";
+        mvc.perform(patch("/domini/12345678901").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .header("If-Match", etag)
+                        .contentType(JSON_PATCH).content(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagamentoSito", is(true)));
+
+        org.assertj.core.api.Assertions.assertThat(
+                dominioRepository.findByCodDominio("12345678901").orElseThrow().getPagamentoSito()).isTrue();
+    }
 
     @Test
     void patchReplaceRagioneSociale() throws Exception {

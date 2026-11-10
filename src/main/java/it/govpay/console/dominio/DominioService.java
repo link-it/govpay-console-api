@@ -177,7 +177,7 @@ public class DominioService {
         DatiDominio dati = new DatiDominio(body.getRagioneSociale(), body.getGln(), body.getCbill(),
                 body.getIuvPrefix(), body.getAutStampaPosteItaliane(), body.getAuxDigit(),
                 body.getSegregationCode(), body.getTassonomiaPagoPA(), body.getIntermediato(),
-                body.getScaricaFr(), body.getAbilitato(), body.getIdStazione());
+                body.getScaricaFr(), body.getPagamentoSito(), body.getAbilitato(), body.getIdStazione());
         semanticValidator.validate(dati);
         Stazione stazione = resolveStazioneOptional(body.getIdStazione());
 
@@ -219,7 +219,7 @@ public class DominioService {
         DatiDominio dati = new DatiDominio(body.getRagioneSociale(), body.getGln(), body.getCbill(),
                 body.getIuvPrefix(), body.getAutStampaPosteItaliane(), body.getAuxDigit(),
                 body.getSegregationCode(), body.getTassonomiaPagoPA(), body.getIntermediato(),
-                body.getScaricaFr(), body.getAbilitato(), body.getIdStazione());
+                body.getScaricaFr(), body.getPagamentoSito(), body.getAbilitato(), body.getIdStazione());
         semanticValidator.validate(dati);
         Stazione stazione = resolveStazioneOptional(body.getIdStazione());
         writeDominio(entity, dati, stazione);
@@ -279,7 +279,7 @@ public class DominioService {
         DatiDominio dati = new DatiDominio(result.getRagioneSociale(), result.getGln(), result.getCbill(),
                 result.getIuvPrefix(), result.getAutStampaPosteItaliane(), result.getAuxDigit(),
                 result.getSegregationCode(), result.getTassonomiaPagoPA(), result.getIntermediato(),
-                result.getScaricaFr(), result.getAbilitato(), result.getIdStazione());
+                result.getScaricaFr(), result.getPagamentoSito(), result.getAbilitato(), result.getIdStazione());
         semanticValidator.validate(dati);
 
         Stazione stazione = resolveStazioneOptional(result.getIdStazione());
@@ -309,6 +309,8 @@ public class DominioService {
         e.setTassonomiaPagoPa(d.tassonomia());
         e.setIntermediato(d.intermediato() != null ? d.intermediato() : Boolean.TRUE);
         e.setScaricaFr(d.scaricaFr());
+        // Facoltativo: se assente l'ente non consente il pagamento dal proprio sito.
+        e.setPagamentoSito(Boolean.TRUE.equals(d.pagamentoSito()));
         e.setAbilitato(d.abilitato());
         e.setStazione(stazione);
     }
