@@ -10275,6 +10275,14 @@ components:
           type: boolean
         scaricaFr:
           type: boolean
+        pagamentoSito:
+          type: boolean
+          default: false
+          description: |
+            Indica se l'ente consente il pagamento degli avvisi dal proprio sito.
+            Se true, la stampa dell'avviso riporta "oppure sul sito di <ente>"
+            tra i canali di pagamento, come previsto dalla specifica pagoPA.
+            Se assente in creazione o sostituzione vale false.
         abilitato:
           type: boolean
         idStazione:
@@ -10381,6 +10389,14 @@ components:
           default: true
         scaricaFr:
           type: boolean
+        pagamentoSito:
+          type: boolean
+          default: false
+          description: |
+            Indica se l'ente consente il pagamento degli avvisi dal proprio sito.
+            Se true, la stampa dell'avviso riporta "oppure sul sito di <ente>"
+            tra i canali di pagamento, come previsto dalla specifica pagoPA.
+            Se assente in creazione o sostituzione vale false.
         abilitato:
           type: boolean
 
@@ -10471,6 +10487,14 @@ components:
           type: boolean
         scaricaFr:
           type: boolean
+        pagamentoSito:
+          type: boolean
+          default: false
+          description: |
+            Indica se l'ente consente il pagamento degli avvisi dal proprio sito.
+            Se true, la stampa dell'avviso riporta "oppure sul sito di <ente>"
+            tra i canali di pagamento, come previsto dalla specifica pagoPA.
+            Se assente in creazione o sostituzione vale false.
         abilitato:
           type: boolean
 

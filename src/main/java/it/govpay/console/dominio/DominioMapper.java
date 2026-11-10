@@ -45,6 +45,7 @@ public class DominioMapper {
         dto.setTassonomiaPagoPA(entity.getTassonomiaPagoPa());
         dto.setIntermediato(entity.getIntermediato());
         dto.setScaricaFr(entity.getScaricaFr());
+        dto.setPagamentoSito(entity.getPagamentoSito());
         dto.setAbilitato(entity.getAbilitato());
 
         if (ec != null) {
