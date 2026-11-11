@@ -118,6 +118,19 @@ class DominioLogoCodecTest {
         assertThat(DominioLogoCodec.toDataUri("/domini/12345678901/logo".getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
 
+    @Test
+    void logoArchiviatoConfrontaIlContenutoDellImmagine() {
+        var logo = new DominioLogoCodec.LogoArchiviato(new byte[] {1, 2, 3}, LogoMimeDetector.IMAGE_PNG);
+        var uguale = new DominioLogoCodec.LogoArchiviato(new byte[] {1, 2, 3}, LogoMimeDetector.IMAGE_PNG);
+
+        assertThat(logo).isEqualTo(uguale).hasSameHashCodeAs(uguale)
+                .isNotEqualTo(new DominioLogoCodec.LogoArchiviato(new byte[] {1, 2, 4}, LogoMimeDetector.IMAGE_PNG))
+                .isNotEqualTo(new DominioLogoCodec.LogoArchiviato(new byte[] {1, 2, 3}, LogoMimeDetector.IMAGE_JPEG))
+                .isNotEqualTo("altro");
+        assertThat(logo).hasToString("LogoArchiviato[contentType=image/png, byte=3]");
+        assertThat(new DominioLogoCodec.LogoArchiviato(null, null)).hasToString("LogoArchiviato[contentType=null, byte=0]");
+    }
+
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] r = java.util.Arrays.copyOf(a, a.length + b.length);
         System.arraycopy(b, 0, r, a.length, b.length);

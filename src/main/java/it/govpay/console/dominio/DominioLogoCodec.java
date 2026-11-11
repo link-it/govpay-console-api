@@ -36,9 +36,9 @@ public final class DominioLogoCodec {
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof LogoArchiviato other
-                    && Arrays.equals(immagine, other.immagine)
-                    && Objects.equals(contentType, other.contentType);
+            return o instanceof LogoArchiviato(byte[] altraImmagine, String altroContentType)
+                    && Arrays.equals(immagine, altraImmagine)
+                    && Objects.equals(contentType, altroContentType);
         }
 
         @Override
