@@ -3533,8 +3533,12 @@ paths:
       summary: Logo dell'ente creditore.
       description: |
         Ritorna il logo binario del dominio. Il `Content-Type` viene determinato
-        dal contenuto (`image/png` o `image/jpeg`). `404` se il dominio non esiste
-        o non ha un logo.
+        dal contenuto: `image/png` o `image/jpeg`, oppure `image/svg+xml` (o un
+        altro tipo di immagine) per i loghi gia' in archivio caricati dalla
+        console legacy o dall'API Backoffice. Un SVG e' servito con una
+        `Content-Security-Policy` che non consente script ne' risorse esterne.
+        `404` se il dominio non esiste, non ha un logo o il logo in archivio non
+        e' un'immagine in Base64.
       responses:
         '200':
           description: Logo del dominio.
@@ -3543,12 +3547,20 @@ paths:
               description: Direttiva di cache del logo.
               schema:
                 type: string
+            Content-Security-Policy:
+              description: Presente solo per i loghi SVG.
+              schema:
+                type: string
           content:
             image/png:
               schema:
                 type: string
                 format: binary
             image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
               schema:
                 type: string
                 format: binary
@@ -3564,8 +3576,11 @@ paths:
       description: |
         Carica il logo binario del dominio. Formati accettati: `image/png`,
         `image/jpeg`. Il tipo effettivo viene verificato dal contenuto: un payload
-        non riconosciuto come immagine supportata produce `415`. Dimensione massima
-        configurabile (default 256 KB): oltre il limite produce `413`.
+        non riconosciuto come immagine supportata produce `415` (anche SVG, GIF,
+        BMP, TIFF e WebP). L'immagine viene poi decodificata per intero: un file
+        PNG o JPEG troncato o corrotto, che non si potrebbe stampare, produce
+        `422` con la causa. Dimensione massima configurabile (default 256 KB):
+        oltre il limite produce `413`.
       requestBody:
         required: true
         content:
@@ -3590,6 +3605,8 @@ paths:
           $ref: '#/components/responses/Problem413'
         '415':
           $ref: '#/components/responses/Problem415'
+        '422':
+          $ref: '#/components/responses/Problem422'
     delete:
       tags:
         - Domini
@@ -7993,6 +8010,17 @@ components:
                 $ref: '#/components/schemas/Segnalazione'
             pendenza:
               $ref: '#/components/schemas/PendenzaRef'
+            voci:
+              type: array
+              description: |
+                Stato di rendicontazione/riconciliazione per pagamento
+                (issue #119), uno per `indice`. Array vuoto se la RT non ha
+                pagamenti associati. Assente (non null, non array vuoto) se
+                l'operatore non ha il diritto di lettura su "Rendicontazioni
+                e Incassi": l'assenza del campo stesso e' il segnale di dato
+                non autorizzato, mai un array vuoto o un valore di default.
+              items:
+                $ref: '#/components/schemas/VoceRicevuta'
             _links:
               $ref: '#/components/schemas/RicevutaLinks'
 
@@ -8727,6 +8755,183 @@ components:
           $ref: '#/components/schemas/StatoRiscossione'
         _links:
           $ref: '#/components/schemas/RiscossioneLinks'
+
+    StatoRendicontazioneVoce:
+      type: string
+      description: |
+        Stato di rendicontazione della voce (issue #119), calcolato con questa
+        precedenza:
+        1. `Pagamento.idIncasso` popolato -> `RICONCILIATA` (anche se
+           `rendicontazioni` e' vuoto: una riga di rendicontazione puo' essere
+           stata superata da una revisione successiva del flusso, ma l'incasso
+           resta collegato al pagamento).
+        2. Almeno una riga di rendicontazione corrente (flusso non obsoleto)
+           -> `RENDICONTATA`. Significa "rendicontazione presente", non
+           "rendicontazione valida": una riga puo' essere comunque anomala,
+           vedi `anomalia`/`anomalie` sulla voce.
+        3. Altrimenti -> `DA_RENDICONTARE`.
+      enum:
+        - DA_RENDICONTARE
+        - RENDICONTATA
+        - RICONCILIATA
+
+    StatoRigaRendicontazione:
+      type: string
+      description: |
+        Stato della singola riga di rendicontazione (colonna DB
+        `rendicontazioni.stato`), indipendente dall'esito pagoPA.
+        `ALTRO_INTERMEDIARIO` segnala che lo IUV rendicontato appartiene a un
+        dominio non intermediato da questo GovPay: e' una situazione normale,
+        non un'anomalia. Solo `ANOMALA` alimenta `VoceRicevuta.anomalia`.
+      enum:
+        - OK
+        - ANOMALA
+        - ALTRO_INTERMEDIARIO
+
+    EsitoRendicontazione:
+      type: string
+      description: |
+        Esito pagoPA della singola rendicontazione (colonna DB
+        `rendicontazioni.esito`, codifica invariata da V1). Non e' un giudizio
+        di successo/fallimento: sono varianti di come il pagamento e' stato
+        riconosciuto, `REVOCATO` incluso come revoca esplicita, non come
+        "pagamento riuscito" equivalente alle altre.
+      enum:
+        - ESEGUITO
+        - REVOCATO
+        - ESEGUITO_STANDIN
+        - ESEGUITO_STANDIN_SENZA_RPT
+        - ESEGUITO_SENZA_RPT
+
+    AnomaliaRendicontazione:
+      type: object
+      description: |
+        Una singola anomalia di rendicontazione, da `rendicontazioni.anomalie`
+        (formato DB `codice#descrizione`, piu' anomalie separate da `|`).
+      required:
+        - descrizione
+      properties:
+        codice:
+          type: string
+          description: |
+            Assente se la riga a DB non segue il formato `codice#descrizione`
+            (dato storico malformato): in tal caso l'intero testo e' riportato
+            in `descrizione`.
+        descrizione:
+          type: string
+
+    RigaRendicontazioneLinks:
+      type: object
+      properties:
+        flussoRendicontazione:
+          $ref: '#/components/schemas/Link'
+
+    RigaRendicontazione:
+      type: object
+      description: |
+        Una singola riga `rendicontazioni` corrente (flusso non obsoleto) per
+        il pagamento della voce. Possono essercene piu' di una (vedi
+        `VoceRicevuta.rendicontazioni`): nessuna selezione arbitraria e'
+        fatta qui, la selezione e' responsabilita' del client.
+      required:
+        - stato
+      properties:
+        idFlusso:
+          type: string
+        idPsp:
+          type: string
+        revisione:
+          type: integer
+          format: int64
+        iur:
+          type: string
+          description: Identificativo univoco di riscossione della riga rendicontata.
+        dataFlusso:
+          type: string
+          format: date-time
+        dataRendicontazione:
+          type: string
+          format: date-time
+        esito:
+          allOf:
+            - $ref: '#/components/schemas/EsitoRendicontazione'
+          nullable: true
+          description: Assente per righe storiche senza esito valorizzato.
+        importo:
+          type: number
+          format: double
+        stato:
+          $ref: '#/components/schemas/StatoRigaRendicontazione'
+        anomalie:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnomaliaRendicontazione'
+        _links:
+          $ref: '#/components/schemas/RigaRendicontazioneLinks'
+
+    RiconciliazioneVoceLinks:
+      type: object
+      properties:
+        riconciliazione:
+          $ref: '#/components/schemas/Link'
+
+    RiconciliazioneVoce:
+      type: object
+      description: |
+        Riconciliazione del pagamento della voce. Solo i dati reali
+        dell'incasso (`identificativo`/`trn`/`sct`): nessuna etichetta di
+        tipo dedotta (es. "Automatica"), non derivabile da `incassi`.
+      properties:
+        id:
+          type: string
+        data:
+          type: string
+          format: date-time
+        trn:
+          type: string
+        sct:
+          type: string
+        _links:
+          $ref: '#/components/schemas/RiconciliazioneVoceLinks'
+
+    VoceRicevuta:
+      type: object
+      description: |
+        Stato di rendicontazione/riconciliazione del pagamento identificato da
+        `indice` all'interno della RT (issue #119). Quando l'operatore non ha
+        il diritto di lettura su "Rendicontazioni e Incassi" e' omesso l'intero
+        array `Ricevuta.voci`, non le singole voci: nessuno stato di default.
+      required:
+        - indice
+        - statoRendicontazione
+      properties:
+        indice:
+          type: integer
+          format: int32
+          minimum: 1
+        statoRendicontazione:
+          $ref: '#/components/schemas/StatoRendicontazioneVoce'
+        anomalia:
+          type: boolean
+          description: |
+            `true` se almeno una delle righe in `rendicontazioni` ha stato
+            `ANOMALA` (aggregato su tutte le righe correnti, non solo su una
+            eventuale riga "principale"). `ALTRO_INTERMEDIARIO` non e'
+            un'anomalia: e' l'importo di uno IUV gestito da un altro
+            intermediario.
+        anomalie:
+          type: array
+          description: Unione delle anomalie di tutte le righe correnti.
+          items:
+            $ref: '#/components/schemas/AnomaliaRendicontazione'
+        rendicontazioni:
+          type: array
+          items:
+            $ref: '#/components/schemas/RigaRendicontazione'
+        riconciliazione:
+          allOf:
+            - $ref: '#/components/schemas/RiconciliazioneVoce'
+          nullable: true
 
     Soggetto:
       type: object

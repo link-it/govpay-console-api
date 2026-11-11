@@ -21,6 +21,8 @@ import javax.imageio.ImageIO;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -201,6 +203,74 @@ class DominioLogoControllerIntegrationTest {
                         .contentType(MediaType.valueOf("image/gif")).content(image("png")))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(content().contentType("application/problem+json"));
+    }
+
+    // --- Verifica completa dell'immagine (issue #124) ---
+
+    static java.util.List<LoghiDiProva.Logo> loghi() {
+        return LoghiDiProva.tutti();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("loghi")
+    void putVerificaIlLogoComeLaStampa(LoghiDiProva.Logo logo) throws Exception {
+        long auditPrima = countAudit(DominioLogoService.AZIONE_AUDIT_MODIFICA);
+        var risposta = mvc.perform(put("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD))
+                        .contentType(IMAGE_PNG).content(logo.contenuto()))
+                .andExpect(status().is(logo.esito().status));
+
+        byte[] stored = dominioRepository.findByCodDominio(ID_DOMINIO).orElseThrow().getLogo();
+        if (logo.esito() == LoghiDiProva.Esito.ACCETTATO) {
+            Assertions.assertThat(DominioLogoCodec.decode(stored)).isEqualTo(logo.contenuto());
+        } else {
+            Assertions.assertThat(stored).isNull();
+            Assertions.assertThat(countAudit(DominioLogoService.AZIONE_AUDIT_MODIFICA)).isEqualTo(auditPrima);
+        }
+        if (logo.esito() == LoghiDiProva.Esito.NON_LEGGIBILE) {
+            risposta.andExpect(content().contentType("application/problem+json"))
+                    .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("non e' leggibile")));
+        }
+    }
+
+    // --- Loghi gia' in archivio (issue #124) ---
+
+    @Test
+    void getSvgInArchivioServitoComeSvgConCsp() throws Exception {
+        byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/>"
+                .getBytes(StandardCharsets.UTF_8);
+        salvaInColonna(Base64.getEncoder().encodeToString(svg));
+
+        byte[] body = mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/svg+xml"))
+                .andExpect(header().string("Content-Security-Policy", DominioLogoService.CSP_SVG))
+                .andReturn().getResponse().getContentAsByteArray();
+        Assertions.assertThat(body).isEqualTo(svg);
+    }
+
+    @Test
+    void getPngNonHaLaCsp() throws Exception {
+        salvaInColonna(Base64.getEncoder().encodeToString(image("png")));
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Content-Security-Policy"));
+    }
+
+    @Test
+    void getLogoNonLeggibileInArchivioReturns404() throws Exception {
+        // link della GET salvato dalle vecchie PUT dell'API Backoffice
+        salvaInColonna("/domini/" + ID_DOMINIO + "/logo");
+
+        mvc.perform(get("/domini/" + ID_DOMINIO + "/logo").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType("application/problem+json"));
+    }
+
+    private void salvaInColonna(String valore) {
+        Dominio d = dominioRepository.findByCodDominio(ID_DOMINIO).orElseThrow();
+        d.setLogo(valore.getBytes(StandardCharsets.UTF_8));
+        dominioRepository.save(d);
     }
 
     // --- 404 ---

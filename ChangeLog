@@ -1,3 +1,36 @@
+2026-11-11  Giuliano Pintori <pintori@link.it>
+
+	* [Domini] Issue #124 Logo del dominio: verifica di stampabilita' al
+	caricamento e gestione dei loghi gia' in archivio.
+	PUT /domini/{id}/logo, oltre al tipo riconosciuto dai magic bytes, ora
+	decodifica per intero il PNG o il JPEG (anche CMYK): un file troncato o
+	corrotto, che passava il controllo del tipo e falliva solo in stampa,
+	risponde 422 con la causa. SVG, GIF, BMP, TIFF e WebP restano rifiutati
+	con 415.
+	I loghi gia' in archivio caricati dalla console legacy o dall'API
+	Backoffice si leggono in modo tollerante: un SVG e' servito da GET come
+	image/svg+xml (con una Content-Security-Policy che non consente script ne'
+	risorse esterne) e inviato alle stampe con il suo content-type invece di
+	image/png; un valore che non e' un'immagine in Base64, come il testo
+	/domini/{id}/logo salvato dalle vecchie PUT dell'API Backoffice, e'
+	trattato come logo assente (404 con un WARN nel log, logo di default in
+	stampa) invece di un errore 500.
+	La correzione lato stampa (batik-codec e ripiego sul logo di default) e'
+	in link-it/govpay-stampe-api#67.
+
+	* [Ricevute] Issue #119 Stato di rendicontazione e riconciliazione per singola voce.
+	Il dettaglio GET /ricevute/{idDominio}/{iuv}/{idRicevuta} espone il nuovo
+	array voci[], una voce per pagamento della RT identificata da indice, con
+	statoRendicontazione (RICONCILIATA se il pagamento e' collegato a un
+	incasso, RENDICONTATA se ha almeno una rendicontazione in un flusso non
+	obsoleto, altrimenti DA_RENDICONTARE), le righe di rendicontazione correnti
+	(flusso, PSP, revisione, iur, esito, importo, stato, anomalie e link al
+	flusso) e la riconciliazione (identificativo, data, trn, sct e link).
+	anomalia e' vera solo per righe in stato ANOMALA: ALTRO_INTERMEDIARIO non
+	e' un'anomalia. Senza il diritto di lettura su "Rendicontazioni e Incassi"
+	voci e' omesso e la ricevuta resta consultabile. Solo aggiunte al
+	contratto, nessuna modifica al database.
+
 2026-11-10  Giuliano Pintori <pintori@link.it>
 
 	* [Funzionalita'] Nuovo campo pagamentoSito del dominio

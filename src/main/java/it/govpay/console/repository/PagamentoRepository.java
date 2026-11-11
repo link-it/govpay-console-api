@@ -10,4 +10,7 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, Long> {
 
     /** Le riscossioni di una riconciliazione, per il dettaglio {@code riscossioni[]}. */
     List<Pagamento> findByIdIncassoOrderByDataPagamentoAsc(Long idIncasso);
+
+    /** I pagamenti di una RT, per indice, per {@code Ricevuta.voci[]}. */
+    List<Pagamento> findByIdRptOrderByIndiceDatiAsc(Long idRpt);
 }

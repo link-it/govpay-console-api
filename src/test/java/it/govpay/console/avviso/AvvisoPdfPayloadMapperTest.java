@@ -88,16 +88,36 @@ class AvvisoPdfPayloadMapperTest {
     }
 
     @Test
-    void firstLogoIsStoredBase64TextAsIs() {
+    void firstLogoIsStoredBase64TextAsIs() throws java.io.IOException {
         // stampe incorpora il logo come testo base64 nell'XML Jasper: si
         // inoltra il contenuto colonna tal quale, senza decodificarlo
-        byte[] stored = Base64.getEncoder().encode("png-bytes".getBytes(StandardCharsets.UTF_8));
+        byte[] stored = Base64.getEncoder().encode(png());
         Versamento v = versamento();
         v.getDominio().setLogo(stored);
 
         PaymentNotice notice = mapper.toPaymentNotice(v, null);
 
         assertThat(notice.getFirstLogo()).isEqualTo(stored);
+    }
+
+    @Test
+    void firstLogoEmptyWhenStoredLogoIsNotAnImage() {
+        // issue #124: valore salvato dalle vecchie PUT dell'API Backoffice
+        // (il link della GET): si invia contenuto vuoto, govpay-stampe usa il
+        // logo di default
+        Versamento v = versamento();
+        v.getDominio().setLogo("/domini/12345678901/logo".getBytes(StandardCharsets.UTF_8));
+
+        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+
+        assertThat(notice.getFirstLogo()).isEmpty();
+    }
+
+    private static byte[] png() throws java.io.IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(4, 4,
+                java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
     }
 
     @Test

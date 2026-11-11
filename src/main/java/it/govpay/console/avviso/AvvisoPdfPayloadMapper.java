@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
+import it.govpay.console.dominio.DominioLogoCodec;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.SingoloVersamento;
@@ -339,10 +340,11 @@ public class AvvisoPdfPayloadMapper {
      * nell'XML dato in pasto a Jasper, quindi va inviato il contenuto della
      * colonna cosi' com'e' (testo base64), non i byte raw dell'immagine — che
      * romperebbero il parsing XML lato stampe. Senza logo si invia contenuto
-     * vuoto e il default lo applica govpay-stampe.
+     * vuoto e il default lo applica govpay-stampe. Lo stesso vale per un logo
+     * in archivio che non e' un'immagine in Base64 (issue #124).
      */
     private static byte[] firstLogoOf(Dominio dominio) {
-        if (dominio != null && dominio.getLogo() != null && dominio.getLogo().length > 0) {
+        if (dominio != null && DominioLogoCodec.leggi(dominio.getLogo()).isPresent()) {
             return dominio.getLogo();
         }
         return new byte[0];
