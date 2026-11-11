@@ -1,7 +1,9 @@
 package it.govpay.console.dominio;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -31,6 +33,24 @@ public final class DominioLogoCodec {
      * Logo in archivio utilizzabile: i byte dell'immagine e il tipo riconosciuto.
      */
     public record LogoArchiviato(byte[] immagine, String contentType) {
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof LogoArchiviato other
+                    && Arrays.equals(immagine, other.immagine)
+                    && Objects.equals(contentType, other.contentType);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(immagine) + Objects.hashCode(contentType);
+        }
+
+        @Override
+        public String toString() {
+            return "LogoArchiviato[contentType=" + contentType + ", byte="
+                    + (immagine == null ? 0 : immagine.length) + "]";
+        }
     }
 
     /**

@@ -70,8 +70,11 @@ class DominioLogoCodecTest {
     @Test
     void leggiRiconosceSvgSempliceConBomConDichiarazioneEDoctype() {
         byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
-        String dichiarazione = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- logo -->\n"
-                + "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n";
+        String dichiarazione = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!-- logo -->
+                <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+                """;
         for (byte[] svg : java.util.List.of(
                 SVG.getBytes(StandardCharsets.UTF_8),
                 concat(bom, SVG.getBytes(StandardCharsets.UTF_8)),
