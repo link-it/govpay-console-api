@@ -38,7 +38,11 @@ public class VoceRicevutaMapper {
 
     private static final Logger log = LoggerFactory.getLogger(VoceRicevutaMapper.class);
 
-    private static final String STATO_RIGA_OK = "OK";
+    /**
+     * Solo {@code ANOMALA} e' un'anomalia: {@code ALTRO_INTERMEDIARIO} e'
+     * l'importo di uno IUV gestito da un altro intermediario, situazione normale.
+     */
+    private static final String STATO_RIGA_ANOMALA = "ANOMALA";
 
     /**
      * {@code Ricevuta.voci[]}: una voce per pagamento, nell'ordine dato da
@@ -83,11 +87,12 @@ public class VoceRicevutaMapper {
     }
 
     private static boolean anomala(Rendicontazione r) {
-        return r.getStato() != null && !STATO_RIGA_OK.equals(r.getStato());
+        return STATO_RIGA_ANOMALA.equals(r.getStato());
     }
 
     private RigaRendicontazione toRiga(Rendicontazione r) {
         RigaRendicontazione riga = new RigaRendicontazione();
+        riga.setIur(r.getIur());
         riga.setDataRendicontazione(r.getData());
         riga.setEsito(JsonNullable.of(EsitoRendicontazioneMapper.fromCodice(r.getEsito())));
         riga.setImporto(r.getImportoPagato());
@@ -134,8 +139,8 @@ public class VoceRicevutaMapper {
         rv.setTrn(incasso.getTrn());
         rv.setSct(incasso.getSct());
         RiconciliazioneVoceLinks links = new RiconciliazioneVoceLinks();
-        links.setRiconciliazione(new Link("/riconciliazioni/" + incasso.getCodDominio() + "/"
-                + incasso.getIdentificativo()));
+        links.setRiconciliazione(new Link("/riconciliazioni/" + segment(incasso.getCodDominio()) + "/"
+                + segment(incasso.getIdentificativo())));
         rv.setLinks(links);
         return rv;
     }

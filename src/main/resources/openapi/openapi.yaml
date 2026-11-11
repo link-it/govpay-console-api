@@ -8764,7 +8764,8 @@ components:
         Stato della singola riga di rendicontazione (colonna DB
         `rendicontazioni.stato`), indipendente dall'esito pagoPA.
         `ALTRO_INTERMEDIARIO` segnala che lo IUV rendicontato appartiene a un
-        dominio non intermediato da questo GovPay.
+        dominio non intermediato da questo GovPay: e' una situazione normale,
+        non un'anomalia. Solo `ANOMALA` alimenta `VoceRicevuta.anomalia`.
       enum:
         - OK
         - ANOMALA
@@ -8825,6 +8826,9 @@ components:
         revisione:
           type: integer
           format: int64
+        iur:
+          type: string
+          description: Identificativo univoco di riscossione della riga rendicontata.
         dataFlusso:
           type: string
           format: date-time
@@ -8877,10 +8881,9 @@ components:
       type: object
       description: |
         Stato di rendicontazione/riconciliazione del pagamento identificato da
-        `indice` all'interno della RT (issue #119). Omesso interamente
-        dall'array `Ricevuta.voci` quando l'operatore non ha il diritto di
-        lettura su "Rendicontazioni e Incassi" — mai sostituito da uno stato
-        di default.
+        `indice` all'interno della RT (issue #119). Quando l'operatore non ha
+        il diritto di lettura su "Rendicontazioni e Incassi" e' omesso l'intero
+        array `Ricevuta.voci`, non le singole voci: nessuno stato di default.
       required:
         - indice
         - statoRendicontazione
@@ -8895,8 +8898,10 @@ components:
           type: boolean
           description: |
             `true` se almeno una delle righe in `rendicontazioni` ha stato
-            diverso da `OK` (aggregato su tutte le righe correnti, non solo su
-            una eventuale riga "principale").
+            `ANOMALA` (aggregato su tutte le righe correnti, non solo su una
+            eventuale riga "principale"). `ALTRO_INTERMEDIARIO` non e'
+            un'anomalia: e' l'importo di uno IUV gestito da un altro
+            intermediario.
         anomalie:
           type: array
           description: Unione delle anomalie di tutte le righe correnti.

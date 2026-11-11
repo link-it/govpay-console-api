@@ -177,6 +177,7 @@ class RicevutaVociIntegrationTest {
                 .andExpect(jsonPath("$.voci[0].rendicontazioni[0].idFlusso", is("FLUSSO-1")))
                 .andExpect(jsonPath("$.voci[0].rendicontazioni[0].idPsp", is("PSP-TEST")))
                 .andExpect(jsonPath("$.voci[0].rendicontazioni[0].revisione", is(1)))
+                .andExpect(jsonPath("$.voci[0].rendicontazioni[0].iur", is("IUR-CCP-RND")))
                 .andExpect(jsonPath("$.voci[0].rendicontazioni[0]._links.flussoRendicontazione.href",
                         is(linkFlusso)));
 
@@ -202,7 +203,42 @@ class RicevutaVociIntegrationTest {
                 .andExpect(jsonPath("$.voci[0].rendicontazioni", hasSize(0)))
                 .andExpect(jsonPath("$.voci[0].riconciliazione.id", is("INC-001")))
                 .andExpect(jsonPath("$.voci[0].riconciliazione.trn", is("TRN-001")))
-                .andExpect(jsonPath("$.voci[0].riconciliazione.sct", is("SCT-001")));
+                .andExpect(jsonPath("$.voci[0].riconciliazione.sct", is("SCT-001")))
+                .andExpect(jsonPath("$.voci[0].riconciliazione._links.riconciliazione.href",
+                        is("/riconciliazioni/" + DOM + "/INC-001")));
+    }
+
+    @Test
+    void linkRiconciliazioneCodificaIdentificativo() throws Exception {
+        String principal = utenteConDiritto("op-ric-link");
+        Rpt rpt = newRpt("1000000000008", "CCP-RICL");
+        Incasso incasso = newIncasso("INC 002/A", "TRN-002", "SCT-002");
+        newPagamento(rpt, 1, null, incasso.getId());
+
+        flushAndClear();
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.voci[0].riconciliazione.id", is("INC 002/A")))
+                .andExpect(jsonPath("$.voci[0].riconciliazione._links.riconciliazione.href",
+                        is("/riconciliazioni/" + DOM + "/INC%20002%2FA")));
+    }
+
+    @Test
+    void rigaAltroIntermediarioNonAnomala() throws Exception {
+        String principal = utenteConDiritto("op-altro-int");
+        Rpt rpt = newRpt("1000000000009", "CCP-ALT");
+        Pagamento p = newPagamento(rpt, 1, null, null);
+        Fr fr = newFr("FLUSSO-ALT", 1L, false);
+        newRendicontazione(fr, p, null, 0, "ALTRO_INTERMEDIARIO", null);
+
+        flushAndClear();
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+                        .with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("RENDICONTATA")))
+                .andExpect(jsonPath("$.voci[0].anomalia", is(false)))
+                .andExpect(jsonPath("$.voci[0].rendicontazioni[0].stato", is("ALTRO_INTERMEDIARIO")));
     }
 
     @Test
