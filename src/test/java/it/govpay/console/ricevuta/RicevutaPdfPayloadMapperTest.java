@@ -103,6 +103,26 @@ class RicevutaPdfPayloadMapperTest {
         assertThat(nonEseguita.getStatus()).isEqualTo(ReceiptItemStatus.NOT_EXECUTED);
     }
 
+    @Test
+    void logoSvgInArchivioInviatoComeDataUriSvg() throws JAXBException {
+        // issue #124: un SVG caricato dalla console legacy non va dichiarato image/png
+        Rpt rpt = rptSanp230(true);
+        String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/>";
+        String base64 = java.util.Base64.getEncoder().encodeToString(svg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        rpt.getVersamento().getDominio().setLogo(base64.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertThat(mapper.toReceipt(rpt).getCreditorLogo()).isEqualTo("data:image/svg+xml;base64," + base64);
+    }
+
+    @Test
+    void logoNonLeggibileInArchivioLasciaIlLogoDiDefault() throws JAXBException {
+        // issue #124: valore salvato dalle vecchie PUT dell'API Backoffice
+        Rpt rpt = rptSanp230(true);
+        rpt.getVersamento().getDominio().setLogo("/domini/12345678901/logo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertThat(mapper.toReceipt(rpt).getCreditorLogo()).isEmpty();
+    }
+
     private static Rpt rptSanp230(boolean conXmlRpt) throws JAXBException {
         RT rt = new RT();
         rt.setVersioneOggetto("6.2");

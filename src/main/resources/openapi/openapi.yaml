@@ -3533,8 +3533,12 @@ paths:
       summary: Logo dell'ente creditore.
       description: |
         Ritorna il logo binario del dominio. Il `Content-Type` viene determinato
-        dal contenuto (`image/png` o `image/jpeg`). `404` se il dominio non esiste
-        o non ha un logo.
+        dal contenuto: `image/png` o `image/jpeg`, oppure `image/svg+xml` (o un
+        altro tipo di immagine) per i loghi gia' in archivio caricati dalla
+        console legacy o dall'API Backoffice. Un SVG e' servito con una
+        `Content-Security-Policy` che non consente script ne' risorse esterne.
+        `404` se il dominio non esiste, non ha un logo o il logo in archivio non
+        e' un'immagine in Base64.
       responses:
         '200':
           description: Logo del dominio.
@@ -3543,12 +3547,20 @@ paths:
               description: Direttiva di cache del logo.
               schema:
                 type: string
+            Content-Security-Policy:
+              description: Presente solo per i loghi SVG.
+              schema:
+                type: string
           content:
             image/png:
               schema:
                 type: string
                 format: binary
             image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
               schema:
                 type: string
                 format: binary
@@ -3564,8 +3576,11 @@ paths:
       description: |
         Carica il logo binario del dominio. Formati accettati: `image/png`,
         `image/jpeg`. Il tipo effettivo viene verificato dal contenuto: un payload
-        non riconosciuto come immagine supportata produce `415`. Dimensione massima
-        configurabile (default 256 KB): oltre il limite produce `413`.
+        non riconosciuto come immagine supportata produce `415` (anche SVG, GIF,
+        BMP, TIFF e WebP). L'immagine viene poi decodificata per intero: un file
+        PNG o JPEG troncato o corrotto, che non si potrebbe stampare, produce
+        `422` con la causa. Dimensione massima configurabile (default 256 KB):
+        oltre il limite produce `413`.
       requestBody:
         required: true
         content:
@@ -3590,6 +3605,8 @@ paths:
           $ref: '#/components/responses/Problem413'
         '415':
           $ref: '#/components/responses/Problem415'
+        '422':
+          $ref: '#/components/responses/Problem422'
     delete:
       tags:
         - Domini
