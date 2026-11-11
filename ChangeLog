@@ -1,3 +1,18 @@
+2026-11-11  Giuliano Pintori <pintori@link.it>
+
+	* [Ricevute] Issue #119 Stato di rendicontazione e riconciliazione per singola voce.
+	Il dettaglio GET /ricevute/{idDominio}/{iuv}/{idRicevuta} espone il nuovo
+	array voci[], una voce per pagamento della RT identificata da indice, con
+	statoRendicontazione (RICONCILIATA se il pagamento e' collegato a un
+	incasso, RENDICONTATA se ha almeno una rendicontazione in un flusso non
+	obsoleto, altrimenti DA_RENDICONTARE), le righe di rendicontazione correnti
+	(flusso, PSP, revisione, iur, esito, importo, stato, anomalie e link al
+	flusso) e la riconciliazione (identificativo, data, trn, sct e link).
+	anomalia e' vera solo per righe in stato ANOMALA: ALTRO_INTERMEDIARIO non
+	e' un'anomalia. Senza il diritto di lettura su "Rendicontazioni e Incassi"
+	voci e' omesso e la ricevuta resta consultabile. Solo aggiunte al
+	contratto, nessuna modifica al database.
+
 2026-11-08  Giuliano Pintori <pintori@link.it>
 
 	* [CI] La pipeline gira anche sul ramo 3.11, ramo di lavoro del
