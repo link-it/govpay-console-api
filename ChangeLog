@@ -1,3 +1,44 @@
+2026-11-08  Giuliano Pintori <pintori@link.it>
+
+	* [CI] La pipeline gira anche sul ramo 3.11, ramo di lavoro del
+	passaggio a GovPay 3.11 (issue #133): build su push e pull request
+	verso 3.11, e docker-dev pubblica l'immagine di sviluppo anche al push
+	su 3.11. Il tag dell'immagine e' la versione del pom, diversa su 3.11.
+
+2026-11-08  Giuliano Pintori <pintori@link.it>
+
+	* [Sicurezza] json-path passa allo scope test: e' usato solo nelle
+	asserzioni jsonPath() dei test. Escono dal pacchetto di produzione
+	json-smart 2.6.0 (CVE-2026-113602) e asm 9.7.1 (CVE-2026-110257,
+	CVE-2026-110258, CVE-2026-110259, CVE-2026-110260, CVE-2026-110261,
+	CVE-2026-110263), dipendenze transitive segnalate da OWASP
+	Dependency-Check.
+
+2026-11-08  Giuliano Pintori <pintori@link.it>
+
+	* [Dipendenze] Swagger UI 5.34.1 (link-it/govpay-bom#7).
+	govpay-bom porta swagger-ui alla 5.34.1, con DOMPurify 3.4.17, per
+	CVE-2026-116802, CVE-2026-116803 e CVE-2026-116804. springdoc compone
+	il percorso della Swagger UI con la propria versione (5.34.0): ora la
+	legge dal BOM con springdoc.swagger-ui.version=@swagger-ui.version@,
+	altrimenti /swagger-ui/index.html risponde 404.
+
+2026-11-08  Giuliano Pintori <pintori@link.it>
+
+	* [Sicurezza] Issue #128 Una richiesta anonima respinta con 401 non crea
+	piu' una sessione HTTP ne' il cookie JSESSIONID. Aggiornato
+	govpay-common-auth a 1.0.2-SNAPSHOT, che disabilita la request cache
+	(govpay-common-auth#12).
+
+2026-11-07  Giuliano Pintori <pintori@link.it>
+
+	* [Sicurezza] Issue #128 Cookie di sessione senza SameSite (alert ZAP 10054).
+	JSESSIONID e XSRF-TOKEN ora dichiarano SameSite=Lax, configurabile con
+	server.servlet.session.cookie.same-site (SESSION_COOKIE_SAME_SITE). Il
+	cookie CSRF, scritto dal CookieCsrfTokenRepository di govpay-common-auth,
+	riceve lo stesso valore tramite un CookieSameSiteSupplier. Lax e non
+	Strict, per non interrompere il rientro dai metodi di login esterni.
+
 2026-11-03  Giuliano Pintori <pintori@link.it>
 
 	* [CI] Il report OWASP Dependency-Check torna negli artifact della build e

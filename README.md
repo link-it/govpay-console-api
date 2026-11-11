@@ -93,9 +93,11 @@ Le proprietà si impostano in `application.properties`, da riga di comando (`-D<
 | `spring.mvc.throw-exception-if-no-handler-found` | - | `true` | Risponde con un errore applicativo sui path inesistenti |
 | `spring.web.resources.add-mappings` | - | `true` | Risorse statiche, necessarie a Swagger UI |
 | `spring.jackson.default-property-inclusion` | - | `non_absent` | Esclude dalle risposte JSON i campi nulli o assenti |
+| `server.servlet.session.cookie.same-site` | `SESSION_COOKIE_SAME_SITE` | `lax` | Attributo `SameSite` del cookie di sessione `JSESSIONID` e del cookie CSRF `XSRF-TOKEN`. `strict` interrompe il rientro nella console dai metodi di login esterni (SPID, OAuth2) |
 | `server.error.whitelabel.enabled` | - | `true` | Pagina di errore di default di Spring Boot |
 | `spring.main.banner-mode` | - | `off` | Banner di Spring Boot all'avvio |
 | `springdoc.api-docs.enabled` | - | `true` | Infrastruttura di Swagger UI (`/v3/api-docs/swagger-config`) |
+| `springdoc.swagger-ui.version` | - | `@swagger-ui.version@` | Versione della Swagger UI, presa in build dal govpay-bom: springdoc la usa per il percorso del webjar. Da non cambiare |
 | `springdoc.paths-to-exclude` | - | `/**` | Esclude i controller dalla specifica generata: Swagger UI mostra la specifica sorgente |
 | `springdoc.swagger-ui.enabled` | - | `true` | Abilita Swagger UI |
 | `springdoc.swagger-ui.path` | - | `/swagger-ui.html` | Path di Swagger UI |
