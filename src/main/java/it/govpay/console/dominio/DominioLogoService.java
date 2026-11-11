@@ -5,9 +5,10 @@ import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,12 +21,21 @@ import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.console.web.PayloadTooLargeException;
+import it.govpay.console.web.UnprocessableEntityException;
 import it.govpay.console.web.UnsupportedMediaTypeException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Service
 public class DominioLogoService {
+
+    private static final Logger log = LoggerFactory.getLogger(DominioLogoService.class);
+
+    /**
+     * Per gli SVG gia' in archivio: aperto direttamente nel browser, l'SVG non
+     * esegue script e non carica risorse esterne (issue #124).
+     */
+    static final String CSP_SVG = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
     public static final String AZIONE_AUDIT_MODIFICA = "DOMINIO_LOGO_MODIFICA";
     public static final String AZIONE_AUDIT_RIMUOVI = "DOMINIO_LOGO_RIMUOVI";
@@ -59,12 +69,16 @@ public class DominioLogoService {
         if (stored == null || stored.length == 0) {
             throw new NotFoundException("Il dominio '" + idDominio + "' non ha un logo.");
         }
-        byte[] image = DominioLogoCodec.decode(stored);
-        String contentType = LogoMimeDetector.detect(image);
-        if (contentType == null) {
-            contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        DominioLogoCodec.LogoArchiviato logo = DominioLogoCodec.leggi(stored).orElseThrow(() -> {
+            log.warn("Logo del dominio [{}] non leggibile in archivio: non e' un'immagine in Base64. "
+                    + "Trattato come logo assente.", idDominio);
+            return new NotFoundException("Il dominio '" + idDominio + "' non ha un logo.");
+        });
+        byte[] image = logo.immagine();
+        response.setContentType(logo.contentType());
+        if (LogoMimeDetector.IMAGE_SVG.equals(logo.contentType())) {
+            response.setHeader("Content-Security-Policy", CSP_SVG);
         }
-        response.setContentType(contentType);
         response.setHeader(HttpHeaders.CACHE_CONTROL, "max-age=" + cacheMaxAgeSeconds);
         try {
             response.getOutputStream().write(image);
@@ -92,6 +106,12 @@ public class DominioLogoService {
             throw new UnsupportedMediaTypeException("Tipo di immagine non supportato"
                     + (contentType != null ? " (" + contentType + ")" : "") + ": sono ammessi "
                     + supportedTypesLabel() + ".");
+        }
+        try {
+            LogoRasterVerifier.verifica(content, contentType);
+        } catch (LogoRasterVerifier.LogoNonValidoException e) {
+            throw new UnprocessableEntityException("L'immagine " + contentType
+                    + " non e' leggibile e non si potrebbe stampare: " + e.getMessage() + ".");
         }
 
         dominio.setLogo(DominioLogoCodec.encode(content));

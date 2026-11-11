@@ -2,6 +2,7 @@ package it.govpay.console.dominio;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Optional;
 
 /**
  * Incapsula il formato con cui il logo del dominio e' persistito nella colonna
@@ -27,6 +28,37 @@ public final class DominioLogoCodec {
     }
 
     /**
+     * Logo in archivio utilizzabile: i byte dell'immagine e il tipo riconosciuto.
+     */
+    public record LogoArchiviato(byte[] immagine, String contentType) {
+    }
+
+    /**
+     * Lettura tollerante dei loghi gia' in archivio (issue #124): restituisce
+     * vuoto, invece di un errore, se il valore non e' Base64 o se i byte
+     * decodificati non sono un'immagine riconosciuta. Gli a capo dei valori
+     * legacy sono ignorati. Un valore come {@code /domini/{id}/logo}, salvato
+     * dalle vecchie PUT dell'API Backoffice, e' Base64 formalmente valido ma
+     * non decodifica un'immagine: per questo serve il controllo del tipo.
+     */
+    public static Optional<LogoArchiviato> leggi(byte[] stored) {
+        if (stored == null || stored.length == 0) {
+            return Optional.empty();
+        }
+        byte[] immagine;
+        try {
+            immagine = Base64.getDecoder().decode(base64Of(stored).replaceAll("\\s", ""));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        String contentType = LogoMimeDetector.detect(immagine);
+        if (contentType == null || !contentType.startsWith("image/")) {
+            return Optional.empty();
+        }
+        return Optional.of(new LogoArchiviato(immagine, contentType));
+    }
+
+    /**
      * Codifica i byte grezzi dell'immagine nel formato memorizzato in colonna
      * (testo Base64 nudo, in byte UTF-8).
      */
@@ -38,19 +70,15 @@ public final class DominioLogoCodec {
     }
 
     /**
-     * Costruisce il data-URI per il payload delle stampe riusando la stringa
-     * Base64 gia' presente in colonna e ricavando il content-type dai magic bytes
-     * dell'immagine decodificata.
+     * Costruisce il data-URI per il payload delle stampe con il content-type
+     * riconosciuto, SVG compreso. Restituisce {@code ""} se il logo in archivio
+     * non e' utilizzabile (vedi {@link #leggi}): la stampa usa il logo di default.
      */
     public static String toDataUri(byte[] stored) {
-        if (stored == null || stored.length == 0) {
-            return "";
-        }
-        String contentType = LogoMimeDetector.detect(decode(stored));
-        if (contentType == null) {
-            contentType = LogoMimeDetector.IMAGE_PNG;
-        }
-        return "data:" + contentType + ";base64," + base64Of(stored);
+        return leggi(stored)
+                .map(logo -> "data:" + logo.contentType() + ";base64,"
+                        + Base64.getEncoder().encodeToString(logo.immagine()))
+                .orElse("");
     }
 
     private static String base64Of(byte[] stored) {
