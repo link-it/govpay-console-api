@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.model.AclServizio;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -40,14 +40,14 @@ public class DominioLogoService {
     public static final String AZIONE_AUDIT_MODIFICA = "DOMINIO_LOGO_MODIFICA";
     public static final String AZIONE_AUDIT_RIMUOVI = "DOMINIO_LOGO_RIMUOVI";
 
-    private final DominioRepository repository;
+    private final ConsoleDominioRepository repository;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
     private final long maxSizeBytes;
     private final long cacheMaxAgeSeconds;
     private final AclAuthorizer aclAuthorizer;
 
-    public DominioLogoService(DominioRepository repository,
+    public DominioLogoService(ConsoleDominioRepository repository,
                               CurrentOperatorService currentOperatorService,
                               AuditService auditService,
                               @Value("${app.dominio.logo.max-size-bytes:262144}") long maxSizeBytes,

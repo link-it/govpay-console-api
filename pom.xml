@@ -26,6 +26,9 @@
         <!-- govpay-common-auth (not in BOM) -->
         <govpay-common-auth.version>1.1.0-SNAPSHOT</govpay-common-auth.version>
 
+        <!-- govpay-common-pendenze (not in BOM) -->
+        <govpay-common-pendenze.version>1.0.0-SNAPSHOT</govpay-common-pendenze.version>
+
         <!-- mime-util (not in BOM) -->
         <mime-util.version>2.1.3</mime-util.version>
 
@@ -278,6 +281,13 @@
             <groupId>org.gov4j.govpay</groupId>
             <artifactId>govpay-common-auth</artifactId>
             <version>${govpay-common-auth.version}</version>
+        </dependency>
+
+        <!-- GovPay Common Pendenze: modello v3 delle pendenze e ricevute/rendicontazioni -->
+        <dependency>
+            <groupId>org.gov4j.govpay</groupId>
+            <artifactId>govpay-common-pendenze</artifactId>
+            <version>${govpay-common-pendenze.version}</version>
         </dependency>
 
         <!-- FreeMarker Template Engine -->

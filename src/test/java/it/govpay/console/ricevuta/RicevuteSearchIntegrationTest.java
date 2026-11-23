@@ -27,18 +27,18 @@ import it.govpay.common.auth.GovpayPasswordEncoder;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
@@ -65,12 +65,12 @@ class RicevuteSearchIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private UnitaOperativaRepository unitaOperativaRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
 
@@ -478,8 +478,11 @@ class RicevuteSearchIntegrationTest {
         v.setTipoVersamentoDominio(tvdA);
         versamentoRepository.save(v);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv("NODATAIUV01");
-        r.setCcp("CCP-ND");
+        r.setIur("CCP-ND");
         r.setCodDominio(DOM_A);
         r.setXmlRt("<RT/>".getBytes());
         r.setImportoTotalePagato(10.0);
@@ -487,7 +490,7 @@ class RicevuteSearchIntegrationTest {
         r.setDataMsgRicevuta(null);
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
 
         // cursor mode: deve restare stabile (no NPE su encode) ed escludere la riga senza data
@@ -698,8 +701,11 @@ class RicevuteSearchIntegrationTest {
         versamentoRepository.save(v);
 
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(dominio.getCodDominio());
         r.setXmlRt("<RT/>".getBytes());
         r.setCodEsitoPagamento(0);
@@ -710,7 +716,7 @@ class RicevuteSearchIntegrationTest {
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("ok");
         r.setCodPsp("PSP-X");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
     }
 
@@ -738,15 +744,18 @@ class RicevuteSearchIntegrationTest {
         versamentoRepository.save(v);
 
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(dominio.getCodDominio());
         r.setXmlRpt("<RPT/>".getBytes());
         r.setXmlRt(null);
         r.setDataMsgRichiesta(data);
         r.setVersione("SANP_240");
         r.setStato("RPT_ATTIVATA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
     }
 

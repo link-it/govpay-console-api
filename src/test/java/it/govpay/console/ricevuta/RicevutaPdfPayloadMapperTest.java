@@ -13,6 +13,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -26,7 +28,7 @@ import it.gov.digitpa.schemas._2011.pagamenti.RPT;
 import it.gov.digitpa.schemas._2011.pagamenti.RT;
 import it.gov.digitpa.schemas._2011.pagamenti.StTipoIdentificativoUnivocoPersFG;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.UnitaOperativaRepository;
@@ -45,6 +47,8 @@ class RicevutaPdfPayloadMapperTest {
 
     /** Nessuno stub di default: {@code Optional.empty()} finche' un test non lo configura diversamente. */
     private final UnitaOperativaRepository unitaOperativaRepository = mock(UnitaOperativaRepository.class);
+    /** Versamento corrente associato a ciascuna Rpt costruita dagli helper (la Rpt tiene solo l'id). */
+    private final Map<Rpt, Versamento> versamenti = new IdentityHashMap<>();
     private final RicevutaPdfPayloadMapper mapper = new RicevutaPdfPayloadMapper(unitaOperativaRepository, "");
 
     // ---------- SANP_230 (ctRicevutaTelematica) ----------
@@ -53,7 +57,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230LeggeDataOperazioneDallRptEDataApplicativaDallaRt() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         // RPT.dataOraMessaggioRichiesta = 2026-06-09T08:15 -> non mezzanotte, ore/minuti visibili
         assertThat(receipt.getOperationDate()).isEqualTo("09/06/2026 08:15");
@@ -67,7 +71,7 @@ class RicevutaPdfPayloadMapperTest {
         // mezzanotte esatta -> la data operazione deve mostrare solo la data
         rpt.setDataMsgRichiesta(OffsetDateTime.of(2026, 6, 9, 0, 0, 0, 0, ZoneOffset.ofHours(2)));
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getOperationDate()).isEqualTo("09/06/2026");
     }
@@ -76,7 +80,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230UsaIlSoggettoPagatoreDellaRtNonIlDebitoreCorrenteDellaPendenza() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getPayer().getFiscalCode()).isEqualTo("RSSMRA80A01H501U");
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi (storico RT)");
@@ -88,7 +92,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230UsaLeVociDellaRtConIurVeroEStatoPerImporto() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getItems()).hasSize(2);
         ReceiptItem eseguita = receipt.getItems().get(0);
@@ -109,21 +113,21 @@ class RicevutaPdfPayloadMapperTest {
         Rpt rpt = rptSanp230(true);
         String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/>";
         String base64 = java.util.Base64.getEncoder().encodeToString(svg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        rpt.getVersamento().getDominio().setLogo(base64.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        versamenti.get(rpt).getDominio().setLogo(base64.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        assertThat(mapper.toReceipt(rpt).getCreditorLogo()).isEqualTo("data:image/svg+xml;base64," + base64);
+        assertThat(mapper.toReceipt(rpt, versamenti.get(rpt)).getCreditorLogo()).isEqualTo("data:image/svg+xml;base64," + base64);
     }
 
     @Test
     void logoNonLeggibileInArchivioLasciaIlLogoDiDefault() throws JAXBException {
         // issue #124: valore salvato dalle vecchie PUT dell'API Backoffice
         Rpt rpt = rptSanp230(true);
-        rpt.getVersamento().getDominio().setLogo("/domini/12345678901/logo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        versamenti.get(rpt).getDominio().setLogo("/domini/12345678901/logo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        assertThat(mapper.toReceipt(rpt).getCreditorLogo()).isEmpty();
+        assertThat(mapper.toReceipt(rpt, versamenti.get(rpt)).getCreditorLogo()).isEmpty();
     }
 
-    private static Rpt rptSanp230(boolean conXmlRpt) throws JAXBException {
+    private Rpt rptSanp230(boolean conXmlRpt) throws JAXBException {
         RT rt = new RT();
         rt.setVersioneOggetto("6.2");
         CtDominio dominioRt = new CtDominio();
@@ -166,8 +170,11 @@ class RicevutaPdfPayloadMapperTest {
         rt.setDatiPagamento(dati);
 
         Rpt rpt = new Rpt();
+        rpt.setCodStazione("STAZIONE-TEST");
+        rpt.setCodMsgRichiesta("MSG-RICHIESTA");
+        rpt.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         rpt.setIuv("IUV900000004");
-        rpt.setCcp("CCP900000004");
+        rpt.setIur("CCP900000004");
         rpt.setCodDominio("12345678901");
         rpt.setVersione("SANP_230");
         rpt.setCodEsitoPagamento(2);
@@ -194,7 +201,7 @@ class RicevutaPdfPayloadMapperTest {
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Test");
         v.setDominio(d);
-        rpt.setVersamento(v);
+        versamenti.put(rpt, v);
 
         return rpt;
     }
@@ -210,7 +217,7 @@ class RicevutaPdfPayloadMapperTest {
         ec.setUoProvincia("MI");
         when(unitaOperativaRepository.findByDominio_IdAndCodUo(eq(42L), eq("EC"))).thenReturn(Optional.of(ec));
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getOrganization().getAddress()).isEqualTo("Piazza Duomo, 1");
         assertThat(receipt.getOrganization().getLocation()).isEqualTo("20100 Milano (MI)");
@@ -221,7 +228,7 @@ class RicevutaPdfPayloadMapperTest {
         Rpt rpt = rptSanp230(true);
         // unitaOperativaRepository senza stub -> Optional.empty() di default
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getOrganization().getAddress()).isEmpty();
         assertThat(receipt.getOrganization().getLocation()).isEmpty();
@@ -234,7 +241,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptSenzaDateNellaRtNonRipiegaSulleColonneDbMaMostraNd() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getOperationDate()).isEqualTo("N/D");
         assertThat(receipt.getApplicationDate()).isEqualTo("N/D");
@@ -244,7 +251,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptUsaIlDebtorDellaRtNonIlPayerNeIlDebitoreCorrente() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi");
         assertThat(receipt.getPayer().getFiscalCode()).isEqualTo("RSSMRA80A01H501U");
@@ -254,7 +261,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptUsaLeVociDellaRtConReceiptIdComeIur() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getItems()).hasSize(1);
         ReceiptItem item = receipt.getItems().get(0);
@@ -264,10 +271,13 @@ class RicevutaPdfPayloadMapperTest {
         assertThat(item.getStatus()).isEqualTo(ReceiptItemStatus.EXECUTED);
     }
 
-    private static Rpt rptCtReceipt() throws IOException {
+    private Rpt rptCtReceipt() throws IOException {
         Rpt rpt = new Rpt();
+        rpt.setCodStazione("STAZIONE-TEST");
+        rpt.setCodMsgRichiesta("MSG-RICHIESTA");
+        rpt.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         rpt.setIuv("IUV900000003");
-        rpt.setCcp("RT900000003");
+        rpt.setIur("RT900000003");
         rpt.setCodDominio("12345678901");
         rpt.setVersione("SANP_240");
         rpt.setCodEsitoPagamento(0);
@@ -282,7 +292,7 @@ class RicevutaPdfPayloadMapperTest {
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Prova");
         v.setDominio(d);
-        rpt.setVersamento(v);
+        versamenti.put(rpt, v);
 
         return rpt;
     }
@@ -294,7 +304,7 @@ class RicevutaPdfPayloadMapperTest {
             throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         // paymentDateTime = 2026-09-01T10:00:00+02:00 -> non mezzanotte, ore/minuti visibili
         assertThat(receipt.getOperationDate()).isEqualTo("01/09/2026 10:00");
@@ -306,7 +316,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptV2UsaIlDebtorDellaRtConIndirizzo() throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi");
         assertThat(receipt.getPayer().getAddress()).isEqualTo("Via Roma 1");
@@ -317,7 +327,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptV2UsaLeVociDellaRtConReceiptIdComeIur() throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt);
+        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
 
         assertThat(receipt.getItems()).hasSize(1);
         ReceiptItem item = receipt.getItems().get(0);
@@ -327,10 +337,13 @@ class RicevutaPdfPayloadMapperTest {
         assertThat(item.getStatus()).isEqualTo(ReceiptItemStatus.EXECUTED);
     }
 
-    private static Rpt rptCtReceiptV2() throws IOException {
+    private Rpt rptCtReceiptV2() throws IOException {
         Rpt rpt = new Rpt();
+        rpt.setCodStazione("STAZIONE-TEST");
+        rpt.setCodMsgRichiesta("MSG-RICHIESTA");
+        rpt.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         rpt.setIuv("IUV900000001");
-        rpt.setCcp("RT900000001");
+        rpt.setIur("RT900000001");
         rpt.setCodDominio("12345678901");
         rpt.setVersione("SANP_321_V2");
         rpt.setCodEsitoPagamento(0);
@@ -345,7 +358,7 @@ class RicevutaPdfPayloadMapperTest {
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Prova");
         v.setDominio(d);
-        rpt.setVersamento(v);
+        versamenti.put(rpt, v);
 
         return rpt;
     }

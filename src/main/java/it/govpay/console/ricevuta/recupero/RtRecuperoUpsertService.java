@@ -7,10 +7,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.RtRecupero;
 import it.govpay.console.model.AclServizio;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
+import it.govpay.console.repository.ConsoleRptRepository.RptConVersamento;
 import it.govpay.console.repository.RtRecuperoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.OperatoreCorrente;
@@ -32,14 +33,14 @@ import jakarta.persistence.PersistenceContext;
 @Service
 public class RtRecuperoUpsertService {
 
-    private final RptRepository rptRepository;
+    private final ConsoleRptRepository rptRepository;
     private final RtRecuperoRepository rtRecuperoRepository;
     private final AclAuthorizer aclAuthorizer;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public RtRecuperoUpsertService(RptRepository rptRepository,
+    public RtRecuperoUpsertService(ConsoleRptRepository rptRepository,
                                    RtRecuperoRepository rtRecuperoRepository,
                                    AclAuthorizer aclAuthorizer) {
         this.rptRepository = rptRepository;
@@ -51,10 +52,11 @@ public class RtRecuperoUpsertService {
     public RtRecupero upsert(String idDominio, String iuv, String idRicevuta, OperatoreCorrente operatore) {
         aclAuthorizer.requireScrittura(AclServizio.PAGAMENTI);
 
-        Rpt rpt = rptRepository.findByDominioAndIuv(idDominio, iuv)
+        RptConVersamento caricata = rptRepository.findConVersamentoByDominioAndIuv(idDominio, iuv)
                 .orElseThrow(() -> new NotFoundException(
                         "Pagamento non trovato: idDominio=" + idDominio + ", iuv=" + iuv + "."));
-        if (!VersamentoVisibilita.isVisibile(rpt.getVersamento(), operatore)) {
+        Rpt rpt = caricata.rpt();
+        if (!VersamentoVisibilita.isVisibile(caricata.versamento(), operatore)) {
             throw new AccessDeniedException(
                     "L'operatore '" + operatore.principal() + "' non ha visibilità sul dominio '" + idDominio + "'.");
         }

@@ -21,17 +21,18 @@ import it.govpay.common.metrics.ExternalCallMetricsRecorder;
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.StampeClient;
 import it.govpay.console.entity.Incasso;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rendicontazione;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.pendenze.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.repository.IncassoRepository;
-import it.govpay.console.repository.PagamentoRepository;
-import it.govpay.console.repository.RendicontazioneRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsolePagamentoRepository;
+import it.govpay.console.repository.ConsoleRendicontazioneRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
+import it.govpay.console.repository.ConsoleRptRepository.RptConVersamento;
 import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.console.ricevuta.pagopa.RptRtJsonConverter;
 import it.govpay.console.security.AclAuthorizer;
@@ -68,7 +69,7 @@ public class RicevutaService {
 
     public static final String AZIONE_AUDIT_VISUALIZZA = "RICEVUTA_VISUALIZZA";
 
-    private final RptRepository rptRepository;
+    private final ConsoleRptRepository rptRepository;
     private final VersamentoRepository versamentoRepository;
     private final RicevutaMapper ricevutaMapper;
     private final RicevutaPdfPayloadMapper pdfPayloadMapper;
@@ -77,13 +78,13 @@ public class RicevutaService {
     private final AuditService auditService;
     private final RptRtJsonConverter rptRtJsonConverter;
     private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
-    private final PagamentoRepository pagamentoRepository;
-    private final RendicontazioneRepository rendicontazioneRepository;
+    private final ConsolePagamentoRepository pagamentoRepository;
+    private final ConsoleRendicontazioneRepository rendicontazioneRepository;
     private final IncassoRepository incassoRepository;
     private final AclAuthorizer aclAuthorizer;
     private final VoceRicevutaMapper voceRicevutaMapper;
 
-    public RicevutaService(RptRepository rptRepository,
+    public RicevutaService(ConsoleRptRepository rptRepository,
                            VersamentoRepository versamentoRepository,
                            RicevutaMapper ricevutaMapper,
                            RicevutaPdfPayloadMapper pdfPayloadMapper,
@@ -92,8 +93,8 @@ public class RicevutaService {
                            AuditService auditService,
                            RptRtJsonConverter rptRtJsonConverter,
                            ExternalCallMetricsRecorder externalCallMetricsRecorder,
-                           PagamentoRepository pagamentoRepository,
-                           RendicontazioneRepository rendicontazioneRepository,
+                           ConsolePagamentoRepository pagamentoRepository,
+                           ConsoleRendicontazioneRepository rendicontazioneRepository,
                            IncassoRepository incassoRepository,
                            AclAuthorizer aclAuthorizer,
                            VoceRicevutaMapper voceRicevutaMapper) {
@@ -123,18 +124,20 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public Ricevuta getDetail(String idDominio, String iuv, String idRicevuta, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        Rpt rpt = rptRepository.findByKey(idDominio, iuv, idRicevuta)
+        RptConVersamento caricata = rptRepository.findConVersamentoByKey(idDominio, iuv, idRicevuta)
                 .orElseThrow(() -> new NotFoundException(
                         "Ricevuta non trovata: idDominio=" + idDominio + ", iuv=" + iuv
                                 + ", idRicevuta=" + idRicevuta));
-        if (!VersamentoVisibilita.isVisibile(rpt.getVersamento(), operatore)) {
+        Rpt rpt = caricata.rpt();
+        Versamento versamento = caricata.versamento();
+        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
             log.debug("getRicevuta ACL nega l'accesso (404 anti-leak) idDominio={} iuv={} idRicevuta={}",
                     idDominio, iuv, idRicevuta);
             throw new NotFoundException(
                     "Ricevuta non trovata: idDominio=" + idDominio + ", iuv=" + iuv
                             + ", idRicevuta=" + idRicevuta);
         }
-        Ricevuta dto = ricevutaMapper.toRicevuta(rpt);
+        Ricevuta dto = ricevutaMapper.toRicevuta(rpt, versamento);
         popolaVoci(dto, rpt);
         auditService.registra(AZIONE_AUDIT_VISUALIZZA, rpt.getId(),
                 auditDettaglio(idDominio, iuv, idRicevuta, "ricevuta"), operatore, request);
@@ -151,7 +154,7 @@ public class RicevutaService {
             dto.setVoci(null);
             return;
         }
-        List<Pagamento> pagamenti = pagamentoRepository.findByIdRptOrderByIndiceDatiAsc(rpt.getId());
+        List<Pagamento> pagamenti = pagamentoRepository.findByRptIdOrderByIndiceDatiAsc(rpt.getId());
         if (pagamenti.isEmpty()) {
             dto.setVoci(List.of());
             return;
@@ -214,7 +217,8 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> getRpt(String idDominio, String iuv, String idRicevuta,
                                          HttpServletRequest request, HttpServletResponse response) {
-        Rpt rpt = loadVisibile(idDominio, iuv, idRicevuta);
+        RptConVersamento caricata = loadVisibile(idDominio, iuv, idRicevuta);
+        Rpt rpt = caricata.rpt();
         MediaType chosen = chooseContentType(request, false);
         if (MediaType.APPLICATION_XML.equals(chosen)) {
             byte[] xml = requireBytes(rpt.getXmlRpt(), "RPT XML non disponibile per la ricevuta.");
@@ -240,7 +244,8 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> getRt(String idDominio, String iuv, String idRicevuta,
                                         HttpServletRequest request, HttpServletResponse response) {
-        Rpt rpt = loadVisibile(idDominio, iuv, idRicevuta);
+        RptConVersamento caricata = loadVisibile(idDominio, iuv, idRicevuta);
+        Rpt rpt = caricata.rpt();
         MediaType chosen = chooseContentType(request, true);
         if (MediaType.APPLICATION_XML.equals(chosen)) {
             byte[] xml = requireBytes(rpt.getXmlRt(), "RT XML non disponibile per la ricevuta.");
@@ -249,7 +254,7 @@ public class RicevutaService {
             return null;
         }
         if (MediaType.APPLICATION_PDF.equals(chosen)) {
-            streamReceiptPdf(rpt, "ricevuta-" + iuv + ".pdf", response);
+            streamReceiptPdf(rpt, caricata.versamento(), "ricevuta-" + iuv + ".pdf", response);
             audit(rpt, idDominio, iuv, idRicevuta, "rt", "pdf", request);
             return null;
         }
@@ -262,14 +267,14 @@ public class RicevutaService {
     }
 
     /** Carica la RT per chiave applicando l'ACL (404 anti-leak, nessun audit sul 404). */
-    private Rpt loadVisibile(String idDominio, String iuv, String idRicevuta) {
+    private RptConVersamento loadVisibile(String idDominio, String iuv, String idRicevuta) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        Rpt rpt = rptRepository.findByKey(idDominio, iuv, idRicevuta)
+        RptConVersamento caricata = rptRepository.findConVersamentoByKey(idDominio, iuv, idRicevuta)
                 .orElseThrow(() -> new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta)));
-        if (!VersamentoVisibilita.isVisibile(rpt.getVersamento(), operatore)) {
+        if (!VersamentoVisibilita.isVisibile(caricata.versamento(), operatore)) {
             throw new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta));
         }
-        return rpt;
+        return caricata;
     }
 
     private void audit(Rpt rpt, String idDominio, String iuv, String idRicevuta,
@@ -298,8 +303,8 @@ public class RicevutaService {
         }
     }
 
-    private void streamReceiptPdf(Rpt rpt, String filename, HttpServletResponse response) {
-        Receipt payload = pdfPayloadMapper.toReceipt(rpt);
+    private void streamReceiptPdf(Rpt rpt, Versamento versamento, String filename, HttpServletResponse response) {
+        Receipt payload = pdfPayloadMapper.toReceipt(rpt, versamento);
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
         try {

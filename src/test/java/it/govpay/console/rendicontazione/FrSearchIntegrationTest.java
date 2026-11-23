@@ -1,5 +1,9 @@
 package it.govpay.console.rendicontazione;
 
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
+import it.govpay.pendenze.model.StatoRendicontazione;
+import it.govpay.pendenze.entity.FlussoRendicontazione;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -25,15 +29,15 @@ import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rendicontazione;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RendicontazioneRepository;
+import it.govpay.console.repository.ConsoleRendicontazioneRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 
@@ -49,6 +53,9 @@ import it.govpay.console.repository.UtenzaRepository;
 @Transactional
 class FrSearchIntegrationTest {
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private static final String PASSWORD = "secret";
     private static final String DOM_A = "11111111111";
     private static final String DOM_B = "22222222222";
@@ -58,9 +65,9 @@ class FrSearchIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
-    @Autowired private RendicontazioneRepository rendicontazioneRepository;
+    @Autowired private ConsoleRendicontazioneRepository rendicontazioneRepository;
     @Autowired private AclRepository aclRepository;
 
     private Dominio domA;
@@ -90,8 +97,10 @@ class FrSearchIntegrationTest {
 
         // riga di rendicontazione per il filtro iuv, agganciata a FLUSSO-A2.
         Rendicontazione rnd = new Rendicontazione();
-        rnd.setIdFr(a2Anomalo.getId());
+        rnd.setFlusso(entityManager.getReference(FlussoRendicontazione.class, a2Anomalo.getId()));
         rnd.setIuv("IUV-XYZ");
+        rnd.setIur("IUR-XYZ");
+        rnd.setStato(StatoRendicontazione.OK);
         rnd.setData(date(2026, 6, 19));
         rendicontazioneRepository.save(rnd);
     }

@@ -28,7 +28,7 @@ import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
@@ -38,10 +38,10 @@ import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.operazioni.OperazioneBatchClient;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.RtRecuperoRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -76,12 +76,12 @@ class RecuperoRicevutaEsitoIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private RtRecuperoRepository rtRecuperoRepository;
     @Autowired private AclRepository aclRepository;
     @Autowired private OperazioniProperties operazioniProperties;
@@ -157,7 +157,7 @@ class RecuperoRicevutaEsitoIntegrationTest {
         // rt_recuperi sparisca, cosi' come nel flusso vero.
         simulaBatch((idDominio, iuv, iur) -> {
             rptRepository.findByDominioAndIuv(idDominio, iuv).ifPresent(rpt -> {
-                rpt.setCcp(iur);
+                rpt.setIur(iur);
                 rpt.setXmlRt("<RT/>".getBytes());
                 rpt.setDataMsgRicevuta(OffsetDateTime.now());
                 rptRepository.save(rpt);
@@ -304,11 +304,14 @@ class RecuperoRicevutaEsitoIntegrationTest {
 
     private Rpt newRptSenzaRt(Versamento v, String iuv, String ccp) {
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(DOM);
         r.setDataMsgRichiesta(OffsetDateTime.now());
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         r.setVersione("SANP_240");
         r.setStato("RT_MANCANTE");
         return rptRepository.save(r);

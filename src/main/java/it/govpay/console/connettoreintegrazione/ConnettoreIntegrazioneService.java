@@ -13,7 +13,7 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ConnettoreCredenziali;
 import it.govpay.console.model.ConnettoreIntegrazioneApplicazione;
-import it.govpay.console.repository.ApplicazioneRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -39,7 +39,7 @@ public class ConnettoreIntegrazioneService {
 
     private static final String COD_CONNETTORE_SUFFIX = "_INTEGRAZIONE";
 
-    private final ApplicazioneRepository applicazioneRepository;
+    private final ConsoleApplicazioneRepository applicazioneRepository;
     private final ConnettoreStore store;
     private final ConnettoreIntegrazioneMapper mapper;
     private final ObjectMapper objectMapper;
@@ -47,7 +47,7 @@ public class ConnettoreIntegrazioneService {
     private final AuditService auditService;
     private final AclAuthorizer aclAuthorizer;
 
-    public ConnettoreIntegrazioneService(ApplicazioneRepository applicazioneRepository,
+    public ConnettoreIntegrazioneService(ConsoleApplicazioneRepository applicazioneRepository,
                                          ConnettoreStore store,
                                          ConnettoreIntegrazioneMapper mapper,
                                          ObjectMapper objectMapper,

@@ -17,7 +17,7 @@ import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.RuoloRef;
 import it.govpay.console.model.TipoPendenzaRef;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
@@ -40,7 +40,7 @@ import jakarta.persistence.PersistenceContext;
 @Component
 public class UtenzaAssociazioniWriter {
 
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoVersamentoRepository tipoVersamentoRepository;
     private final AclRepository aclRepository;
     private final UtenzaDominioRepository utenzaDominioRepository;
@@ -49,7 +49,7 @@ public class UtenzaAssociazioniWriter {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public UtenzaAssociazioniWriter(DominioRepository dominioRepository,
+    public UtenzaAssociazioniWriter(ConsoleDominioRepository dominioRepository,
                                     TipoVersamentoRepository tipoVersamentoRepository,
                                     AclRepository aclRepository,
                                     UtenzaDominioRepository utenzaDominioRepository,

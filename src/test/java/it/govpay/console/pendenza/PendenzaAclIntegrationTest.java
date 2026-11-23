@@ -29,8 +29,8 @@ import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -62,9 +62,9 @@ class PendenzaAclIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired

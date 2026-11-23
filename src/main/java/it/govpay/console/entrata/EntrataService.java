@@ -31,7 +31,7 @@ import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListEntrate200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoContabilita;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -69,7 +69,7 @@ public class EntrataService {
     private static final int MAX_COD_CONTABILITA = 255;
 
     private final TipoTributoRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final EntrataMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -80,7 +80,7 @@ public class EntrataService {
     private EntityManager entityManager;
 
     public EntrataService(TipoTributoRepository repository,
-                          DominioRepository dominioRepository,
+                          ConsoleDominioRepository dominioRepository,
                           EntrataMapper mapper,
                           CurrentOperatorService currentOperatorService,
                           AuditService auditService,

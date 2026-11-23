@@ -17,13 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.model.ListRicevute200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.pagination.CursorCodec;
 import it.govpay.console.pendenza.PendenzaService;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -72,7 +72,7 @@ public class RicevutaSearchService {
     private static final int MIN_ANAGRAFICA_DEBITORE_LENGTH = 3;
     private static final int MAX_LIMIT_ANAGRAFICA_DEBITORE = 50;
 
-    private final RptRepository rptRepository;
+    private final ConsoleRptRepository rptRepository;
     private final RicevutaMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -80,7 +80,7 @@ public class RicevutaSearchService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public RicevutaSearchService(RptRepository rptRepository,
+    public RicevutaSearchService(ConsoleRptRepository rptRepository,
                                  RicevutaMapper mapper,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService) {

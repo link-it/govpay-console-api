@@ -23,7 +23,7 @@ import it.gov.pagopa.pagopa_api.pa.pafornode.CtTransferPAReceiptV2;
 import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.dominio.DominioLogoCodec;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.UnitaOperativaRepository;
@@ -90,8 +90,7 @@ public class RicevutaPdfPayloadMapper {
         this.pagopaLogoBase64 = pagopaLogoBase64;
     }
 
-    public Receipt toReceipt(Rpt rpt) {
-        Versamento v = rpt.getVersamento();
+    public Receipt toReceipt(Rpt rpt, Versamento v) {
         Dominio d = v != null ? v.getDominio() : null;
         DatiStoriciRicevuta dati = datiStoriciDi(rpt);
 
@@ -109,7 +108,7 @@ public class RicevutaPdfPayloadMapper {
         receipt.setApplicationDate(dati.applicationDate());
         receipt.setStatus(mapStatus(rpt.getCodEsitoPagamento()));
         receipt.setCreditorReferenceId(tronca(rpt.getIuv(), MAX_IDENTIFICATIVO));
-        receipt.setReceiptId(tronca(rpt.getCcp(), MAX_IDENTIFICATIVO));
+        receipt.setReceiptId(tronca(rpt.getIur(), MAX_IDENTIFICATIVO));
         receipt.setObjectVersion(mapVersione(rpt.getVersione()));
         receipt.setItems(dati.items());
         return receipt;

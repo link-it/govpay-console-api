@@ -10,8 +10,8 @@ import jakarta.persistence.criteria.Predicate;
 /**
  * Predicati su {@link Versamento} condivisi fra le risorse che lo raggiungono da
  * punti di ingresso diversi: direttamente ({@code /pendenze}, root della query) o
- * via join ({@code /ricevute}, {@code root.get("versamento")} su {@link
- * it.govpay.console.entity.Rpt}). Stesso pattern di {@link
+ * via join ({@code /ricevute}, join su {@code rpt.id_versamento} a partire da
+ * {@link it.govpay.pendenze.entity.Rpt}). Stesso pattern di {@link
  * it.govpay.console.security.VersamentoVisibilita#predicate}: {@code versamento} è
  * un {@link Path} generico, non un {@code Root}, proprio per essere componibile da
  * entrambi i chiamanti.

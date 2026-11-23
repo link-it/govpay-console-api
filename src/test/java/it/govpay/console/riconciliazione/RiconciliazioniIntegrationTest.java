@@ -1,5 +1,7 @@
 package it.govpay.console.riconciliazione;
 
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -27,8 +29,10 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Incasso;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.pendenze.model.StatoPagamentoRicevuta;
+import it.govpay.pendenze.model.TipoPagamento;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
@@ -37,12 +41,12 @@ import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.PagamentoRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsolePagamentoRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.SingoloVersamentoRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -63,6 +67,9 @@ import it.govpay.console.repository.VersamentoRepository;
 @Transactional
 class RiconciliazioniIntegrationTest {
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private static final String PASSWORD = "secret";
     private static final String DOM_A = "11111111111";
     private static final String DOM_B = "22222222222";
@@ -72,15 +79,15 @@ class RiconciliazioniIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private IncassoRepository incassoRepository;
-    @Autowired private PagamentoRepository pagamentoRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsolePagamentoRepository pagamentoRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
     @Autowired private SingoloVersamentoRepository singoloVersamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private AclRepository aclRepository;
 
     private Dominio domA;
@@ -414,9 +421,10 @@ class RiconciliazioniIntegrationTest {
         p.setIndiceDati(indice);
         p.setImportoPagato(importo);
         p.setDataPagamento(incasso.getDataOraIncasso());
-        p.setTipo(tipo);
-        p.setStato(stato);
-        p.setIdRpt(idRpt);
+        p.setTipo(TipoPagamento.valueOf(tipo));
+        p.setStato(stato != null ? StatoPagamentoRicevuta.valueOf(stato) : null);
+        p.setRpt(idRpt != null ? entityManager.getReference(Rpt.class, idRpt) : null);
+        p.setDataAcquisizione(incasso.getDataOraIncasso());
         p.setIdSingoloVersamento(idSingoloVersamento);
         p.setIdIncasso(incasso.getId());
         pagamentoRepository.save(p);
@@ -448,13 +456,16 @@ class RiconciliazioniIntegrationTest {
     private Rpt newRpt(Dominio dominio, String iuv, String ccp, TipoVersamento tv, TipoVersamentoDominio tvd) {
         Versamento v = newVersamento(dominio, "PEND-" + ccp, tv, tvd);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(dominio.getCodDominio());
         r.setDataMsgRichiesta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         return rptRepository.save(r);
     }
 

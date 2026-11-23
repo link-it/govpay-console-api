@@ -32,7 +32,7 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -57,7 +57,7 @@ class OperatoreControllerIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired

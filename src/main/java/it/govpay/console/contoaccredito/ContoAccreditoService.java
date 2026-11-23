@@ -29,7 +29,7 @@ import it.govpay.console.model.ContoAccreditoReplace;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListContiAccredito200Response;
 import it.govpay.console.model.Pagination;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -65,7 +65,7 @@ public class ContoAccreditoService {
     public static final String AZIONE_AUDIT_MODIFICA = "CONTO_ACCREDITO_MODIFICA";
 
     private final IbanAccreditoRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final ContoAccreditoMapper mapper;
     private final RepresentationValidator representationValidator;
     private final CurrentOperatorService currentOperatorService;
@@ -77,7 +77,7 @@ public class ContoAccreditoService {
     private EntityManager entityManager;
 
     public ContoAccreditoService(IbanAccreditoRepository repository,
-                                 DominioRepository dominioRepository,
+                                 ConsoleDominioRepository dominioRepository,
                                  ContoAccreditoMapper mapper,
                                  RepresentationValidator representationValidator,
                                  CurrentOperatorService currentOperatorService,

@@ -22,7 +22,7 @@ import it.govpay.console.model.FormatoTracciato;
 import it.govpay.console.model.NuovaPendenzaTracciato;
 import it.govpay.console.model.TracciatoPendenze;
 import it.govpay.console.model.TracciatoPendenzePost;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TracciatoRepository;
@@ -59,7 +59,7 @@ public class TracciatoUploadService {
     private static final long DEFAULT_MAX_FILE_SIZE_MB = 50;
 
     private final TracciatoRepository tracciatoRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     private final OperatoreRepository operatoreRepository;
     private final TracciatoMapper mapper;
@@ -72,7 +72,7 @@ public class TracciatoUploadService {
     private final Clock clock;
 
     public TracciatoUploadService(TracciatoRepository tracciatoRepository,
-                                  DominioRepository dominioRepository,
+                                  ConsoleDominioRepository dominioRepository,
                                   TipoVersamentoDominioRepository tipoVersamentoDominioRepository,
                                   OperatoreRepository operatoreRepository,
                                   TracciatoMapper mapper,

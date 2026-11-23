@@ -32,7 +32,7 @@ import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.Profilo;
 import it.govpay.console.model.RuoloRef;
 import it.govpay.console.model.TipoPendenzaRef;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
@@ -77,7 +77,7 @@ public class ProfiloService {
 
     private final CurrentOperatorService currentOperatorService;
     private final UtenzaRepository utenzaRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final UnitaOperativaRepository unitaOperativaRepository;
     private final TipoVersamentoRepository tipoVersamentoRepository;
     private final AclEffettive aclEffettive;
@@ -87,7 +87,7 @@ public class ProfiloService {
 
     public ProfiloService(CurrentOperatorService currentOperatorService,
                           UtenzaRepository utenzaRepository,
-                          DominioRepository dominioRepository,
+                          ConsoleDominioRepository dominioRepository,
                           UnitaOperativaRepository unitaOperativaRepository,
                           TipoVersamentoRepository tipoVersamentoRepository,
                           AclEffettive aclEffettive,

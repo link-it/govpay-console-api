@@ -28,7 +28,7 @@ import it.govpay.console.entity.ConnettoreProprieta;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.ConnettoreProprietaRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
@@ -52,7 +52,7 @@ class ConnettoreIntegrazioneControllerIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private ConnettoreProprietaRepository connettoreProprietaRepository;
     @Autowired

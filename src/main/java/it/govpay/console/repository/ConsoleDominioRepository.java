@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import it.govpay.console.entity.Dominio;
 
-public interface DominioRepository
+public interface ConsoleDominioRepository
         extends JpaRepository<Dominio, Long>, JpaSpecificationExecutor<Dominio> {
 
     List<Dominio> findByStazione_IdOrderByCodDominioAsc(Long idStazione);

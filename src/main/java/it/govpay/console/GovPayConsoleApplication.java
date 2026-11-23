@@ -21,25 +21,28 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypesScanner;
 
+import it.govpay.common.entity.ApplicazioneEntity;
 import it.govpay.common.entity.ConfigurazioneEntity;
 import it.govpay.common.entity.ConnettoreEntity;
+import it.govpay.common.entity.DominioEntity;
+import it.govpay.common.entity.IntermediarioEntity;
+import it.govpay.common.entity.StazioneEntity;
+import it.govpay.pendenze.config.GeneratoreIuvAutoConfiguration;
 
 /**
  * Repository scan esteso a {@code it.govpay.common.repository} ma limitato ai
- * due soli repository che servono: molte tabelle sono modellate in common in
- * sola lettura (per costruire RestTemplate/leggere configurazione) E in
- * console-api in CRUD completo con la propria entity slim — i repository di
- * common per quelle tabelle avrebbero lo stesso nome bean di default delle
- * controparti CRUD di console, e il contesto non parte.
+ * repository che servono: {@code ConnettoreEntityRepository},
+ * {@code ConfigurazioneRepository} e, per i servizi di govpay-common-pendenze,
+ * {@code ApplicazioneRepository} e {@code DominioRepository}. Molte tabelle sono
+ * modellate in common in sola lettura E in console-api in CRUD completo con la
+ * propria entity: i repository di common per quelle tabelle avrebbero lo stesso
+ * nome bean delle controparti di console, e il contesto non parte. Per questo i
+ * repository di console con nome in collisione hanno il prefisso {@code Console}.
  * <p>
  * Il filtro e' espresso come esclusione di tutto il pacchetto con l'eccezione
- * di {@code ConnettoreEntityRepository} e {@code ConfigurazioneRepository},
- * invece che come elenco dei nomi in collisione: l'elenco andava aggiornato a
- * ogni repository nuovo pubblicato da govpay-common, e finche' non lo era il
- * servizio non partiva — e' successo con i repository di anagrafica aggiunti
- * nella 2.0.4 (unita' operative, tipi versamento, iban, tributi). Cosi'
- * invece un repository nuovo in common non entra nello scan di console-api
- * finche' qualcuno non lo aggiunge esplicitamente all'eccezione.
+ * dei repository elencati, invece che come elenco dei nomi in collisione:
+ * un repository nuovo pubblicato da govpay-common non entra nello scan di
+ * console-api finche' qualcuno non lo aggiunge esplicitamente all'eccezione.
  * <p>
  * Component scan NON esteso a {@code it.govpay.common.client}/
  * {@code it.govpay.common.configurazione}: i pochi bean di sola lettura che
@@ -52,11 +55,14 @@ import it.govpay.common.entity.ConnettoreEntity;
  * invece del piu' semplice {@code @EntityScan(basePackages = "it.govpay.common.entity")}:
  * vedi il commento su quel bean per il motivo.
  */
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
-@EnableJpaRepositories(basePackages = { "it.govpay.console.repository", "it.govpay.common.repository" },
+@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class, GeneratoreIuvAutoConfiguration.class },
+        scanBasePackages = { "it.govpay.console", "it.govpay.pendenze.service" })
+@EnableJpaRepositories(basePackages = { "it.govpay.console.repository", "it.govpay.pendenze.repository",
+        "it.govpay.common.repository" },
         excludeFilters = @Filter(type = FilterType.REGEX,
                 pattern = "it\\.govpay\\.common\\.repository\\."
-                        + "(?!ConnettoreEntityRepository$|ConfigurazioneRepository$).*"))
+                        + "(?!ConnettoreEntityRepository$|ConfigurazioneRepository$"
+                        + "|ApplicazioneRepository$|DominioRepository$).*"))
 public class GovPayConsoleApplication extends SpringBootServletInitializer {
 
     @Override
@@ -99,13 +105,18 @@ public class GovPayConsoleApplication extends SpringBootServletInitializer {
     @Bean
     public PersistenceManagedTypes persistenceManagedTypes(ResourceLoader resourceLoader) {
         PersistenceManagedTypes proprie = new PersistenceManagedTypesScanner(resourceLoader)
-                .scan("it.govpay.console.entity");
+                .scan("it.govpay.console.entity", "it.govpay.pendenze.entity");
 
         List<String> nomiClassi = new ArrayList<>(proprie.getManagedClassNames());
         nomiClassi.add(ConnettoreEntity.class.getName());
         nomiClassi.add(ConfigurazioneEntity.class.getName());
+        nomiClassi.add(ApplicazioneEntity.class.getName());
+        nomiClassi.add(DominioEntity.class.getName());
+        nomiClassi.add(StazioneEntity.class.getName());
+        nomiClassi.add(IntermediarioEntity.class.getName());
 
-        return PersistenceManagedTypes.of(nomiClassi, List.of("it.govpay.console.entity"));
+        return PersistenceManagedTypes.of(nomiClassi,
+                List.of("it.govpay.console.entity", "it.govpay.pendenze.entity"));
     }
 
     @Value("${console.time-zone:Europe/Rome}")

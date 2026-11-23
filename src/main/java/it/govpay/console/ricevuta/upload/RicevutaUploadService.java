@@ -18,11 +18,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import it.govpay.console.audit.AuditService;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Ricevuta;
-import it.govpay.console.repository.DominioRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.ricevuta.RicevutaService;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -67,8 +67,8 @@ public class RicevutaUploadService {
     private final RicevutaXmlValidator xmlValidator;
     private final RicevutaJsonConverter jsonConverter;
     private final PaForNodeClient paForNodeClient;
-    private final RptRepository rptRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleRptRepository rptRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final RicevutaService ricevutaService;
     private final AuditService auditService;
     private final long maxSizeBytes;
@@ -80,8 +80,8 @@ public class RicevutaUploadService {
                                  RicevutaXmlValidator xmlValidator,
                                  RicevutaJsonConverter jsonConverter,
                                  PaForNodeClient paForNodeClient,
-                                 RptRepository rptRepository,
-                                 DominioRepository dominioRepository,
+                                 ConsoleRptRepository rptRepository,
+                                 ConsoleDominioRepository dominioRepository,
                                  RicevutaService ricevutaService,
                                  AuditService auditService,
                                  @Value("${app.ricevute.upload.max-size-bytes:" + DEFAULT_MAX_SIZE_BYTES + "}")

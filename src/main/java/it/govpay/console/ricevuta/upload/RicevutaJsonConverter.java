@@ -8,7 +8,7 @@ import tools.jackson.databind.ObjectMapper;
 import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Stazione;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.ricevuta.upload.bizevents.model.CtReceiptModelResponse;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.UnprocessableEntityException;
@@ -23,10 +23,10 @@ public class RicevutaJsonConverter {
 
     private final ObjectMapper objectMapper;
     private final RicevutaJsonValidator validator;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
 
     public RicevutaJsonConverter(ObjectMapper objectMapper, RicevutaJsonValidator validator,
-            DominioRepository dominioRepository) {
+            ConsoleDominioRepository dominioRepository) {
         this.objectMapper = objectMapper;
         this.validator = validator;
         this.dominioRepository = dominioRepository;

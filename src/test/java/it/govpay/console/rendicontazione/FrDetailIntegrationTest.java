@@ -1,5 +1,7 @@
 package it.govpay.console.rendicontazione;
 
+import it.govpay.pendenze.model.StatoRendicontazione;
+import it.govpay.pendenze.entity.FlussoRendicontazione;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -26,15 +28,15 @@ import it.govpay.console.entity.Acl;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rendicontazione;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RendicontazioneRepository;
+import it.govpay.console.repository.ConsoleRendicontazioneRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import jakarta.persistence.EntityManager;
@@ -60,9 +62,9 @@ class FrDetailIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
-    @Autowired private RendicontazioneRepository rendicontazioneRepository;
+    @Autowired private ConsoleRendicontazioneRepository rendicontazioneRepository;
     @Autowired private AclRepository aclRepository;
     @PersistenceContext private EntityManager entityManager;
 
@@ -199,7 +201,7 @@ class FrDetailIntegrationTest {
         fr.setRevisione(revisione);
         fr.setStato("ACCETTATA");
         fr.setIur("TRN-" + codFlusso + "-" + revisione);
-        fr.setDataOraFlusso(date(2026, 6, 20));
+        fr.setDataOraFlusso(date(2026, 6, 20).plusMinutes(revisione));
         fr.setDataRegolamento(date(2026, 6, 21));
         fr.setDataAcquisizione(date(2026, 6, 20));
         fr.setNumeroPagamenti(2L);
@@ -225,8 +227,10 @@ class FrDetailIntegrationTest {
 
     private void newRendicontazione(Long idFr, String iuv, OffsetDateTime data) {
         Rendicontazione r = new Rendicontazione();
-        r.setIdFr(idFr);
+        r.setFlusso(entityManager.getReference(FlussoRendicontazione.class, idFr));
         r.setIuv(iuv);
+        r.setIur("IUR-" + iuv);
+        r.setStato(StatoRendicontazione.OK);
         r.setData(data);
         rendicontazioneRepository.save(r);
     }

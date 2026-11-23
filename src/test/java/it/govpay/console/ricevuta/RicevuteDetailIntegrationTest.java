@@ -32,17 +32,17 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.GpAudit;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
@@ -73,12 +73,12 @@ class RicevuteDetailIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
 
     private Dominio dom;
@@ -161,15 +161,18 @@ class RicevuteDetailIntegrationTest {
         v.setTipoVersamentoDominio(tvd);
         versamentoRepository.save(v);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv("NORTIUV0002");
-        r.setCcp("CCP-NORT2");
+        r.setIur("CCP-NORT2");
         r.setCodDominio(DOM);
         r.setXmlRpt("<RPT/>".getBytes());
         r.setXmlRt(null);
         r.setDataMsgRichiesta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RPT_ATTIVATA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
 
         mvc.perform(get("/ricevute/" + DOM + "/NORTIUV0002/CCP-NORT2").with(httpBasic("op-all", PASSWORD)))
@@ -201,8 +204,11 @@ class RicevuteDetailIntegrationTest {
         v.setTipoVersamentoDominio(tvd);
         versamentoRepository.save(v);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv("IUVSTANDIN1");
-        r.setCcp("CCP-ST");
+        r.setIur("CCP-ST");
         r.setCodDominio(DOM);
         r.setXmlRpt(null);
         r.setXmlRt(xmlRt());
@@ -212,7 +218,7 @@ class RicevuteDetailIntegrationTest {
         r.setDataMsgRicevuta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
 
         mvc.perform(get("/ricevute/" + DOM + "/IUVSTANDIN1/CCP-ST").with(httpBasic("op-all", PASSWORD)))
@@ -317,8 +323,11 @@ class RicevuteDetailIntegrationTest {
         versamentoRepository.save(v);
 
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(dominio.getCodDominio());
         r.setXmlRpt(xmlRpt());
         r.setXmlRt(xmlRt());
@@ -330,7 +339,7 @@ class RicevuteDetailIntegrationTest {
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("Ricevuta accettata dalla PA");
         r.setCodPsp("PSP-X");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         return rptRepository.save(r);
     }
 

@@ -41,7 +41,7 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
@@ -49,12 +49,12 @@ import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -83,12 +83,12 @@ class RicevutaUploadIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private AclRepository aclRepository;
     @Autowired private StazioneRepository stazioneRepository;
     @Autowired private IntermediarioRepository intermediarioRepository;
@@ -289,7 +289,7 @@ class RicevutaUploadIntegrationTest {
 
     private void acquisisci(String iuv, String idRicevuta) {
         rptRepository.findByDominioAndIuv(DOM, iuv).ifPresent(rpt -> {
-            rpt.setCcp(idRicevuta);
+            rpt.setIur(idRicevuta);
             rpt.setXmlRt("<RT/>".getBytes(StandardCharsets.UTF_8));
             rpt.setDataMsgRicevuta(OffsetDateTime.now());
             rptRepository.save(rpt);
@@ -360,7 +360,7 @@ class RicevutaUploadIntegrationTest {
     void ricevutaGiaAcquisitaRitorna409SenzaChiamareIlClient() throws Exception {
         Versamento v = newVersamento("PEND-DUP");
         Rpt rpt = newRptSenzaRt(v, "IUV-DUP", "CCP-DUP");
-        rpt.setCcp("IUR-DUP");
+        rpt.setIur("IUR-DUP");
         rpt.setXmlRt("<RT/>".getBytes(StandardCharsets.UTF_8));
         rpt.setDataMsgRicevuta(OffsetDateTime.now());
         rptRepository.save(rpt);
@@ -855,11 +855,14 @@ class RicevutaUploadIntegrationTest {
 
     private Rpt newRptSenzaRt(Versamento v, String iuv, String ccp) {
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(DOM);
         r.setDataMsgRichiesta(OffsetDateTime.now());
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         r.setVersione("SANP_240");
         r.setStato("RT_MANCANTE");
         return rptRepository.save(r);

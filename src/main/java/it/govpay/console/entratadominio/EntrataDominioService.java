@@ -32,7 +32,7 @@ import it.govpay.console.model.EntrataDominioReplace;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListEntrateDominio200Response;
 import it.govpay.console.model.Pagination;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.repository.TributoRepository;
@@ -73,7 +73,7 @@ public class EntrataDominioService {
     public static final String AZIONE_AUDIT_MODIFICA = "ENTRATA_DOMINIO_MODIFICA";
 
     private final TributoRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoTributoRepository tipoTributoRepository;
     private final IbanAccreditoRepository ibanAccreditoRepository;
     private final EntrataDominioMapper mapper;
@@ -88,7 +88,7 @@ public class EntrataDominioService {
     private EntityManager entityManager;
 
     public EntrataDominioService(TributoRepository repository,
-                                 DominioRepository dominioRepository,
+                                 ConsoleDominioRepository dominioRepository,
                                  TipoTributoRepository tipoTributoRepository,
                                  IbanAccreditoRepository ibanAccreditoRepository,
                                  EntrataDominioMapper mapper,

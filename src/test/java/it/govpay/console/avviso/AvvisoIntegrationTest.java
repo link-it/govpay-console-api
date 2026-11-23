@@ -47,9 +47,9 @@ import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.DocumentoRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.repository.TributoRepository;
@@ -90,13 +90,13 @@ class AvvisoIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private StazioneRepository stazioneRepository;
     @Autowired
     private IntermediarioRepository intermediarioRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired

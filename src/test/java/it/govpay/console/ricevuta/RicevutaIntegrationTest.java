@@ -37,15 +37,15 @@ import it.govpay.console.avviso.StampeUnavailableException;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
@@ -71,12 +71,12 @@ class RicevutaIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
 
     @MockitoBean private StampeClient stampeClient;
 
@@ -155,15 +155,18 @@ class RicevutaIntegrationTest {
     private Rpt newRpt(Versamento v, String iuv, String ccp,
                        int esito, OffsetDateTime dataRicevuta, byte[] xmlRt) {
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(DOM);
         r.setXmlRt(xmlRt);
         r.setCodEsitoPagamento(esito);
         r.setImportoTotalePagato(100.0);
         r.setDataMsgRichiesta(dataRicevuta.minusHours(1));
         r.setDataMsgRicevuta(dataRicevuta);
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("Ricevuta accettata dalla PA");

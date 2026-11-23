@@ -39,8 +39,8 @@ import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.OperazioneRepository;
@@ -73,7 +73,7 @@ class TracciatoSubResourceIntegrationTest {
     @Autowired
     private AclRepository aclRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
     @Autowired
@@ -81,7 +81,7 @@ class TracciatoSubResourceIntegrationTest {
     @Autowired
     private OperazioneRepository operazioneRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private VersamentoRepository versamentoRepository;
     @Autowired

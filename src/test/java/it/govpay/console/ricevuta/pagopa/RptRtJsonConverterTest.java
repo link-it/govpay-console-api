@@ -21,7 +21,7 @@ import it.gov.pagopa.pagopa_api.pa.pafornode.PaGetPaymentV2Response;
 import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTReq;
 import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request;
 import it.gov.pagopa.pagopa_api.pa.pafornode.StOutcome;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
@@ -49,6 +49,9 @@ class RptRtJsonConverterTest {
 
 	private static Rpt rptWith(String versione, byte[] xmlRpt, byte[] xmlRt) {
 		Rpt rpt = new Rpt();
+		rpt.setCodStazione("STAZIONE-TEST");
+		rpt.setCodMsgRichiesta("MSG-RICHIESTA");
+		rpt.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
 		rpt.setVersione(versione);
 		rpt.setXmlRpt(xmlRpt);
 		rpt.setXmlRt(xmlRt);

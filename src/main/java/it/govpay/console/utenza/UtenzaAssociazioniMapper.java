@@ -22,7 +22,7 @@ import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.RuoloRef;
 import it.govpay.console.model.TipoPendenzaRef;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
@@ -46,13 +46,13 @@ public class UtenzaAssociazioniMapper {
     private final AclRepository aclRepository;
     private final UtenzaDominioRepository utenzaDominioRepository;
     private final UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoVersamentoRepository tipoVersamentoRepository;
 
     public UtenzaAssociazioniMapper(AclRepository aclRepository,
                                     UtenzaDominioRepository utenzaDominioRepository,
                                     UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository,
-                                    DominioRepository dominioRepository,
+                                    ConsoleDominioRepository dominioRepository,
                                     TipoVersamentoRepository tipoVersamentoRepository) {
         this.aclRepository = aclRepository;
         this.utenzaDominioRepository = utenzaDominioRepository;

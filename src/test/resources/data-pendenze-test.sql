@@ -1,7 +1,8 @@
 -- Fixture E2E per la suite di test integration dello scope I (issue #9).
 -- Caricata via @Sql sui test che ne hanno bisogno. Lavora su H2 in modalita'
--- PostgreSQL con schema generato da ddl-auto=create-drop sulle entity slim,
--- quindi qui usiamo SOLO le colonne effettivamente mappate dalle entity V2.
+-- PostgreSQL con schema generato da ddl-auto=create-drop sulle entity mappate
+-- (della console e di govpay-common-pendenze): le colonne NOT NULL di quelle
+-- entity vanno valorizzate anche qui.
 --
 -- Dati: 1 dominio, 1 applicazione, 1 tipo versamento, 2 pendenze (entrambe
 -- pagate), 1 SV ciascuna, 2 RT entrambe con xml_rt valorizzato.
@@ -79,19 +80,19 @@ VALUES (8002, 'SV-FIX-2-A', 'ESEGUITO', 50.0, 'Voce fixture 2', 1, 7002);
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
                  versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
-                 id_versamento)
+                 cod_stazione, cod_msg_richiesta, data_aggiornamento_stato, id_versamento)
 VALUES (9001, '1111111111111', 'CCP-FIX-001', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-1</id></RT>' AS BYTEA), 0,
         100.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-1',
-        7001);
+        'STAZIONE-FIX', 'MSG-FIX-1', CURRENT_TIMESTAMP, 7001);
 
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
                  versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
-                 id_versamento)
+                 cod_stazione, cod_msg_richiesta, data_aggiornamento_stato, id_versamento)
 VALUES (9002, '2222222222222', 'CCP-FIX-002', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-2</id></RT>' AS BYTEA), 0,
         50.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-2',
-        7002);
+        'STAZIONE-FIX', 'MSG-FIX-2', CURRENT_TIMESTAMP, 7002);

@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.security.OperatoreCorrente;
 
 /**
@@ -20,9 +20,9 @@ import it.govpay.console.security.OperatoreCorrente;
 @Component
 public class EventoAcl {
 
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
 
-    public EventoAcl(DominioRepository dominioRepository) {
+    public EventoAcl(ConsoleDominioRepository dominioRepository) {
         this.dominioRepository = dominioRepository;
     }
 

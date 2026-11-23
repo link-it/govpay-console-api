@@ -7,7 +7,7 @@ import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.stereotype.Component;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.Link;
 import it.govpay.console.model.PendenzaRef;
@@ -20,7 +20,7 @@ import it.govpay.console.ricevuta.pagopa.RptRtJsonConverter;
  * Mapper {@link Rpt} → modelli ricevuta:
  * <ul>
  *   <li>{@link #toSummary(Rpt)} — proiezione metadata-only per le liste;</li>
- *   <li>{@link #toRicevuta(Rpt)} — dettaglio canonico con conversione JSON di
+ *   <li>{@link #toRicevuta(Rpt, Versamento)} — dettaglio canonico con conversione JSON di
  *       {@code rpt}/{@code rt} (via {@link RptRtJsonConverter}), riferimento alla
  *       pendenza e hyperlink ai sub-resource.</li>
  * </ul>
@@ -45,7 +45,7 @@ public class RicevutaMapper {
         RicevutaSummary s = new RicevutaSummary();
         s.setIdDominio(rpt.getCodDominio());
         s.setIuv(rpt.getIuv());
-        s.setIdRicevuta(rpt.getCcp());
+        s.setIdRicevuta(rpt.getIur());
         s.setDataRicevuta(rpt.getDataMsgRicevuta());
         s.setCodPsp(rpt.getCodPsp());
         s.setVersione(versioneProtocollo(rpt.getVersione()));
@@ -56,14 +56,14 @@ public class RicevutaMapper {
     }
 
     /** Dettaglio canonico: i 9 metadati della summary + rpt/rt JSON + pendenza + _links. */
-    public Ricevuta toRicevuta(Rpt rpt) {
+    public Ricevuta toRicevuta(Rpt rpt, Versamento versamento) {
         if (rpt == null) {
             return null;
         }
         Ricevuta r = new Ricevuta();
         r.setIdDominio(rpt.getCodDominio());
         r.setIuv(rpt.getIuv());
-        r.setIdRicevuta(rpt.getCcp());
+        r.setIdRicevuta(rpt.getIur());
         r.setDataRicevuta(rpt.getDataMsgRicevuta());
         r.setCodPsp(rpt.getCodPsp());
         r.setVersione(versioneProtocollo(rpt.getVersione()));
@@ -74,8 +74,8 @@ public class RicevutaMapper {
         // serializza esplicitamente "rpt": null.
         r.setRpt(JsonNullable.of(rptRtJsonConverter.toRptMap(rpt)));
         r.setRt(rptRtJsonConverter.toRtMap(rpt));
-        r.setPendenza(pendenzaRef(rpt.getVersamento()));
-        r.setLinks(buildLinks(rpt));
+        r.setPendenza(pendenzaRef(versamento));
+        r.setLinks(buildLinks(rpt, versamento));
         return r;
     }
 
@@ -88,10 +88,9 @@ public class RicevutaMapper {
         return ref;
     }
 
-    private static RicevutaLinks buildLinks(Rpt rpt) {
-        String base = "/ricevute/" + rpt.getCodDominio() + "/" + rpt.getIuv() + "/" + segment(rpt.getCcp());
+    private static RicevutaLinks buildLinks(Rpt rpt, Versamento v) {
+        String base = "/ricevute/" + rpt.getCodDominio() + "/" + rpt.getIuv() + "/" + segment(rpt.getIur());
         RicevutaLinks links = new RicevutaLinks(new Link(base + "/rpt"), new Link(base + "/rt"));
-        Versamento v = rpt.getVersamento();
         if (v != null && v.getApplicazione() != null) {
             links.setPendenza(new Link(
                     "/pendenze/" + v.getApplicazione().getCodApplicazione() + "/" + v.getCodVersamentoEnte()));

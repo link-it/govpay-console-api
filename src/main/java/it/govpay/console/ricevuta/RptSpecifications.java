@@ -5,13 +5,21 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import org.hibernate.query.criteria.JpaEntityJoin;
+import org.hibernate.query.criteria.JpaRoot;
+import org.hibernate.query.sqm.tree.SqmJoinType;
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.common.LikePatterns;
 import it.govpay.console.common.VersamentoPredicates;
-import it.govpay.console.entity.Rpt;
+import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.VersamentoVisibilita;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Root;
 
 /**
  * Predicati di ricerca per la collection {@code GET /ricevute} (entità
@@ -41,11 +49,27 @@ import it.govpay.console.security.VersamentoVisibilita;
  */
 public final class RptSpecifications {
 
-    private static final String FIELD_VERSAMENTO = "versamento";
     private static final String FIELD_DATA_MSG_RICEVUTA = "dataMsgRicevuta";
     private static final String FIELD_DATA_MSG_RICHIESTA = "dataMsgRichiesta";
 
     private RptSpecifications() {
+    }
+
+    /**
+     * Join sul {@code Versamento} della ricevuta ({@code rpt.id_versamento}, FK piatta: la
+     * {@code Rpt} della libreria non ha l'associazione). Il join e' creato una sola volta per
+     * query e riusato da tutti i predicati, cosi' filtri e visibilita' lavorano sulla stessa riga.
+     */
+    @SuppressWarnings("unchecked")
+    private static From<?, Versamento> versamento(Root<Rpt> root, CriteriaBuilder cb) {
+        for (Join<Rpt, ?> join : root.getJoins()) {
+            if (Versamento.class.equals(join.getJavaType())) {
+                return (From<?, Versamento>) join;
+            }
+        }
+        JpaEntityJoin<Rpt, Versamento> join = ((JpaRoot<Rpt>) root).join(Versamento.class, SqmJoinType.INNER);
+        join.on(cb.equal(join.get("id"), root.get("idVersamento")));
+        return join;
     }
 
     public static Specification<Rpt> iuvExact(String value) {
@@ -66,7 +90,7 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("ccp"), value);
+        return (root, q, cb) -> cb.equal(root.get("iur"), value);
     }
 
     /** Limite inferiore incluso sulla data di ricezione della ricevuta ({@code data_msg_ricevuta}). */
@@ -114,7 +138,7 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, root.get(FIELD_VERSAMENTO), value);
+        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, versamento(root, cb), value);
     }
 
     /**
@@ -128,49 +152,49 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("codVersamentoEnte"), value);
+        return (root, q, cb) -> cb.equal(versamento(root, cb).get("codVersamentoEnte"), value);
     }
 
     public static Specification<Rpt> identificativoDebitoreExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, root.get(FIELD_VERSAMENTO), value);
+        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, versamento(root, cb), value);
     }
 
     public static Specification<Rpt> idUnitaOperativaExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("unitaOperativa").get("codUo"), value);
+        return (root, q, cb) -> cb.equal(versamento(root, cb).get("unitaOperativa").get("codUo"), value);
     }
 
     public static Specification<Rpt> idTipoPendenzaIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(root.get(FIELD_VERSAMENTO), values);
+        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(versamento(root, cb), values);
     }
 
     public static Specification<Rpt> direzioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.direzioneIn(root.get(FIELD_VERSAMENTO), values);
+        return (root, q, cb) -> VersamentoPredicates.direzioneIn(versamento(root, cb), values);
     }
 
     public static Specification<Rpt> divisioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.divisioneIn(root.get(FIELD_VERSAMENTO), values);
+        return (root, q, cb) -> VersamentoPredicates.divisioneIn(versamento(root, cb), values);
     }
 
     public static Specification<Rpt> tassonomiaExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get(FIELD_VERSAMENTO).get("tassonomia"), value);
+        return (root, q, cb) -> cb.equal(versamento(root, cb).get("tassonomia"), value);
     }
 
     /**
@@ -194,11 +218,11 @@ public final class RptSpecifications {
             return null;
         }
         String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get(FIELD_VERSAMENTO).get("debitoreAnagrafica")), pattern, LikePatterns.ESCAPE_CHAR);
+        return (root, q, cb) -> cb.like(cb.lower(versamento(root, cb).get("debitoreAnagrafica")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore) {
-        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root.get(FIELD_VERSAMENTO), operatore);
+        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, versamento(root, cb), operatore);
     }
 
     /**
