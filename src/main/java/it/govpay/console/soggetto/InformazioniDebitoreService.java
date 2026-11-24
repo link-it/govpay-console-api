@@ -9,12 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.Soggetto;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.pendenza.PendenzaLettura;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.web.NotFoundException;
+import it.govpay.pendenze.entity.Pendenza;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
@@ -26,8 +25,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * {@link #AZIONE_AUDIT_VISUALIZZA}. L'audit viene scritto <i>dopo</i> il mapping
  * (prima del return) per non sporcare la tabella in caso di errori a monte.
  *
- * <p>ACL: 404 anti-leak (stesso pattern di {@code AvvisoService} e
- * {@code RicevutaService}).
+ * <p>ACL: 404 anti-leak, la stessa lettura del dettaglio della pendenza.
  */
 @Service
 public class InformazioniDebitoreService {
@@ -36,16 +34,16 @@ public class InformazioniDebitoreService {
 
     private static final Logger log = LoggerFactory.getLogger(InformazioniDebitoreService.class);
 
-    private final VersamentoRepository repository;
+    private final PendenzaLettura lettura;
     private final SoggettoMapper soggettoMapper;
     private final AuditService auditService;
     private final CurrentOperatorService currentOperatorService;
 
-    public InformazioniDebitoreService(VersamentoRepository repository,
+    public InformazioniDebitoreService(PendenzaLettura lettura,
                                        SoggettoMapper soggettoMapper,
                                        AuditService auditService,
                                        CurrentOperatorService currentOperatorService) {
-        this.repository = repository;
+        this.lettura = lettura;
         this.soggettoMapper = soggettoMapper;
         this.auditService = auditService;
         this.currentOperatorService = currentOperatorService;
@@ -57,53 +55,17 @@ public class InformazioniDebitoreService {
         log.debug("getInformazioniDebitore idA2A={} idPendenza={} operatore={}",
                 idA2A, idPendenza, operatore.principal());
 
-        Versamento versamento = repository.findDetail(idA2A, idPendenza)
-                .orElseThrow(() -> new NotFoundException(
-                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
+        Pendenza pendenza = lettura.leggiVisibile(idA2A, idPendenza, operatore).pendenza();
 
-        if (!isVisibile(versamento, operatore)) {
-            log.debug("getInformazioniDebitore ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={}",
-                    idA2A, idPendenza);
-            throw new NotFoundException(
-                    "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
-        }
-
-        Soggetto soggetto = soggettoMapper.toSoggetto(versamento);
+        // Il debitore della pendenza e' quello della sua opzione di pagamento.
+        Soggetto soggetto = soggettoMapper.toSoggetto(pendenza.getOpzionePagamento().getPdDebitore().getDebitore());
 
         Map<String, Object> dettaglio = new HashMap<>();
         dettaglio.put("idA2A", idA2A);
         dettaglio.put("idPendenza", idPendenza);
         dettaglio.put("identificativoDebitore", soggetto.getIdentificativo());
-        auditService.registra(AZIONE_AUDIT_VISUALIZZA, versamento.getId(),
-                dettaglio, operatore, request);
+        auditService.registra(AZIONE_AUDIT_VISUALIZZA, pendenza.getId(), dettaglio, operatore, request);
 
         return soggetto;
-    }
-
-    private static boolean isVisibile(Versamento v, OperatoreCorrente operatore) {
-        if (!isDominioOrUoVisible(v, operatore)) {
-            return false;
-        }
-        if (!operatore.tuttiITipiVersamento()) {
-            if (v.getTipoVersamento() == null) {
-                return false;
-            }
-            return operatore.idTipiVersamentoVisibili().contains(v.getTipoVersamento().getId());
-        }
-        return true;
-    }
-
-    private static boolean isDominioOrUoVisible(Versamento v, OperatoreCorrente operatore) {
-        if (operatore.tuttiIDomini()) {
-            return true;
-        }
-        if (v.getDominio() == null) {
-            return false;
-        }
-        if (operatore.idDominiInteri().contains(v.getDominio().getId())) {
-            return true;
-        }
-        return v.getUnitaOperativa() != null
-                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId());
     }
 }

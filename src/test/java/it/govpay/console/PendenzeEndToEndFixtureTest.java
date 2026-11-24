@@ -118,6 +118,7 @@ class PendenzeEndToEndFixtureTest {
                 .andExpect(jsonPath("$.idPendenza", is("PEND-FIX-1")))
                 .andExpect(jsonPath("$._links.informazioniDebitore.href").exists())
                 .andExpect(jsonPath("$._links.ricevute.href").exists())
+                .andExpect(jsonPath("$._links.posizioneDebitoria.href").exists())
                 .andExpect(jsonPath("$._links.ricevuta").doesNotExist())
                 .andExpect(jsonPath("$._links.avviso.href").exists());
     }

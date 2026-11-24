@@ -23,6 +23,10 @@ servers:
 tags:
   - name: Pendenze
     description: Pagamenti in attesa e spontanei.
+  - name: Posizioni debitorie
+    description: |
+      Posizioni debitorie del modello v3: il raggruppamento di debitori, opzioni
+      di pagamento e pendenze.
   - name: Ricevute
     description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
   - name: Pendenze - Tracciati
@@ -1608,6 +1612,7 @@ paths:
         `_links`:
         - `informazioniDebitore` sempre presente;
         - `ricevute` sempre presente (la lista e' eventualmente vuota);
+        - `posizioneDebitoria` sempre presente (dettaglio della posizione);
         - `avviso` presente solo se `numeroAvviso != null`.
 
         `?expand=datiAllegati,proprieta` consente di includere sotto-tree
@@ -1768,12 +1773,14 @@ paths:
       operationId: getInformazioniDebitore
       summary: Dati anagrafici e contatti del debitore associato alla pendenza.
       description: |
-        Ritorna l'oggetto `Soggetto` completo (dati anagrafici e contatti del
-        soggetto pagatore). Endpoint separato dal dettaglio pendenza per
+        Ritorna l'oggetto `Soggetto` completo (dati anagrafici e contatti) del
+        debitore della pendenza, cioe' quello della sua opzione di pagamento:
+        in una posizione con piu' debitori e' il solo debitore di quella
+        pendenza, non il primo della posizione. Endpoint separato dal dettaglio pendenza per
         minimizzare l'esposizione di dati personali (scope F della issue #9).
 
-        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
-        viene restituito 404 (no leak di esistenza).
+        ACL: se l'operatore non ha visibilita' sulla pendenza (dominio, unita'
+        operativa o tipo pendenza), viene restituito 404 (no leak di esistenza).
 
         **Audit GDPR**: ogni 200 scrive una riga in `gp_audit` con azione
         `PENDENZA_VISUALIZZA_DEBITORE`, dettaglio JSON
@@ -1808,6 +1815,66 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Pendenza non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}:
+    get:
+      tags:
+        - Posizioni debitorie
+      operationId: getPosizioneDebitoria
+      summary: Dettaglio di una posizione debitoria con debitori, opzioni di pagamento e pendenze.
+      description: |
+        Restituisce la posizione identificata da `(idA2A, idPosizioneDebitoria)`, dove
+        `idPosizioneDebitoria` e' l'IUPD (`idA2A` + `idDominio` + codice documento,
+        senza separatore), lo stesso di `PendenzaSummary.posizioneDebitoria`.
+
+        I `debitori` comprendono quelli rimossi (`rimosso: true`), con le opzioni di
+        pagamento e le pendenze che li riguardano. Ogni pendenza ha la stessa forma
+        delle righe della lista.
+
+        Espone l'anagrafica completa di tutti i debitori: come `/informazioniDebitore`
+        scrive un audit.
+
+        ACL: la posizione e' visibile se l'operatore vede il dominio e l'unita'
+        operativa e almeno una delle sue pendenze (per tipo pendenza). Le pendenze di
+        tipi non visibili sono omesse, insieme alle opzioni che restano senza
+        pendenze; i debitori restano tutti. Altrimenti 404 (no leak di esistenza).
+
+        **Audit GDPR**: ogni 200 scrive una riga in `gp_audit` con azione
+        `POSIZIONE_VISUALIZZA_DEBITORI`, dettaglio JSON
+        `{idA2A, idPosizioneDebitoria, identificativiDebitori}` e IP del richiedente.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPosizioneDebitoria
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 81
+            pattern: '^[a-zA-Z0-9\-_]{1,81}$'
+      responses:
+        '200':
+          description: Posizione debitoria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosizioneDebitoria'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Posizione non trovata o non visibile per l'operatore corrente.
           content:
             application/problem+json:
               schema:
@@ -7665,6 +7732,117 @@ components:
           nullable: true
           description: Data dalla quale la posizione e' visibile al debitore. Null se pubblicata subito.
 
+    PosizioneDebitoria:
+      type: object
+      description: |
+        Posizione debitoria del modello v3: i debitori, ciascuno con le proprie opzioni
+        di pagamento, e le pendenze che le compongono.
+      required:
+        - idA2A
+        - idPosizioneDebitoria
+        - dominio
+        - descrizione
+        - dataCreazione
+        - dataUltimoAggiornamento
+        - debitori
+      properties:
+        idA2A:
+          type: string
+        idPosizioneDebitoria:
+          type: string
+          description: Identificativo unico della posizione debitoria (IUPD).
+        dominio:
+          $ref: '#/components/schemas/DominioRef'
+        unitaOperativa:
+          $ref: '#/components/schemas/UnitaOperativaRef'
+        descrizione:
+          type: string
+        dataPubblicazione:
+          type: string
+          format: date
+          nullable: true
+          description: Data dalla quale la posizione e' visibile al debitore. Null se pubblicata subito.
+        dataCreazione:
+          type: string
+          format: date-time
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+        debitori:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebitorePosizione'
+
+    DebitorePosizione:
+      type: object
+      description: Un debitore della posizione, con le opzioni di pagamento che lo riguardano.
+      required:
+        - soggetto
+        - rimosso
+        - opzioniPagamento
+      properties:
+        soggetto:
+          $ref: '#/components/schemas/Soggetto'
+        rimosso:
+          type: boolean
+          description: Il debitore e' stato rimosso dalla posizione; le sue opzioni sono annullate.
+        opzioniPagamento:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpzionePagamentoPosizione'
+
+    OpzionePagamentoPosizione:
+      type: object
+      description: Opzione di pagamento di un debitore, con le pendenze (rate) che la compongono.
+      required:
+        - idOpzionePagamento
+        - tipologia
+        - stato
+        - sendAbilitato
+        - pendenze
+      properties:
+        idOpzionePagamento:
+          type: string
+          format: uuid
+        tipologia:
+          type: string
+          enum:
+            - PIANO_RATEALE
+            - SOLUZIONE_UNICA
+            - SOLUZIONE_UNICA_ENTRO
+            - SOLUZIONE_UNICA_OLTRE
+            - SOLUZIONE_UNICA_RIDOTTO
+            - SOLUZIONE_UNICA_SCONTATO
+        giorni:
+          type: integer
+          format: int32
+          nullable: true
+          description: Termine in giorni delle sole tipologie `_ENTRO` e `_OLTRE`.
+        stato:
+          type: string
+          enum:
+            - DISPONIBILE
+            - ATTIVATA
+            - ANNULLATA
+        dataInizioValidita:
+          type: string
+          format: date
+          nullable: true
+        dataScadenza:
+          type: string
+          format: date
+          nullable: true
+        sendAbilitato:
+          type: boolean
+        sendNav:
+          type: string
+          nullable: true
+        pendenze:
+          type: array
+          description: Pendenze visibili all'operatore, per numero di rata.
+          items:
+            $ref: '#/components/schemas/PendenzaSummary'
+
     StatoVocePendenza:
       type: string
       description: Stato della voce nel modello v3.
@@ -7729,19 +7907,22 @@ components:
     PendenzaLinks:
       type: object
       description: |
-        Collezione di hyperlink relativi alla pendenza. Le chiavi `informazioniDebitore`
-        e `ricevute` sono sempre presenti; `avviso` e' condizionale (vedi descrizione di `Pendenza`).
+        Collezione di hyperlink relativi alla pendenza. Le chiavi `informazioniDebitore`,
+        `ricevute` e `posizioneDebitoria` sono sempre presenti; `avviso` e' condizionale (vedi descrizione di `Pendenza`).
         Lo schema accetta `additionalProperties` di tipo `Link` per consentire l'aggiunta
         non-breaking di chiavi future (rpp, pagamenti, allegati, ...).
       required:
         - informazioniDebitore
         - ricevute
+        - posizioneDebitoria
       properties:
         informazioniDebitore:
           $ref: '#/components/schemas/Link'
         avviso:
           $ref: '#/components/schemas/Link'
         ricevute:
+          $ref: '#/components/schemas/Link'
+        posizioneDebitoria:
           $ref: '#/components/schemas/Link'
       additionalProperties:
         $ref: '#/components/schemas/Link'

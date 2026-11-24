@@ -22,10 +22,10 @@ import jakarta.persistence.EntityManager;
  * Costruisce nei test pendenze del modello v3: una posizione debitoria con un debitore,
  * una opzione di pagamento e la pendenza.
  */
-final class PendenzaV3Fixtures {
+public final class PendenzaV3Fixtures {
 
     /** Chiavi e valori con cui creare una pendenza; i campi non obbligatori possono restare {@code null}. */
-    record Dati(
+    public record Dati(
             Long idApplicazione,
             Long idDominio,
             Long idTipoVersamento,
@@ -43,7 +43,7 @@ final class PendenzaV3Fixtures {
             String datiAllegati,
             String proprieta) {
 
-        Dati(Long idApplicazione, Long idDominio, Long idTipoVersamento, Long idTipoPendenza,
+        public Dati(Long idApplicazione, Long idDominio, Long idTipoVersamento, Long idTipoPendenza,
              Long idUnitaOperativa, String idPendenza, String numeroAvviso, String debitore,
              double importo, StatoPendenza stato, int oreDaOra) {
             this(idApplicazione, idDominio, idTipoVersamento, idTipoPendenza, idUnitaOperativa, idPendenza,
@@ -80,7 +80,7 @@ final class PendenzaV3Fixtures {
     }
 
     /** Persiste la posizione con la pendenza, in una nuova posizione per ogni pendenza. */
-    static Pendenza pendenza(EntityManager em, Dati dati) {
+    public static Pendenza pendenza(EntityManager em, Dati dati) {
         return pendenza(em, dati, null, false);
     }
 
@@ -89,7 +89,7 @@ final class PendenzaV3Fixtures {
      * ({@code primoDebitore}) e la pendenza appartiene al secondo; con {@code rimosso} il
      * debitore della pendenza e' rimosso e la sua opzione annullata.
      */
-    static Pendenza pendenzaDelSecondoDebitore(EntityManager em, Dati dati, String primoDebitore, boolean rimosso) {
+    public static Pendenza pendenzaDelSecondoDebitore(EntityManager em, Dati dati, String primoDebitore, boolean rimosso) {
         return pendenza(em, dati, primoDebitore, rimosso);
     }
 
@@ -128,14 +128,26 @@ final class PendenzaV3Fixtures {
         }
         posizione.addPdDebitore(pdDebitore);
 
+        OpzionePagamento opzione = nuovaOpzione(dati, riferimento, rimosso);
+        pdDebitore.addOpzionePagamento(opzione);
+        Pendenza pendenza = nuovaPendenza(dati, riferimento);
+        opzione.addPendenza(pendenza);
+
+        em.persist(posizione);
+        return pendenza;
+    }
+
+    private static OpzionePagamento nuovaOpzione(Dati dati, OffsetDateTime riferimento, boolean rimosso) {
         OpzionePagamento opzione = new OpzionePagamento();
         opzione.setIdOpzionePagamento(UUID.randomUUID());
         opzione.setTipologia(dati.tipologia());
         opzione.setStato(rimosso ? StatoOpzionePagamento.ANNULLATA : StatoOpzionePagamento.DISPONIBILE);
         opzione.setDataCreazione(riferimento);
         opzione.setDataUltimoAggiornamento(riferimento);
-        pdDebitore.addOpzionePagamento(opzione);
+        return opzione;
+    }
 
+    private static Pendenza nuovaPendenza(Dati dati, OffsetDateTime riferimento) {
         Pendenza pendenza = new Pendenza();
         pendenza.setIdApplicazione(dati.idApplicazione());
         pendenza.setIdDominio(dati.idDominio());
@@ -159,14 +171,23 @@ final class PendenzaV3Fixtures {
         pendenza.setProprieta(dati.proprieta());
         pendenza.setDataCreazione(riferimento);
         pendenza.setDataUltimoAggiornamento(riferimento);
-        opzione.addPendenza(pendenza);
 
-        em.persist(posizione);
+        return pendenza;
+    }
+
+    /** Aggiunge alla posizione di {@code esistente} una nuova opzione di pagamento, con la sua pendenza, per lo stesso debitore. */
+    public static Pendenza pendenzaNellaStessaPosizione(EntityManager em, Pendenza esistente, Dati dati) {
+        OffsetDateTime riferimento = OffsetDateTime.now().minusHours(dati.oreDaOra());
+        OpzionePagamento opzione = nuovaOpzione(dati, riferimento, false);
+        esistente.getOpzionePagamento().getPdDebitore().addOpzionePagamento(opzione);
+        Pendenza pendenza = nuovaPendenza(dati, riferimento);
+        opzione.addPendenza(pendenza);
+        em.persist(opzione);
         return pendenza;
     }
 
     /** Persiste la sola pendenza, senza opzione di pagamento ne' posizione debitoria. */
-    static Pendenza pendenzaSenzaOpzione(EntityManager em, Dati dati) {
+    public static Pendenza pendenzaSenzaOpzione(EntityManager em, Dati dati) {
         OffsetDateTime riferimento = OffsetDateTime.now().minusHours(dati.oreDaOra());
         Pendenza pendenza = new Pendenza();
         pendenza.setIdApplicazione(dati.idApplicazione());

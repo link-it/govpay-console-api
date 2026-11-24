@@ -327,6 +327,8 @@ class PendenzaDetailIntegrationTest {
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/ricevute")))
                 .andExpect(jsonPath("$._links.avviso.href",
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/avviso")))
+                .andExpect(jsonPath("$._links.posizioneDebitoria.href",
+                        endsWith("/posizioni-debitorie/" + APP_COD + "/" + APP_COD + COD_DOMINIO_VISIBILE + "DOC-PEND-FULL")))
                 .andExpect(jsonPath("$.tipo").doesNotExist())
                 .andExpect(jsonPath("$.tassonomia").doesNotExist())
                 .andExpect(jsonPath("$.tassonomiaAvviso").doesNotExist())
@@ -395,6 +397,7 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._links.informazioniDebitore.href", notNullValue()))
                 .andExpect(jsonPath("$._links.ricevute.href", notNullValue()))
+                .andExpect(jsonPath("$._links.posizioneDebitoria.href", notNullValue()))
                 .andExpect(jsonPath("$._links.avviso").doesNotExist());
     }
 

@@ -28,14 +28,10 @@ import it.govpay.console.model.PendenzaSummary;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.pendenze.entity.PdDebitore;
 import it.govpay.pendenze.entity.Pendenza;
-import it.govpay.pendenze.repository.PendenzaRepository;
-import it.govpay.pendenze.service.PosizioneDebitoriaService;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ListQueryValidator;
-import it.govpay.console.web.NotFoundException;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Subgraph;
@@ -59,8 +55,7 @@ public class PendenzaService {
     private static final int MAX_ID_TIPO_PENDENZA = 50;
     private static final int MAX_DIREZIONE_DIVISIONE = 50;
 
-    private final PosizioneDebitoriaService posizioneDebitoriaService;
-    private final PendenzaRepository pendenzaRepository;
+    private final PendenzaLettura lettura;
     private final UnitaOperativaRepository unitaOperativaRepository;
     private final PendenzaAnagrafiche anagrafiche;
     private final PendenzaMapper mapper;
@@ -72,8 +67,7 @@ public class PendenzaService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public PendenzaService(PosizioneDebitoriaService posizioneDebitoriaService,
-                           PendenzaRepository pendenzaRepository,
+    public PendenzaService(PendenzaLettura lettura,
                            UnitaOperativaRepository unitaOperativaRepository,
                            PendenzaAnagrafiche anagrafiche,
                            PendenzaMapper mapper,
@@ -81,8 +75,7 @@ public class PendenzaService {
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,
                            Clock clock) {
-        this.posizioneDebitoriaService = posizioneDebitoriaService;
-        this.pendenzaRepository = pendenzaRepository;
+        this.lettura = lettura;
         this.unitaOperativaRepository = unitaOperativaRepository;
         this.anagrafiche = anagrafiche;
         this.mapper = mapper;
@@ -98,31 +91,13 @@ public class PendenzaService {
         log.debug("getPendenza idA2A={} idPendenza={} expand={} operatore={}",
                 idA2A, idPendenza, expand, operatore.principal());
 
-        // Esclude le pendenze senza opzione di pagamento, che il modello non ammette.
-        Long id = posizioneDebitoriaService.trovaPendenzaPerIdentificativo(idA2A, idPendenza)
-                .map(Pendenza::getId)
-                .orElseThrow(() -> new NotFoundException(
-                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
-        // Voci, opzione di pagamento e posizione debitoria in una sola query.
-        Pendenza p = pendenzaRepository.findByIdConVociEOpzione(id)
-                .orElseThrow(() -> new NotFoundException(
-                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
-        Long idUnitaOperativa = p.getOpzionePagamento().getPosizioneDebitoria().getIdUnitaOperativa();
-
-        PendenzaAnagrafiche.Contesto contesto =
-                anagrafiche.risolviContesto(p.getIdDominio(), p.getIdTipoPendenza(), idUnitaOperativa);
-        Long idTipoVersamento = contesto.tipoVersamento() != null ? contesto.tipoVersamento().getId() : null;
-
-        if (!VersamentoVisibilita.isVisibile(p.getIdDominio(), idUnitaOperativa, idTipoVersamento,
-                () -> unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili()), operatore)) {
-            log.debug("getPendenza ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={} principal={}",
-                    idA2A, idPendenza, operatore.principal());
-            throw new NotFoundException(
-                    "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
-        }
+        PendenzaLettura.Letta letta = lettura.leggiVisibile(idA2A, idPendenza, operatore);
+        Pendenza p = letta.pendenza();
+        PendenzaAnagrafiche.Contesto contesto = letta.contesto();
 
         it.govpay.console.model.Pendenza pendenza = mapper.toDetail(idA2A, p, contesto, anagrafiche.risolviVoci(p.getVoci()), expand);
-        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza, p.getNumeroAvviso());
+        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza,
+                pendenza.getPosizioneDebitoria().getIdPosizioneDebitoria(), p.getNumeroAvviso());
         pendenza.setLinks(links);
         log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={}",
                 idPendenza, pendenza.getVoci().size(), links.getAvviso() != null);
