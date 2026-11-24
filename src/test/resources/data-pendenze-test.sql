@@ -5,7 +5,8 @@
 -- entity vanno valorizzate anche qui.
 --
 -- Dati: 1 dominio, 1 applicazione, 1 tipo versamento, 2 pendenze (entrambe
--- pagate), 1 SV ciascuna, 2 RT entrambe con xml_rt valorizzato.
+-- pagate, ciascuna con la propria posizione debitoria, debitore e opzione di
+-- pagamento), 1 SV ciascuna, 2 RT entrambe con xml_rt valorizzato.
 -- L'autenticazione (utenza + operatore con visibilita' totale) viene allestita
 -- dal @BeforeEach del test via JPA con GovpayPasswordEncoder.
 
@@ -16,6 +17,10 @@ DELETE FROM gp_audit;
 DELETE FROM rpt WHERE id IN (9001, 9002);
 DELETE FROM singoli_versamenti WHERE id IN (8001, 8002);
 DELETE FROM versamenti WHERE id IN (7001, 7002);
+DELETE FROM opzioni_pagamento WHERE id IN (9801, 9802);
+DELETE FROM pd_debitori WHERE id IN (9701, 9702);
+DELETE FROM debitori WHERE id IN (9601, 9602);
+DELETE FROM documenti WHERE id IN (9501, 9502);
 DELETE FROM tipi_vers_domini WHERE id = 6001;
 DELETE FROM tipi_versamento WHERE id = 5001;
 DELETE FROM applicazioni WHERE id = 4001;
@@ -65,6 +70,37 @@ VALUES (7002, 'PEND-FIX-2', 50.0, 50.0,
         FALSE, TRUE, 'DOVUTO', 'TARI fixture causale 2',
         '2222222222222', '022222222222222222',
         3001, 4001, 5001, 6001);
+
+-- Posizione debitoria, debitore e opzione di pagamento di ciascuna pendenza.
+INSERT INTO documenti (id, cod_documento, descrizione, id_applicazione, id_dominio,
+                       anomalo, data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9501, 'DOC-FIX-1', 'Posizione fixture 1', 4001, 3001, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+INSERT INTO documenti (id, cod_documento, descrizione, id_applicazione, id_dominio,
+                       anomalo, data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9502, 'DOC-FIX-2', 'Posizione fixture 2', 4001, 3001, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+
+INSERT INTO debitori (id, tipo, identificativo, anagrafica)
+VALUES (9601, 'F', 'RSSMRA80A01H501U', 'Mario Rossi Fixture');
+INSERT INTO debitori (id, tipo, identificativo, anagrafica)
+VALUES (9602, 'F', 'VRDLGI90B02H501T', 'Luigi Verdi Fixture');
+
+INSERT INTO pd_debitori (id, id_documento, id_debitore, posizione) VALUES (9701, 9501, 9601, 0);
+INSERT INTO pd_debitori (id, id_documento, id_debitore, posizione) VALUES (9702, 9502, 9602, 0);
+
+INSERT INTO opzioni_pagamento (id, id_opzione_pagamento, id_pd_debitore, tipologia, stato,
+                               data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9801, '00000000-0000-0000-0000-000000009801', 9701, 'SOLUZIONE_UNICA', 'ATTIVATA',
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+INSERT INTO opzioni_pagamento (id, id_opzione_pagamento, id_pd_debitore, tipologia, stato,
+                               data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9802, '00000000-0000-0000-0000-000000009802', 9702, 'SOLUZIONE_UNICA', 'ATTIVATA',
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+
+-- Colonne del modello v3 sulle pendenze.
+UPDATE versamenti SET id_opzione_pagamento = 9801, numero_rata = 1, aggiornabile = FALSE,
+                      importo_incassato = 0, send_abilitato = FALSE WHERE id = 7001;
+UPDATE versamenti SET id_opzione_pagamento = 9802, numero_rata = 1, aggiornabile = FALSE,
+                      importo_incassato = 0, send_abilitato = FALSE WHERE id = 7002;
 
 INSERT INTO singoli_versamenti (id, cod_singolo_versamento_ente, stato_singolo_versamento,
                                 importo_singolo_versamento, descrizione, indice_dati,

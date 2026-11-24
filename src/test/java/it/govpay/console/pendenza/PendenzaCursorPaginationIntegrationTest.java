@@ -250,14 +250,14 @@ class PendenzaCursorPaginationIntegrationTest {
     /** Filtro diretto su colonna (§A), rappresentativo: stato + cursor su piu' pagine. */
     @Test
     void cursorModeConFiltroStato() throws Exception {
-        // PEND-2/4/6 -> PAGATA, PEND-1/3/5/7 restano NON_PAGATA (NON_ESEGUITO, nessuna dataScadenza).
+        // PEND-2/4/6 -> ESEGUITO, PEND-1/3/5/7 restano NON_ESEGUITO (NON_ESEGUITO, nessuna dataScadenza).
         for (String id : new String[] { "PEND-2", "PEND-4", "PEND-6" }) {
             Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
             v.setStatoVersamento("ESEGUITO");
             versamentoRepository.save(v);
         }
 
-        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&stato=NON_PAGATA")
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&stato=NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
@@ -267,7 +267,7 @@ class PendenzaCursorPaginationIntegrationTest {
                 .andReturn();
         String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
 
-        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&stato=NON_PAGATA")
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&stato=NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))

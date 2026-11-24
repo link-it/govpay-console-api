@@ -136,7 +136,7 @@ class TracciatoControllerIntegrationTest {
                       "idA2A": "A2A_TEST",
                       "idPendenza": "PEND-001",
                       "voci": [
-                        {"idVocePendenza": "V1", "importo": 10.0, "descrizione": "Voce di test", "stato": "NON_PAGATA", "codEntrata": "TARI"}
+                        {"idVocePendenza": "V1", "importo": 10.0, "descrizione": "Voce di test", "stato": "NON_ESEGUITO", "codEntrata": "TARI"}
                       ]
                     }
                   ]

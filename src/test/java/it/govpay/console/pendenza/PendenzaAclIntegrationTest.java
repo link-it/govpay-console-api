@@ -8,8 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.OffsetDateTime;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +26,7 @@ import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.UtenzaTipoVersamento;
-import it.govpay.console.entity.Versamento;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -38,8 +36,11 @@ import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -70,13 +71,15 @@ class PendenzaAclIntegrationTest {
     @Autowired
     private UnitaOperativaRepository unitaOperativaRepository;
     @Autowired
-    private VersamentoRepository versamentoRepository;
-    @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private Dominio domA;
     private UnitaOperativa uoX;
     private UnitaOperativa uoY;
+    private UnitaOperativa uoEc;
     private TipoVersamento tariType;
     private TipoVersamento imuType;
     private TipoVersamentoDominio tariTvd;
@@ -102,6 +105,12 @@ class PendenzaAclIntegrationTest {
         uoY.setUoDenominazione("Polizia Locale");
         uoY.setDominio(domA);
         unitaOperativaRepository.save(uoY);
+
+        uoEc = new UnitaOperativa();
+        uoEc.setCodUo("EC");
+        uoEc.setUoDenominazione("Ente creditore");
+        uoEc.setDominio(domA);
+        unitaOperativaRepository.save(uoEc);
 
         app = new Applicazione();
         app.setCodApplicazione("APP-A");
@@ -137,25 +146,18 @@ class PendenzaAclIntegrationTest {
 
     private void newPendenza(String idPendenza, UnitaOperativa uo, TipoVersamento tv,
                              TipoVersamentoDominio tvd) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setStatoVersamento("NON_ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("CF1234567890ABCDE");
-        v.setDebitoreAnagrafica("Test");
-        v.setSrcDebitoreIdentificativo("CF1234567890ABCDE");
-        v.setImportoPagato(0.0);
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setDominio(domA);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        v.setUnitaOperativa(uo);
-        versamentoRepository.save(v);
+        Long idUo = uo != null ? uo.getId() : null;
+        Pendenza pendenza = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), domA.getId(), tv.getId(),
+                tvd.getId(), idUo, idPendenza, null, "CF1234567890ABCDE", 100.0, StatoPendenza.NON_ESEGUITO, 0));
+        em.flush();
+        if (idUo != null) {
+            // La lista legge ancora la pendenza come versamento, dove la unita' operativa
+            // e' una colonna propria.
+            em.createNativeQuery("update versamenti set id_uo = :uo where id = :id")
+                    .setParameter("uo", idUo)
+                    .setParameter("id", pendenza.getId())
+                    .executeUpdate();
+        }
     }
 
     private String newUtenzaConDominioIntero(String principal) {
@@ -255,6 +257,27 @@ class PendenzaAclIntegrationTest {
         String principal = newUtenzaConUoSpecifica("user-uox-4", uoX);
         mvc.perform(get("/pendenze/APP-A/P-TARI-NOUO").with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void pendenzaSenzaUoVisibilePerUtenteConUoEnteCreditore() throws Exception {
+        String principal = newUtenzaConUoSpecifica("user-ec", uoEc);
+        mvc.perform(get("/pendenze/APP-A/P-TARI-NOUO").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void pendenzaConUoSpecificaNonVisibilePerUtenteConUoEnteCreditore() throws Exception {
+        String principal = newUtenzaConUoSpecifica("user-ec-2", uoEc);
+        mvc.perform(get("/pendenze/APP-A/P-TARI-UOX").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void pendenzaSenzaUoVisibilePerUtenteConDominioIntero() throws Exception {
+        String principal = newUtenzaConDominioIntero("user-intero-2");
+        mvc.perform(get("/pendenze/APP-A/P-TARI-NOUO").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk());
     }
 
     // ----- ACL tipoVersamento ---------------------------------------------------

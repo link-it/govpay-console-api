@@ -132,36 +132,42 @@ public final class PendenzaSpecifications {
      * {@code ESEGUITO} che {@code ESEGUITA} in dati reali): ogni stato include
      * tutte le varianti riconosciute — un filtro piu' stretto lascerebbe fuori
      * righe che l'output mostra correttamente mappate.
-     * {@code PAGATA} include anche gli stati interni equivalenti
-     * ({@code ESEGUITO_ALTRO_CANALE}, {@code ESEGUITO_SENZA_RPT}).
-     * {@code SCADUTA} unisce il valore letterale ({@code SCADUTA}/{@code SCADUTO})
+     * {@code SCADUTO} unisce il valore letterale ({@code SCADUTA}/{@code SCADUTO})
      * con la derivazione da {@code NON_ESEGUITO} + {@code data_scadenza} passata —
      * stessa semantica di V1 (V1 {@code PendenzeDAO}:
      * {@code AbilitaFiltroNonScaduto}/{@code AbilitaFiltroScaduto}) per la parte
-     * derivata. {@code ANOMALA} e' il catch-all del mapper (valori letterali
+     * derivata. {@code ANOMALO} e' il catch-all del mapper (valori letterali
      * {@code ANOMALA}/{@code ANOMALO} + qualunque valore non riconosciuto): il
      * filtro lo esprime come {@code NOT IN} sul complemento, non un elenco chiuso,
-     * altrimenti una riga con stato grezzo ignoto sarebbe mostrata ANOMALA in
-     * output ma irraggiungibile da {@code ?stato=ANOMALA}.
+     * altrimenti una riga con stato grezzo ignoto sarebbe mostrata ANOMALO in
+     * output ma irraggiungibile da {@code ?stato=ANOMALO}.
      */
     public static Specification<Versamento> statoExact(StatoPendenza stato, OffsetDateTime now) {
         if (stato == null) {
             return null;
         }
         return switch (stato) {
-            case PAGATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA);
-            case PAGATA_PARZIALE -> (root, q, cb) ->
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA_PARZIALE);
-            case RICONCILIATA -> (root, q, cb) ->
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.RICONCILIATA);
-            case ANNULLATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ANNULLATA);
-            case ANOMALA -> (root, q, cb) ->
+            case ESEGUITO -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ESEGUITO);
+            case ESEGUITO_ALTRO_CANALE -> (root, q, cb) ->
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ESEGUITO_ALTRO_CANALE);
+            case ESEGUITO_SENZA_RPT -> (root, q, cb) ->
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ESEGUITO_SENZA_RPT);
+            case PARZIALMENTE_ESEGUITO -> (root, q, cb) ->
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PARZIALMENTE_ESEGUITO);
+            case INCASSATO -> (root, q, cb) ->
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.INCASSATO);
+            case ANNULLATO -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ANNULLATO);
+            case ANOMALO -> (root, q, cb) ->
                     cb.not(root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ALTRI_STATI_NOTI));
-            case NON_PAGATA -> (root, q, cb) -> cb.and(
+            case NON_ESEGUITO -> (root, q, cb) -> cb.and(
                     root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
                     cb.or(cb.isNull(root.get(FIELD_DATA_SCADENZA)), cb.greaterThanOrEqualTo(root.get(FIELD_DATA_SCADENZA), now)));
-            case SCADUTA -> (root, q, cb) -> cb.or(
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.SCADUTA_LETTERALE),
+            // La data di pubblicazione sta sulla posizione debitoria, che la lettura per
+            // Versamento non vede: finche' la lista non passa al modello v3 nessuna riga
+            // e' classificabile come NON_PUBBLICATA.
+            case NON_PUBBLICATA -> (root, q, cb) -> cb.disjunction();
+            case SCADUTO -> (root, q, cb) -> cb.or(
+                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.SCADUTO_LETTERALE),
                     cb.and(
                             root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
                             cb.isNotNull(root.get(FIELD_DATA_SCADENZA)),

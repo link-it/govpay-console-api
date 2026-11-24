@@ -27,4 +27,12 @@ public interface UnitaOperativaRepository
      */
     @Query("SELECT DISTINCT u.dominio.id FROM UnitaOperativa u WHERE u.id IN :ids")
     Set<Long> findDistinctDominioIdsByIdIn(@Param("ids") Set<Long> ids);
+
+    /**
+     * Domini la cui unita' operativa dell'ente creditore ({@code EC}) e' tra quelle
+     * indicate. Serve alla visibilita' delle pendenze senza unita' operativa, che
+     * equivalgono a quelle dell'unita' {@code EC} del loro dominio.
+     */
+    @Query("SELECT DISTINCT u.dominio.id FROM UnitaOperativa u WHERE u.id IN :ids AND u.codUo = 'EC'")
+    Set<Long> findDominioIdsConUoEcTra(@Param("ids") Set<Long> ids);
 }

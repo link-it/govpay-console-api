@@ -1,6 +1,7 @@
 package it.govpay.console.security;
 
 import java.util.Set;
+import java.util.function.Supplier;
 
 import it.govpay.console.entity.Versamento;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -74,6 +75,38 @@ public final class VersamentoVisibilita {
                 return false;
             }
             return operatore.idTipiVersamentoVisibili().contains(v.getTipoVersamento().getId());
+        }
+        return true;
+    }
+
+    /**
+     * Check post-fetch su una pendenza del modello v3, identificata dalle chiavi dei
+     * suoi assi: l'unita' operativa sta sulla posizione debitoria e puo' mancare.
+     * Una pendenza senza unita' operativa equivale a quella {@code EC} del suo dominio:
+     * e' visibile a chi ha quella unita' operativa.
+     *
+     * @param idUo                       unita' operativa della posizione, o {@code null}
+     * @param idTipoVersamento           tipo versamento globale (non il tipo del dominio)
+     * @param dominiConUoEcVisibile      domini di cui l'operatore ha la unita' operativa
+     *                                   {@code EC}; letto solo se serve
+     */
+    public static boolean isVisibile(Long idDominio, Long idUo, Long idTipoVersamento,
+                                     Supplier<Set<Long>> dominiConUoEcVisibile, OperatoreCorrente operatore) {
+        if (!operatore.tuttiIDomini()) {
+            if (idDominio == null) {
+                return false;
+            }
+            boolean visibile = operatore.idDominiInteri().contains(idDominio)
+                    || (idUo != null && operatore.idUoVisibili().contains(idUo))
+                    || (idUo == null && !isEmpty(operatore.idUoVisibili())
+                            && dominiConUoEcVisibile.get().contains(idDominio));
+            if (!visibile) {
+                return false;
+            }
+        }
+        if (!operatore.tuttiITipiVersamento()) {
+            return idTipoVersamento != null
+                    && operatore.idTipiVersamentoVisibili().contains(idTipoVersamento);
         }
         return true;
     }

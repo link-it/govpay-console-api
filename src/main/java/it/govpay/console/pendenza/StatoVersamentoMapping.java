@@ -6,13 +6,13 @@ import java.util.stream.Stream;
 import it.govpay.console.model.StatoPendenza;
 
 /**
- * Fonte unica della traduzione fra {@code stato_versamento} (V1, stringa grezza,
- * genere non garantito nei dati reali) e {@link StatoPendenza} (V2). Usata sia
+ * Fonte unica della traduzione fra {@code stato_versamento} (stringa grezza,
+ * genere non garantito nei dati reali) e {@link StatoPendenza}. Usata sia
  * da {@link PendenzaMapper} (mapping in lettura) sia da {@link PendenzaSpecifications}
  * (filtro {@code ?stato=}): le due derivazioni condividono questi gruppi invece di
  * ridefinirli ciascuna per conto proprio, per non poter divergere silenziosamente.
  *
- * <p>{@code ANOMALA} non ha un proprio elenco chiuso di valori grezzi: e' il
+ * <p>{@code ANOMALO} non ha un proprio elenco chiuso di valori grezzi: e' il
  * catch-all per tutto cio' che non rientra negli altri gruppi (compresi i
  * letterali {@code ANOMALA}/{@code ANOMALO} e qualunque valore sconosciuto),
  * esattamente come nel mapper. {@link #ALTRI_STATI_NOTI} espone il complemento,
@@ -20,21 +20,23 @@ import it.govpay.console.model.StatoPendenza;
  */
 final class StatoVersamentoMapping {
 
-    static final List<String> PAGATA =
-            List.of("ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO", "ESEGUITO_ALTRO_CANALE", "ESEGUITO_SENZA_RPT");
+    static final List<String> ESEGUITO = List.of("ESEGUITA", "ESEGUITO", "PAGATA", "PAGATO");
+    static final List<String> ESEGUITO_ALTRO_CANALE = List.of("ESEGUITO_ALTRO_CANALE");
+    static final List<String> ESEGUITO_SENZA_RPT = List.of("ESEGUITO_SENZA_RPT");
     static final List<String> NON_ESEGUITO =
             List.of("NON_ESEGUITA", "NON_ESEGUITO", "NON_PAGATA", "NON_PAGATO");
-    static final List<String> PAGATA_PARZIALE = List.of(
+    static final List<String> PARZIALMENTE_ESEGUITO = List.of(
             "ESEGUITA_PARZIALE", "ESEGUITO_PARZIALE", "PAGATA_PARZIALE", "PAGATO_PARZIALE", "PARZIALMENTE_ESEGUITO");
-    static final List<String> RICONCILIATA =
+    static final List<String> INCASSATO =
             List.of("INCASSATA", "INCASSATO", "RICONCILIATA", "RICONCILIATO");
-    static final List<String> ANNULLATA = List.of("ANNULLATA", "ANNULLATO");
-    static final List<String> SCADUTA_LETTERALE = List.of("SCADUTA", "SCADUTO");
-    static final List<String> ANOMALA_LETTERALE = List.of("ANOMALA", "ANOMALO");
+    static final List<String> ANNULLATO = List.of("ANNULLATA", "ANNULLATO");
+    static final List<String> SCADUTO_LETTERALE = List.of("SCADUTA", "SCADUTO");
+    static final List<String> ANOMALO_LETTERALE = List.of("ANOMALA", "ANOMALO");
 
-    /** Unione di tutti i gruppi diversi da ANOMALA: il complemento per il catch-all. */
+    /** Unione di tutti i gruppi diversi da ANOMALO: il complemento per il catch-all. */
     static final List<String> ALTRI_STATI_NOTI = Stream.of(
-                    PAGATA, NON_ESEGUITO, PAGATA_PARZIALE, RICONCILIATA, ANNULLATA, SCADUTA_LETTERALE)
+                    ESEGUITO, ESEGUITO_ALTRO_CANALE, ESEGUITO_SENZA_RPT, NON_ESEGUITO,
+                    PARZIALMENTE_ESEGUITO, INCASSATO, ANNULLATO, SCADUTO_LETTERALE)
             .flatMap(List::stream)
             .toList();
 
@@ -42,37 +44,43 @@ final class StatoVersamentoMapping {
     }
 
     /**
-     * Mapping diretto, senza la derivazione SCADUTA-da-{@code dataScadenza} (che
+     * Mapping diretto, senza la derivazione SCADUTO-da-{@code dataScadenza} (che
      * dipende anche da {@code now} e resta responsabilita' del chiamante: vedi
      * {@link PendenzaMapper#mapStato} per la lettura, {@link PendenzaSpecifications#statoExact}
      * per il filtro).
      */
     static StatoPendenza baseMap(String raw) {
         String normalized = raw.trim().toUpperCase();
-        if (PAGATA.contains(normalized)) {
-            return StatoPendenza.PAGATA;
+        if (ESEGUITO.contains(normalized)) {
+            return StatoPendenza.ESEGUITO;
+        }
+        if (ESEGUITO_ALTRO_CANALE.contains(normalized)) {
+            return StatoPendenza.ESEGUITO_ALTRO_CANALE;
+        }
+        if (ESEGUITO_SENZA_RPT.contains(normalized)) {
+            return StatoPendenza.ESEGUITO_SENZA_RPT;
         }
         if (NON_ESEGUITO.contains(normalized)) {
-            return StatoPendenza.NON_PAGATA;
+            return StatoPendenza.NON_ESEGUITO;
         }
-        if (PAGATA_PARZIALE.contains(normalized)) {
-            return StatoPendenza.PAGATA_PARZIALE;
+        if (PARZIALMENTE_ESEGUITO.contains(normalized)) {
+            return StatoPendenza.PARZIALMENTE_ESEGUITO;
         }
-        if (RICONCILIATA.contains(normalized)) {
-            return StatoPendenza.RICONCILIATA;
+        if (INCASSATO.contains(normalized)) {
+            return StatoPendenza.INCASSATO;
         }
-        if (ANNULLATA.contains(normalized)) {
-            return StatoPendenza.ANNULLATA;
+        if (ANNULLATO.contains(normalized)) {
+            return StatoPendenza.ANNULLATO;
         }
-        if (SCADUTA_LETTERALE.contains(normalized)) {
-            return StatoPendenza.SCADUTA;
+        if (SCADUTO_LETTERALE.contains(normalized)) {
+            return StatoPendenza.SCADUTO;
         }
-        return StatoPendenza.ANOMALA;
+        return StatoPendenza.ANOMALO;
     }
 
-    /** {@code true} se il valore grezzo rientra in un gruppo esplicito (incluso ANOMALA letterale). */
+    /** {@code true} se il valore grezzo rientra in un gruppo esplicito (incluso ANOMALO letterale). */
     static boolean isRiconosciuto(String raw) {
         String normalized = raw.trim().toUpperCase();
-        return ALTRI_STATI_NOTI.contains(normalized) || ANOMALA_LETTERALE.contains(normalized);
+        return ALTRI_STATI_NOTI.contains(normalized) || ANOMALO_LETTERALE.contains(normalized);
     }
 }

@@ -145,7 +145,7 @@ class PendenzaControllerIntegrationTest {
         newPendenza("PEND-C-001", domC, app, tv, tvdC, null, "RSSMRA80A01H501U", null, 999.0,
                 "NON_ESEGUITO", 6);
 
-        // Pendenza non eseguita ma con data scadenza nel PASSATO -> stato V2 derivato a SCADUTA.
+        // Pendenza non eseguita ma con data scadenza nel PASSATO -> stato derivato a SCADUTO.
         Versamento scaduta = new Versamento();
         scaduta.setCodVersamentoEnte("PEND-SCADUTA");
         scaduta.setImportoTotale(42.0);
@@ -166,7 +166,7 @@ class PendenzaControllerIntegrationTest {
         scaduta.setTipoVersamentoDominio(tvdA);
         versamentoRepository.save(scaduta);
 
-        // Pendenza non eseguita con data scadenza nel FUTURO -> stato V2 = NON_PAGATA.
+        // Pendenza non eseguita con data scadenza nel FUTURO -> stato = NON_ESEGUITO.
         Versamento futura = new Versamento();
         futura.setCodVersamentoEnte("PEND-FUTURA");
         futura.setImportoTotale(15.0);
@@ -387,8 +387,8 @@ class PendenzaControllerIntegrationTest {
     }
 
     @Test
-    void filterByStatoNonPagataEsludeScaduta() throws Exception {
-        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "NON_PAGATA")
+    void filterByStatoNonEseguitoEsludeScaduto() throws Exception {
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza",
@@ -396,26 +396,22 @@ class PendenzaControllerIntegrationTest {
     }
 
     @Test
-    void filterByStatoScadutaSoloNonEseguiteScadute() throws Exception {
-        mvc.perform(get("/pendenze").param("stato", "SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+    void filterByStatoScadutoSoloNonEseguiteScadute() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "SCADUTO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-SCADUTA")));
     }
 
     @Test
-    void filterByStatoPagata() throws Exception {
-        mvc.perform(get("/pendenze").param("stato", "PAGATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+    void filterByStatoEseguito() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "ESEGUITO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
     }
 
-    /**
-     * Stati interni equivalenti a ESEGUITO (bug scoperto lavorando su #66,
-     * corretto anche in {@link PendenzaMapper#mapStato}): il filtro deve
-     * trovarli, non solo il mapper di output.
-     */
+    /** Gli stati ESEGUITO_ALTRO_CANALE e ESEGUITO_SENZA_RPT sono stati a se', non varianti di ESEGUITO. */
     @Test
-    void filterByStatoPagataIncludeStatiInterniEquivalenti() throws Exception {
+    void filterByStatoEseguitoAltroCanaleESenzaRptSonoDistinti() throws Exception {
         Versamento altroCanale = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
         altroCanale.setStatoVersamento("ESEGUITO_ALTRO_CANALE");
         versamentoRepository.save(altroCanale);
@@ -424,11 +420,26 @@ class PendenzaControllerIntegrationTest {
         senzaRpt.setStatoVersamento("ESEGUITO_SENZA_RPT");
         versamentoRepository.save(senzaRpt);
 
-        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "PAGATA")
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[*].idPendenza",
-                        containsInAnyOrder("PEND-A-001", "PEND-A-002", "PEND-A-003")));
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "ESEGUITO_ALTRO_CANALE")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "ESEGUITO_SENZA_RPT")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-003")));
+    }
+
+    /** NON_PUBBLICATA dipende dalla posizione debitoria, che la lista non legge ancora: nessun risultato. */
+    @Test
+    void filterByStatoNonPubblicataNonTrovaNulla() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "NON_PUBBLICATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", org.hamcrest.Matchers.empty()));
     }
 
     /** Acceptance criteria issue #66: valore V1 non valido per 'stato' elenca i valori ammessi. */
@@ -438,30 +449,30 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType("application/problem+json"))
                 .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Valori ammessi")))
-                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("NON_PAGATA")))
-                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("PAGATA")));
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("NON_ESEGUITO")))
+                .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("ESEGUITO")));
     }
 
     @Test
-    void filterByStatoAnnullata() throws Exception {
-        mvc.perform(get("/pendenze").param("stato", "ANNULLATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+    void filterByStatoAnnullato() throws Exception {
+        mvc.perform(get("/pendenze").param("stato", "ANNULLATO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-B-002")));
     }
 
     /**
      * Il mapper mappa lo stato grezzo letterale SCADUTA/SCADUTO direttamente a
-     * SCADUTA, indipendentemente da data_scadenza: il filtro deve trovarla,
+     * SCADUTO, indipendentemente da data_scadenza: il filtro deve trovarla,
      * non solo la variante derivata da NON_ESEGUITO + scadenza passata.
      */
     @Test
-    void filterByStatoScadutaTrovaAncheIlValoreGrezzoLetterale() throws Exception {
+    void filterByStatoScadutoTrovaAncheIlValoreGrezzoLetterale() throws Exception {
         Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
         v.setStatoVersamento("SCADUTA");
         v.setDataScadenza(null);
         versamentoRepository.save(v);
 
-        mvc.perform(get("/pendenze").param("stato", "SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+        mvc.perform(get("/pendenze").param("stato", "SCADUTO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza",
                         containsInAnyOrder("PEND-A-001", "PEND-SCADUTA")));
@@ -470,31 +481,31 @@ class PendenzaControllerIntegrationTest {
     /**
      * PARZIALMENTE_ESEGUITO e' il nome V1 canonico dello stato (oltre alle
      * varianti ESEGUITA_PARZIALE/ESEGUITO_PARZIALE): il mapper lo mostra come
-     * PAGATA_PARZIALE, quindi il filtro deve trovarlo con lo stesso nome.
+     * PARZIALMENTE_ESEGUITO, quindi il filtro deve trovarlo con lo stesso nome.
      */
     @Test
-    void filterByStatoPagataParzialeTrovaAncheParzialmenteEseguito() throws Exception {
+    void filterByStatoParzialmenteEseguitoTrovaAncheLeVarianti() throws Exception {
         Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
         v.setStatoVersamento("PARZIALMENTE_ESEGUITO");
         versamentoRepository.save(v);
 
-        mvc.perform(get("/pendenze").param("stato", "PAGATA_PARZIALE").with(httpBasic(PRINCIPAL, PASSWORD)))
+        mvc.perform(get("/pendenze").param("stato", "PARZIALMENTE_ESEGUITO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
     }
 
     /**
-     * ANOMALA nel mapper e' il catch-all per qualunque valore grezzo non
+     * ANOMALO nel mapper e' il catch-all per qualunque valore grezzo non
      * riconosciuto: il filtro deve trovare anche quelle righe, non solo i
      * letterali ANOMALA/ANOMALO.
      */
     @Test
-    void filterByStatoAnomalaTrovaAncheValoriGrezziSconosciuti() throws Exception {
+    void filterByStatoAnomaloTrovaAncheValoriGrezziSconosciuti() throws Exception {
         Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
         v.setStatoVersamento("QUALCOSA_DI_INESISTENTE");
         versamentoRepository.save(v);
 
-        mvc.perform(get("/pendenze").param("stato", "ANOMALA").with(httpBasic(PRINCIPAL, PASSWORD)))
+        mvc.perform(get("/pendenze").param("stato", "ANOMALO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
     }
@@ -631,16 +642,16 @@ class PendenzaControllerIntegrationTest {
         TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
                 .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
 
-        // Dentro il range richiesto, NON_PAGATA: deve comparire.
+        // Dentro il range richiesto, NON_ESEGUITO: deve comparire.
         salvaVersamentoCombinazione("PEND-COMBO-DENTRO", dom, app, tv, tvd, "NON_ESEGUITO", 1, null);
         // Dentro il range richiesto, ma PAGATA: non deve comparire (stato non combacia).
         salvaVersamentoCombinazione("PEND-COMBO-PAGATA", dom, app, tv, tvd, "ESEGUITO", 1, null);
-        // Fuori dal range richiesto (10 giorni fa), NON_PAGATA: non deve comparire (data non combacia).
+        // Fuori dal range richiesto (10 giorni fa), NON_ESEGUITO: non deve comparire (data non combacia).
         salvaVersamentoCombinazione("PEND-COMBO-FUORI-RANGE", dom, app, tv, tvd, "NON_ESEGUITO", 10, null);
 
         java.time.LocalDate oggi = java.time.LocalDate.now();
         mvc.perform(get("/pendenze").param("idPendenza", "PEND-COMBO")
-                        .param("stato", "NON_PAGATA")
+                        .param("stato", "NON_ESEGUITO")
                         .param("dataDa", oggi.minusDays(2).toString()).param("dataA", oggi.toString())
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -674,7 +685,7 @@ class PendenzaControllerIntegrationTest {
     /** ACL prevale anche sui nuovi filtri: dominio non visibile -> lista vuota, non 403. */
     @Test
     void aclPrevaleSuNuoviFiltri() throws Exception {
-        mvc.perform(get("/pendenze").param("idDominio", "33333333333").param("stato", "NON_PAGATA")
+        mvc.perform(get("/pendenze").param("idDominio", "33333333333").param("stato", "NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", empty()));
@@ -793,7 +804,7 @@ class PendenzaControllerIntegrationTest {
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].idA2A", is(APP_COD)))
-                .andExpect(jsonPath("$.results[0].stato", is("NON_PAGATA")))
+                .andExpect(jsonPath("$.results[0].stato", is("NON_ESEGUITO")))
                 .andExpect(jsonPath("$.results[0].importo", is(100.0)))
                 .andExpect(jsonPath("$.results[0].causale", org.hamcrest.Matchers.notNullValue()))
                 // dataValidita e' una data pura (format: date): nessun orario nel payload.
@@ -880,7 +891,7 @@ class PendenzaControllerIntegrationTest {
         mvc.perform(get("/pendenze").param("idPendenza", "PEND-SCADUTA")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].stato", is("SCADUTA")));
+                .andExpect(jsonPath("$.results[0].stato", is("SCADUTO")));
     }
 
     @Test
@@ -888,7 +899,7 @@ class PendenzaControllerIntegrationTest {
         mvc.perform(get("/pendenze").param("idPendenza", "PEND-FUTURA")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].stato", is("NON_PAGATA")));
+                .andExpect(jsonPath("$.results[0].stato", is("NON_ESEGUITO")));
     }
 
     // ---- Issue #66 scope B: idA2A, idTipoPendenza ----
@@ -920,7 +931,7 @@ class PendenzaControllerIntegrationTest {
         versamentoRepository.save(v);
 
         mvc.perform(get("/pendenze").param("idDominio", "11111111111")
-                        .param("idA2A", "APP-B").param("stato", "NON_PAGATA")
+                        .param("idA2A", "APP-B").param("stato", "NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
@@ -995,7 +1006,7 @@ class PendenzaControllerIntegrationTest {
         salvaVersamentoTipo("PEND-IMU-PAGATA", dom, app, imu, tvdImu, "ESEGUITO");
 
         mvc.perform(get("/pendenze").param("idDominio", "11111111111")
-                        .param("idTipoPendenza", "TARI,IMU").param("stato", "NON_PAGATA")
+                        .param("idTipoPendenza", "TARI,IMU").param("stato", "NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza",

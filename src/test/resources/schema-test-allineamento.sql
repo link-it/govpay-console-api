@@ -23,3 +23,10 @@ ALTER TABLE documenti ALTER COLUMN versione SET NULL;
 -- binarie: H2 le genera di 255 byte, in produzione sono bytea.
 ALTER TABLE rpt ALTER COLUMN xml_rt SET DATA TYPE BYTEA;
 ALTER TABLE rpt ALTER COLUMN xml_rpt SET DATA TYPE BYTEA;
+
+-- Le entity di govpay-common-pendenze generano la chiave con IDENTITY (in produzione la
+-- colonna ha come default il valore della sequence), la console con la sequence: la tabella
+-- di test e' creata dalla mappatura della console, quindi la chiave riceve lo stesso default.
+ALTER TABLE documenti ALTER COLUMN id SET DEFAULT NEXT VALUE FOR seq_documenti;
+ALTER TABLE versamenti ALTER COLUMN id SET DEFAULT NEXT VALUE FOR seq_versamenti;
+ALTER TABLE singoli_versamenti ALTER COLUMN id SET DEFAULT NEXT VALUE FOR seq_singoli_versamenti;

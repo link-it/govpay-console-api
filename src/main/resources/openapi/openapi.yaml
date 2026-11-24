@@ -7563,28 +7563,115 @@ components:
     StatoPendenza:
       type: string
       description: |
-        Stato della pendenza in V2.
-        Mapping rispetto agli stati V1:
-        - V1 `ESEGUITA` -> V2 `PAGATA`
-        - V1 `NON_ESEGUITA` -> V2 `NON_PAGATA`
-        - V1 `ESEGUITA_PARZIALE` -> V2 `PAGATA_PARZIALE`
-        - V1 `INCASSATA` -> V2 `RICONCILIATA`
-        - V1 `ANNULLATA`/`SCADUTA`/`ANOMALA` -> identici in V2.
+        Stato della pendenza nel modello v3.
+        - `NON_ESEGUITO`: da pagare.
+        - `NON_PUBBLICATA`: da pagare ma non ancora visibile al debitore, perche'
+          la posizione debitoria ha una data di pubblicazione futura (derivato).
+        - `SCADUTO`: da pagare con data di scadenza passata (derivato).
+        - `ESEGUITO`: pagata.
+        - `PARZIALMENTE_ESEGUITO`: pagata parzialmente.
+        - `ESEGUITO_ALTRO_CANALE`: pagata fuori da pagoPA.
+        - `ESEGUITO_SENZA_RPT`: pagata senza richiesta di pagamento telematico.
+        - `INCASSATO`: pagata e riconciliata.
+        - `ANNULLATO`: annullata.
+        - `ANOMALO`: in anomalia.
+        `NON_PUBBLICATA` e `SCADUTO` non sono memorizzati: il server li calcola
+        a partire da `NON_ESEGUITO` e dalla data corrente.
       enum:
-        - NON_PAGATA
-        - PAGATA
-        - PAGATA_PARZIALE
-        - ANNULLATA
-        - SCADUTA
-        - RICONCILIATA
-        - ANOMALA
+        - NON_ESEGUITO
+        - NON_PUBBLICATA
+        - SCADUTO
+        - ESEGUITO
+        - PARZIALMENTE_ESEGUITO
+        - ESEGUITO_ALTRO_CANALE
+        - ESEGUITO_SENZA_RPT
+        - INCASSATO
+        - ANNULLATO
+        - ANOMALO
+
+    RiferimentoDebitore:
+      type: object
+      description: |
+        Debitore dell'opzione di pagamento della pendenza: solo tipo e
+        identificativo. Anagrafica e contatti sono esposti soltanto da
+        `/informazioniDebitore`.
+      required:
+        - tipo
+        - identificativo
+      properties:
+        tipo:
+          type: string
+          description: F = persona fisica, G = persona giuridica.
+          enum:
+            - F
+            - G
+        identificativo:
+          type: string
+          description: CF (16 char) o PIVA (11 cifre).
+
+    OpzionePagamentoRef:
+      type: object
+      description: |
+        Opzione di pagamento a cui appartiene la pendenza, all'interno della
+        posizione debitoria.
+      required:
+        - idOpzionePagamento
+        - tipologia
+        - stato
+      properties:
+        idOpzionePagamento:
+          type: string
+          format: uuid
+        tipologia:
+          type: string
+          description: |
+            `PIANO_RATEALE`: pendenze pagabili a rate. `SOLUZIONE_UNICA`: un solo
+            pagamento. Le varianti `_ENTRO`, `_OLTRE`, `_RIDOTTO`, `_SCONTATO` sono
+            soluzioni uniche legate a una soglia di tempo o a una riduzione.
+          enum:
+            - PIANO_RATEALE
+            - SOLUZIONE_UNICA
+            - SOLUZIONE_UNICA_ENTRO
+            - SOLUZIONE_UNICA_OLTRE
+            - SOLUZIONE_UNICA_RIDOTTO
+            - SOLUZIONE_UNICA_SCONTATO
+        stato:
+          type: string
+          description: |
+            `DISPONIBILE`: scelta possibile. `ATTIVATA`: scelta dal debitore, le
+            alternative non sono piu' pagabili. `ANNULLATA`: non piu' pagabile.
+          enum:
+            - DISPONIBILE
+            - ATTIVATA
+            - ANNULLATA
+        numeroRata:
+          type: integer
+          format: int32
+          nullable: true
+          description: Posizione della pendenza nel piano rateale. Null per le soluzioni uniche.
+
+    PosizioneDebitoriaRef:
+      type: object
+      description: Posizione debitoria che raggruppa la pendenza.
+      required:
+        - idPosizioneDebitoria
+      properties:
+        idPosizioneDebitoria:
+          type: string
+          description: Identificativo unico della posizione debitoria (IUPD).
+        dataPubblicazione:
+          type: string
+          format: date
+          nullable: true
+          description: Data dalla quale la posizione e' visibile al debitore. Null se pubblicata subito.
 
     StatoVocePendenza:
       type: string
+      description: Stato della voce nel modello v3.
       enum:
-        - NON_PAGATA
-        - PAGATA
-        - ANOMALA
+        - NON_ESEGUITO
+        - ESEGUITO
+        - ANOMALO
 
     StatoAvviso:
       type: string
@@ -7830,7 +7917,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/UnitaOperativaRef'
           nullable: true
-          description: Null per pendenze non assegnate a una unita' operativa.
+          description: |
+            Null per pendenze non assegnate a una unita' operativa o assegnate
+            all'ente creditore stesso (unita' operativa `EC`).
         importo:
           type: number
           format: double
@@ -7861,18 +7950,29 @@ components:
     Pendenza:
       description: |
         Dettaglio canonico di una pendenza. Composizione: `PendenzaSummary` + dati
-        propri + `voci` embedded inline (max 5 items, sempre presente) + sub-tree
-        opt-in (`datiAllegati`, `proprieta`) + `_links` (con `informazioniDebitore`
-        sempre presente).
+        propri + `opzionePagamento` e `posizioneDebitoria` (collocazione nel
+        modello v3) + `voci` embedded inline (max 5 items, sempre presente) +
+        sub-tree opt-in (`datiAllegati`, `proprieta`) + `_links` (con
+        `informazioniDebitore` sempre presente).
+        `debitore` riporta solo tipo e identificativo del debitore dell'opzione;
         `soggettoPagatore` NON e' nel body: per i dati anagrafici/contatti del
         debitore il client chiama `/informazioniDebitore`.
       allOf:
         - $ref: '#/components/schemas/PendenzaSummary'
         - type: object
           required:
+            - debitore
+            - opzionePagamento
+            - posizioneDebitoria
             - voci
             - _links
           properties:
+            debitore:
+              $ref: '#/components/schemas/RiferimentoDebitore'
+            opzionePagamento:
+              $ref: '#/components/schemas/OpzionePagamentoRef'
+            posizioneDebitoria:
+              $ref: '#/components/schemas/PosizioneDebitoriaRef'
             descrizione:
               type: string
             documento:
