@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component;
 
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operazione;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.console.model.AnnullamentoPendenza;
 import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.EsitoOperazionePendenza;
@@ -42,8 +43,8 @@ public class OperazionePendenzaMapper {
                 StatoOperazioneMapping.map(op.getStato()));
         dto.setDescrizioneStato(JsonNullable.of(op.getDettaglioEsito()));
         dto.setIdentificativoPendenza(JsonNullable.of(op.getCodVersamentoEnte()));
-        Versamento versamento = op.getVersamento();
-        dto.setNumeroAvviso(JsonNullable.of(versamento != null ? versamento.getNumeroAvviso() : null));
+        Pendenza pendenza = op.getPendenza();
+        dto.setNumeroAvviso(JsonNullable.of(pendenza != null ? pendenza.getNumeroAvviso() : null));
         dto.setIdDominio(JsonNullable.of(op.getCodDominio()));
         dto.setLinks(new OperazionePendenzaSummaryLinks()
                 .self(new Link("/pendenze/tracciati/" + op.getTracciato().getId()
@@ -64,9 +65,10 @@ public class OperazionePendenzaMapper {
         Dominio dominio = op.getTracciato().getDominio();
         dto.setEnteCreditore(new DominioRef(dominio.getCodDominio()).ragioneSociale(dominio.getRagioneSociale()));
 
-        Versamento versamento = op.getVersamento();
-        if (versamento != null) {
-            dto.setSoggettoPagatore(soggettoMapper.toSoggetto(versamento));
+        // Il soggetto pagatore e' il debitore dell'opzione della pendenza: senza opzione non c'e'.
+        Debitore debitore = debitoreDi(op.getPendenza());
+        if (debitore != null) {
+            dto.setSoggettoPagatore(soggettoMapper.toSoggetto(debitore));
         }
         if (op.getApplicazione() != null) {
             dto.setApplicazione(JsonNullable.of(op.getApplicazione().getCodApplicazione()));
@@ -75,6 +77,13 @@ public class OperazionePendenzaMapper {
         dto.setRichiesta(JsonNullable.of(parseRichiesta(op)));
         dto.setRisposta(JsonNullable.of(parseRisposta(op)));
         return dto;
+    }
+
+    private static Debitore debitoreDi(Pendenza pendenza) {
+        if (pendenza == null || pendenza.getOpzionePagamento() == null) {
+            return null;
+        }
+        return pendenza.getOpzionePagamento().getPdDebitore().getDebitore();
     }
 
     private OperazionePendenzaAllOfRichiesta parseRichiesta(Operazione op) {

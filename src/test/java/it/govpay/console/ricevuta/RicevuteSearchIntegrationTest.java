@@ -33,7 +33,12 @@ import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
@@ -44,7 +49,6 @@ import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 
 /**
  * Integration test della collection top-level {@code GET /ricevute} (scope B/F
@@ -69,7 +73,7 @@ class RicevuteSearchIntegrationTest {
     @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
+    @PersistenceContext private EntityManager em;
     @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private UnitaOperativaRepository unitaOperativaRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
@@ -264,9 +268,8 @@ class RicevuteSearchIntegrationTest {
         uo.setDominio(domA);
         unitaOperativaRepository.save(uo);
 
-        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
-        v.setUnitaOperativa(uo);
-        versamentoRepository.save(v);
+        Pendenza v = pendenza("PEND-AAAAAAAAAA1");
+        v.getOpzionePagamento().getPosizioneDebitoria().setIdUnitaOperativa(uo.getId());
 
         mvc.perform(get("/ricevute?idUnitaOperativa=UO-RIC-1").with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
@@ -305,14 +308,12 @@ class RicevuteSearchIntegrationTest {
     @Test
     void filterByDirezioneEDivisioneMultiplo() throws Exception {
         String p = utenteDominiStar("u-dirdiv");
-        Versamento v1 = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        Pendenza v1 = pendenza("PEND-AAAAAAAAAA1");
         v1.setDirezione("DIR-1");
         v1.setDivisione("DIV-1");
-        versamentoRepository.save(v1);
-        Versamento v2 = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA2").orElseThrow();
+        Pendenza v2 = pendenza("PEND-AAAAAAAAAA2");
         v2.setDirezione("DIR-2");
         v2.setDivisione("DIV-2");
-        versamentoRepository.save(v2);
 
         mvc.perform(get("/ricevute?direzione=DIR-1,DIR-2").with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
@@ -326,9 +327,8 @@ class RicevuteSearchIntegrationTest {
     @Test
     void filterByTassonomia() throws Exception {
         String p = utenteDominiStar("u-tassonomia");
-        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
+        Pendenza v = pendenza("PEND-AAAAAAAAAA1");
         v.setTassonomia("TAX-001");
-        versamentoRepository.save(v);
 
         mvc.perform(get("/ricevute?tassonomia=TAX-001").with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
@@ -369,9 +369,8 @@ class RicevuteSearchIntegrationTest {
     @Test
     void filterByAnagraficaDebitorePartialCaseInsensitive() throws Exception {
         String p = utenteDominiStar("u-anagrafica");
-        Versamento v = versamentoRepository.findDetail(app.getCodApplicazione(), "PEND-AAAAAAAAAA1").orElseThrow();
-        v.setDebitoreAnagrafica("Anna Verdi");
-        versamentoRepository.save(v);
+        Pendenza v = pendenza("PEND-AAAAAAAAAA1");
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Anna Verdi");
 
         // le altre 4 righe fixture hanno "Mario Rossi": contains su "ver", case-insensitive.
         mvc.perform(get("/ricevute?anagraficaDebitore=VER").with(httpBasic(p, PASSWORD)))
@@ -459,24 +458,13 @@ class RicevuteSearchIntegrationTest {
     void escludeRtSenzaDataPagamento() throws Exception {
         String p = utenteDominiStar("u-nodata");
         // RT presente (xml_rt) ma senza data pagamento: non ordinabile/cursorabile → esclusa.
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-NODATA");
-        v.setImportoTotale(10.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), domA.getId(),
+                tvA.getId(), tvdA.getId(), null, "PEND-NODATA", null, "RSSMRA80A01H501U", 10.0,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(10.0);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(date(2026, 6, 19));
-        v.setDataOraUltimoAggiornamento(date(2026, 6, 19));
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(domA);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tvA);
-        v.setTipoVersamentoDominio(tvdA);
-        versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(date(2026, 6, 19));
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");
         r.setCodMsgRichiesta("MSG-RICHIESTA");
@@ -653,6 +641,11 @@ class RicevuteSearchIntegrationTest {
         return dominioRepository.save(d);
     }
 
+    private Pendenza pendenza(String idPendenza) {
+        return em.createQuery("select p from Pendenza p where p.idPendenza = :id", Pendenza.class)
+                .setParameter("id", idPendenza).getSingleResult();
+    }
+
     private TipoVersamento newTipoVersamento(String cod) {
         TipoVersamento tv = new TipoVersamento();
         tv.setCodTipoVersamento(cod);
@@ -681,24 +674,13 @@ class RicevuteSearchIntegrationTest {
     private void newRpt(Dominio dominio, TipoVersamento tv, TipoVersamentoDominio tvd,
                         String iuv, String ccp, OffsetDateTime dataRichiesta, OffsetDateTime dataRicevuta,
                         double importo, String versione) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-" + iuv);
-        v.setImportoTotale(importo);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                tv.getId(), tvd.getId(), null, "PEND-" + iuv, null, "RSSMRA80A01H501U", importo,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(importo);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(dataRicevuta);
-        v.setDataOraUltimoAggiornamento(dataRicevuta);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(dataRicevuta);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
 
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");
@@ -724,24 +706,13 @@ class RicevuteSearchIntegrationTest {
     private void newRptSenzaRt(Dominio dominio, TipoVersamento tipo, TipoVersamentoDominio tipoDom,
                                String iuv, String ccp) {
         OffsetDateTime data = date(2026, 6, 19);
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-" + ccp);
-        v.setImportoTotale(10.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                tipo.getId(), tipoDom.getId(), null, "PEND-" + ccp, null, "RSSMRA80A01H501U", 10.0,
+                StatoPendenza.NON_ESEGUITO, 0));
         v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
         v.setDataCreazione(data);
-        v.setDataOraUltimoAggiornamento(data);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tipo);
-        v.setTipoVersamentoDominio(tipoDom);
-        versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(data);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
 
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");

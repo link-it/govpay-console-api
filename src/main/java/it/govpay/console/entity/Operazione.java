@@ -1,5 +1,6 @@
 package it.govpay.console.entity;
 
+import it.govpay.pendenze.entity.Pendenza;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -65,7 +66,7 @@ public class Operazione {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_versamento")
-    private Versamento versamento;
+    private Pendenza pendenza;
 
     @Column(name = "dati_richiesta", columnDefinition = "BYTEA")
     private byte[] datiRichiesta;
@@ -161,12 +162,12 @@ public class Operazione {
         this.applicazione = applicazione;
     }
 
-    public Versamento getVersamento() {
-        return versamento;
+    public Pendenza getPendenza() {
+        return pendenza;
     }
 
-    public void setVersamento(Versamento versamento) {
-        this.versamento = versamento;
+    public void setPendenza(Pendenza pendenza) {
+        this.pendenza = pendenza;
     }
 
     public byte[] getDatiRichiesta() {

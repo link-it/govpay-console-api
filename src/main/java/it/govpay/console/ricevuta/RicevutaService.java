@@ -22,9 +22,9 @@ import it.govpay.console.audit.AuditService;
 import it.govpay.console.avviso.StampeClient;
 import it.govpay.console.entity.Incasso;
 import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.pendenze.entity.Rendicontazione;
 import it.govpay.pendenze.entity.Rpt;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Ricevuta;
 import it.govpay.console.model.RicevutaSummary;
@@ -32,13 +32,14 @@ import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.ConsolePagamentoRepository;
 import it.govpay.console.repository.ConsoleRendicontazioneRepository;
 import it.govpay.console.repository.ConsoleRptRepository;
-import it.govpay.console.repository.ConsoleRptRepository.RptConVersamento;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.repository.ConsoleRptRepository.RptConPendenza;
+import it.govpay.console.pendenza.PendenzaLettura;
+import it.govpay.console.repository.ConsoleDominioRepository;
+import it.govpay.console.repository.ConsolePendenzaRepository;
 import it.govpay.console.ricevuta.pagopa.RptRtJsonConverter;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.NotAcceptableMediaTypeException;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.stampe.client.model.Receipt;
@@ -70,7 +71,9 @@ public class RicevutaService {
     public static final String AZIONE_AUDIT_VISUALIZZA = "RICEVUTA_VISUALIZZA";
 
     private final ConsoleRptRepository rptRepository;
-    private final VersamentoRepository versamentoRepository;
+    private final ConsolePendenzaRepository pendenzaRepository;
+    private final PendenzaLettura pendenzaLettura;
+    private final ConsoleDominioRepository dominioRepository;
     private final RicevutaMapper ricevutaMapper;
     private final RicevutaPdfPayloadMapper pdfPayloadMapper;
     private final StampeClient stampeClient;
@@ -85,7 +88,9 @@ public class RicevutaService {
     private final VoceRicevutaMapper voceRicevutaMapper;
 
     public RicevutaService(ConsoleRptRepository rptRepository,
-                           VersamentoRepository versamentoRepository,
+                           ConsolePendenzaRepository pendenzaRepository,
+                           PendenzaLettura pendenzaLettura,
+                           ConsoleDominioRepository dominioRepository,
                            RicevutaMapper ricevutaMapper,
                            RicevutaPdfPayloadMapper pdfPayloadMapper,
                            StampeClient stampeClient,
@@ -99,7 +104,9 @@ public class RicevutaService {
                            AclAuthorizer aclAuthorizer,
                            VoceRicevutaMapper voceRicevutaMapper) {
         this.rptRepository = rptRepository;
-        this.versamentoRepository = versamentoRepository;
+        this.pendenzaRepository = pendenzaRepository;
+        this.pendenzaLettura = pendenzaLettura;
+        this.dominioRepository = dominioRepository;
         this.ricevutaMapper = ricevutaMapper;
         this.pdfPayloadMapper = pdfPayloadMapper;
         this.stampeClient = stampeClient;
@@ -124,20 +131,19 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public Ricevuta getDetail(String idDominio, String iuv, String idRicevuta, HttpServletRequest request) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        RptConVersamento caricata = rptRepository.findConVersamentoByKey(idDominio, iuv, idRicevuta)
+        RptConPendenza caricata = rptRepository.findConPendenzaByKey(idDominio, iuv, idRicevuta)
                 .orElseThrow(() -> new NotFoundException(
                         "Ricevuta non trovata: idDominio=" + idDominio + ", iuv=" + iuv
                                 + ", idRicevuta=" + idRicevuta));
         Rpt rpt = caricata.rpt();
-        Versamento versamento = caricata.versamento();
-        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
+        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
             log.debug("getRicevuta ACL nega l'accesso (404 anti-leak) idDominio={} iuv={} idRicevuta={}",
                     idDominio, iuv, idRicevuta);
             throw new NotFoundException(
                     "Ricevuta non trovata: idDominio=" + idDominio + ", iuv=" + iuv
                             + ", idRicevuta=" + idRicevuta);
         }
-        Ricevuta dto = ricevutaMapper.toRicevuta(rpt, versamento);
+        Ricevuta dto = ricevutaMapper.toRicevuta(rpt, caricata.pendenza(), caricata.idA2A());
         popolaVoci(dto, rpt);
         auditService.registra(AZIONE_AUDIT_VISUALIZZA, rpt.getId(),
                 auditDettaglio(idDominio, iuv, idRicevuta, "ricevuta"), operatore, request);
@@ -195,14 +201,14 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public List<RicevutaSummary> listByPendenza(String idA2A, String idPendenza) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        Versamento versamento = versamentoRepository.findDetail(idA2A, idPendenza)
+        Pendenza pendenza = pendenzaRepository.findPerIdentificativo(idA2A, idPendenza)
                 .orElseThrow(() -> new NotFoundException(
                         "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
-        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
+        if (!pendenzaLettura.isVisibile(pendenza, operatore)) {
             throw new NotFoundException(
                     "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
         }
-        return rptRepository.findByPendenza(idA2A, idPendenza).stream()
+        return rptRepository.findByIdPendenza(pendenza.getId()).stream()
                 .map(ricevutaMapper::toSummary)
                 .toList();
     }
@@ -217,7 +223,7 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> getRpt(String idDominio, String iuv, String idRicevuta,
                                          HttpServletRequest request, HttpServletResponse response) {
-        RptConVersamento caricata = loadVisibile(idDominio, iuv, idRicevuta);
+        RptConPendenza caricata = loadVisibile(idDominio, iuv, idRicevuta);
         Rpt rpt = caricata.rpt();
         MediaType chosen = chooseContentType(request, false);
         if (MediaType.APPLICATION_XML.equals(chosen)) {
@@ -244,7 +250,7 @@ public class RicevutaService {
     @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> getRt(String idDominio, String iuv, String idRicevuta,
                                         HttpServletRequest request, HttpServletResponse response) {
-        RptConVersamento caricata = loadVisibile(idDominio, iuv, idRicevuta);
+        RptConPendenza caricata = loadVisibile(idDominio, iuv, idRicevuta);
         Rpt rpt = caricata.rpt();
         MediaType chosen = chooseContentType(request, true);
         if (MediaType.APPLICATION_XML.equals(chosen)) {
@@ -254,7 +260,7 @@ public class RicevutaService {
             return null;
         }
         if (MediaType.APPLICATION_PDF.equals(chosen)) {
-            streamReceiptPdf(rpt, caricata.versamento(), "ricevuta-" + iuv + ".pdf", response);
+            streamReceiptPdf(rpt, caricata.pendenza(), "ricevuta-" + iuv + ".pdf", response);
             audit(rpt, idDominio, iuv, idRicevuta, "rt", "pdf", request);
             return null;
         }
@@ -267,11 +273,11 @@ public class RicevutaService {
     }
 
     /** Carica la RT per chiave applicando l'ACL (404 anti-leak, nessun audit sul 404). */
-    private RptConVersamento loadVisibile(String idDominio, String iuv, String idRicevuta) {
+    private RptConPendenza loadVisibile(String idDominio, String iuv, String idRicevuta) {
         OperatoreCorrente operatore = currentOperatorService.get();
-        RptConVersamento caricata = rptRepository.findConVersamentoByKey(idDominio, iuv, idRicevuta)
+        RptConPendenza caricata = rptRepository.findConPendenzaByKey(idDominio, iuv, idRicevuta)
                 .orElseThrow(() -> new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta)));
-        if (!VersamentoVisibilita.isVisibile(caricata.versamento(), operatore)) {
+        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
             throw new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta));
         }
         return caricata;
@@ -303,8 +309,9 @@ public class RicevutaService {
         }
     }
 
-    private void streamReceiptPdf(Rpt rpt, Versamento versamento, String filename, HttpServletResponse response) {
-        Receipt payload = pdfPayloadMapper.toReceipt(rpt, versamento);
+    private void streamReceiptPdf(Rpt rpt, Pendenza pendenza, String filename, HttpServletResponse response) {
+        Receipt payload = pdfPayloadMapper.toReceipt(rpt, pendenza,
+                dominioRepository.findById(pendenza.getIdDominio()).orElse(null));
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
         try {

@@ -25,7 +25,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Incasso;
 import it.govpay.pendenze.entity.Pagamento;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.console.riconciliazione.RiscossioniResolver.RiferimentoPendenza;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.NuovaRiconciliazione;
 import it.govpay.console.model.Riconciliazione;
@@ -323,7 +323,7 @@ public class RiconciliazioneUpsertService {
         Map<String, Dominio> domini = Map.of(dominio.getCodDominio(), dominio);
         List<Pagamento> riscossioni = pagamentoRepository.findByIdIncassoOrderByDataPagamentoAsc(incasso.getId());
         Map<Long, String> iurRptById = riscossioniResolver.loadIurRpt(riscossioni);
-        Map<Long, SingoloVersamento> svById = riscossioniResolver.loadSingoliVersamenti(riscossioni);
+        Map<Long, RiferimentoPendenza> svById = riscossioniResolver.loadPendenze(riscossioni);
         return mapper.toDetail(incasso, domini, riscossioni, iurRptById, svById);
     }
 }

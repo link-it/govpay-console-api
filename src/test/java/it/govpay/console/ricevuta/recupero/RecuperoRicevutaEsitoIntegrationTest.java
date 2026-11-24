@@ -32,7 +32,15 @@ import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import it.govpay.pendenze.repository.PosizioneDebitoriaRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.config.OperazioniProperties;
 import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
 import it.govpay.console.model.AclServizio;
@@ -46,7 +54,6 @@ import it.govpay.console.repository.RtRecuperoRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 
 /**
  * Test dedicato agli esiti di {@code POST /ricevute/recuperi} che dipendono
@@ -80,7 +87,9 @@ class RecuperoRicevutaEsitoIntegrationTest {
     @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
+    @PersistenceContext private EntityManager em;
+    @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private PosizioneDebitoriaRepository posizioneDebitoriaRepository;
     @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private RtRecuperoRepository rtRecuperoRepository;
     @Autowired private AclRepository aclRepository;
@@ -139,9 +148,9 @@ class RecuperoRicevutaEsitoIntegrationTest {
         rptRepository.findAll().stream()
                 .filter(r -> DOM.equals(r.getCodDominio()))
                 .forEach(rptRepository::delete);
-        versamentoRepository.findAll().stream()
-                .filter(v -> dominio.getId().equals(v.getDominio().getId()))
-                .forEach(versamentoRepository::delete);
+        posizioneDebitoriaRepository.findAll().stream()
+                .filter(p -> dominio.getId().equals(p.getIdDominio()))
+                .forEach(posizioneDebitoriaRepository::delete);
         tipoVersamentoDominioRepository.delete(tvd);
         tipoVersamentoRepository.delete(tv);
         applicazioneRepository.delete(app);
@@ -150,7 +159,7 @@ class RecuperoRicevutaEsitoIntegrationTest {
 
     @Test
     void rigaScomparsaRitorna201ConLaRicevuta() throws Exception {
-        Versamento v = newVersamento("PEND-ESITO-201");
+        Pendenza v = newVersamento("PEND-ESITO-201");
         newRptSenzaRt(v, "IUV-ESITO-201", "CCP-ESITO-201");
         // Simula l'acquisizione reale fatta dal batch (core, fuori scope qui):
         // la RT diventa disponibile sulla riga rpt *prima* che la riga di
@@ -176,7 +185,7 @@ class RecuperoRicevutaEsitoIntegrationTest {
 
     @Test
     void rigaMarcataNonDisponibileRitorna404() throws Exception {
-        Versamento v = newVersamento("PEND-ESITO-404");
+        Pendenza v = newVersamento("PEND-ESITO-404");
         newRptSenzaRt(v, "IUV-ESITO-404", "CCP-ESITO-404");
         simulaBatch((idDominio, iuv, iur) -> rtRecuperoRepository
                 .findByCodDominioAndIuvAndIur(idDominio, iuv, iur)
@@ -193,7 +202,7 @@ class RecuperoRicevutaEsitoIntegrationTest {
 
     @Test
     void rigaConEsitoSconosciutoRitorna202NonErrore() throws Exception {
-        Versamento v = newVersamento("PEND-ESITO-202");
+        Pendenza v = newVersamento("PEND-ESITO-202");
         newRptSenzaRt(v, "IUV-ESITO-202", "CCP-ESITO-202");
         simulaBatch((idDominio, iuv, iur) -> rtRecuperoRepository
                 .findByCodDominioAndIuvAndIur(idDominio, iuv, iur)
@@ -217,7 +226,7 @@ class RecuperoRicevutaEsitoIntegrationTest {
      */
     @Test
     void batchGiaInEsecuzioneNonRitorna409() throws Exception {
-        Versamento v = newVersamento("PEND-ESITO-409");
+        Pendenza v = newVersamento("PEND-ESITO-409");
         newRptSenzaRt(v, "IUV-ESITO-409", "CCP-ESITO-409");
         doThrow(new it.govpay.console.web.ConflictException("batch gia' in esecuzione"))
                 .when(operazioneBatchClient).run(anyString(), anyBoolean());
@@ -273,36 +282,27 @@ class RecuperoRicevutaEsitoIntegrationTest {
 
     // ----- fixture helpers -------------------------------------------------------------
 
-    private Versamento newVersamento(String idPendenza) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setDebitoreIndirizzo("Via Roma");
-        v.setDebitoreCivico("1");
-        v.setDebitoreCap("00100");
-        v.setDebitoreLocalita("Roma");
-        v.setDebitoreProvincia("RM");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setCausaleVersamento("TARI 2026");
-        v.setIuvVersamento(idPendenza);
-        v.setNumeroAvviso("012345678901234567");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+    private Pendenza newVersamento(String idPendenza) {
+        return new TransactionTemplate(transactionManager).execute(stato -> {
+            Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                    tv.getId(), tvd.getId(), null, idPendenza, "012345678901234567", "RSSMRA80A01H501U", 100.0,
+                    StatoPendenza.ESEGUITO, 0));
+            v.setImportoPagato(0.0);
+            v.setDataCreazione(OffsetDateTime.now());
+            v.setDataUltimoAggiornamento(OffsetDateTime.now());
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setIndirizzo("Via Roma");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setCivico("1");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setCap("00100");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setLocalita("Roma");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setProvincia("RM");
+            v.setCausaleVersamento("TARI 2026");
+            v.setIuv(idPendenza);
+            return v;
+        });
     }
 
-    private Rpt newRptSenzaRt(Versamento v, String iuv, String ccp) {
+    private Rpt newRptSenzaRt(Pendenza v, String iuv, String ccp) {
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");
         r.setCodMsgRichiesta("MSG-RICHIESTA");

@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Incasso;
 import it.govpay.pendenze.entity.Pagamento;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.console.riconciliazione.RiscossioniResolver.RiferimentoPendenza;
 import it.govpay.console.eventi.EventoAcl;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Riconciliazione;
@@ -81,7 +81,7 @@ public class RiconciliazioneDetailService {
                 .toList();
 
         Map<Long, String> iurRptById = riscossioniResolver.loadIurRpt(riscossioni);
-        Map<Long, SingoloVersamento> singoliVersamentiById = riscossioniResolver.loadSingoliVersamenti(riscossioni);
+        Map<Long, RiferimentoPendenza> singoliVersamentiById = riscossioniResolver.loadPendenze(riscossioni);
 
         Riconciliazione dto = mapper.toDetail(incasso, domini, riscossioni, iurRptById, singoliVersamentiById);
         return ResponseEntity.ok()

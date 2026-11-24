@@ -11,11 +11,11 @@ import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.RtRecupero;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.ConsoleRptRepository;
-import it.govpay.console.repository.ConsoleRptRepository.RptConVersamento;
+import it.govpay.console.repository.ConsoleRptRepository.RptConPendenza;
+import it.govpay.console.pendenza.PendenzaLettura;
 import it.govpay.console.repository.RtRecuperoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.ConflictException;
 import it.govpay.console.web.NotFoundException;
 import jakarta.persistence.EntityManager;
@@ -37,13 +37,17 @@ public class RtRecuperoUpsertService {
     private final RtRecuperoRepository rtRecuperoRepository;
     private final AclAuthorizer aclAuthorizer;
 
+    private final PendenzaLettura pendenzaLettura;
+
     @PersistenceContext
     private EntityManager entityManager;
 
     public RtRecuperoUpsertService(ConsoleRptRepository rptRepository,
+                                   PendenzaLettura pendenzaLettura,
                                    RtRecuperoRepository rtRecuperoRepository,
                                    AclAuthorizer aclAuthorizer) {
         this.rptRepository = rptRepository;
+        this.pendenzaLettura = pendenzaLettura;
         this.rtRecuperoRepository = rtRecuperoRepository;
         this.aclAuthorizer = aclAuthorizer;
     }
@@ -52,11 +56,11 @@ public class RtRecuperoUpsertService {
     public RtRecupero upsert(String idDominio, String iuv, String idRicevuta, OperatoreCorrente operatore) {
         aclAuthorizer.requireScrittura(AclServizio.PAGAMENTI);
 
-        RptConVersamento caricata = rptRepository.findConVersamentoByDominioAndIuv(idDominio, iuv)
+        RptConPendenza caricata = rptRepository.findConPendenzaByDominioAndIuv(idDominio, iuv)
                 .orElseThrow(() -> new NotFoundException(
                         "Pagamento non trovato: idDominio=" + idDominio + ", iuv=" + iuv + "."));
         Rpt rpt = caricata.rpt();
-        if (!VersamentoVisibilita.isVisibile(caricata.versamento(), operatore)) {
+        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
             throw new AccessDeniedException(
                     "L'operatore '" + operatore.principal() + "' non ha visibilità sul dominio '" + idDominio + "'.");
         }

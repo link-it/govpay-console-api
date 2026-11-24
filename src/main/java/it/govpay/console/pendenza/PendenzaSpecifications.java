@@ -9,9 +9,8 @@ import java.util.Set;
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.common.LikePatterns;
-import it.govpay.console.entity.Applicazione;
+import it.govpay.console.common.PendenzaPredicates;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.VersamentoVisibilita;
@@ -87,8 +86,8 @@ public final class PendenzaSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(
-                cb.upper(pdDebitore(root).get("debitore").<String>get("identificativo")), value.toUpperCase());
+        return (root, q, cb) -> PendenzaPredicates.identificativoDebitoreExact(cb,
+                pdDebitore(root).get("debitore"), value);
     }
 
     /** Limite inferiore incluso sulla data di creazione ({@code data_creazione}). */
@@ -121,7 +120,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> root.<String>get("direzione").in(values);
+        return (root, q, cb) -> PendenzaPredicates.direzioneIn(root, values);
     }
 
     /** Semantica OR fra i valori: {@code versamenti.divisione IN (...)}. */
@@ -129,19 +128,14 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> root.<String>get("divisione").in(values);
+        return (root, q, cb) -> PendenzaPredicates.divisioneIn(root, values);
     }
 
     public static Specification<Pendenza> idA2AExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> {
-            Subquery<Long> sub = q.subquery(Long.class);
-            Root<Applicazione> applicazione = sub.from(Applicazione.class);
-            sub.select(applicazione.get(FIELD_ID)).where(cb.equal(applicazione.get("codApplicazione"), value));
-            return root.<Long>get("idApplicazione").in(sub);
-        };
+        return (root, q, cb) -> PendenzaPredicates.idA2AExact(cb, q, root, value);
     }
 
     /** Semantica OR fra i codici: {@code id_tipo_versamento IN (tipi con quel codice)}. */
@@ -149,12 +143,7 @@ public final class PendenzaSpecifications {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> {
-            Subquery<Long> sub = q.subquery(Long.class);
-            Root<TipoVersamento> tipo = sub.from(TipoVersamento.class);
-            sub.select(tipo.get(FIELD_ID)).where(tipo.get("codTipoVersamento").in(values));
-            return root.<Long>get("idTipoVersamento").in(sub);
-        };
+        return (root, q, cb) -> PendenzaPredicates.idTipoPendenzaIn(cb, q, root, values);
     }
 
     /**

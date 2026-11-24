@@ -25,7 +25,7 @@ import it.govpay.console.dominio.DominioLogoCodec;
 import it.govpay.console.entity.Dominio;
 import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.UnitaOperativa;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.ricevuta.pagopa.JaxbUtils;
 import it.govpay.console.ricevuta.pagopa.RptRtConversionException;
@@ -43,7 +43,7 @@ import jakarta.xml.bind.JAXBException;
  * tramite microservizio {@code govpay-stampe}.
  *
  * <p>Allineato a V1 ({@code RicevutaTelematica.java}, {@code RicevutaTelematicaPdf}) sui dati
- * di Dominio/Versamento/Rpt. A differenza di una prima versione di questo mapper, data
+ * di Dominio/Pendenza/Rpt. A differenza di una prima versione di questo mapper, data
  * applicativa, data operazione, soggetto pagatore e voci sono letti dall'XML della RT (e,
  * solo per {@code dataOperazione} in SANP_230, dall'XML della RPT originale) — non dai dati
  * correnti della pendenza: sono gli stessi identificativi/importi/anagrafiche che pagoPA ha
@@ -90,15 +90,18 @@ public class RicevutaPdfPayloadMapper {
         this.pagopaLogoBase64 = pagopaLogoBase64;
     }
 
-    public Receipt toReceipt(Rpt rpt, Versamento v) {
-        Dominio d = v != null ? v.getDominio() : null;
+    /**
+     * @param p pendenza della ricevuta
+     * @param d dominio della pendenza
+     */
+    public Receipt toReceipt(Rpt rpt, Pendenza p, Dominio d) {
         DatiStoriciRicevuta dati = datiStoriciDi(rpt);
 
         Receipt receipt = new Receipt();
         receipt.setCreditorLogo(creditorLogoOf(d));
         receipt.setPagopaLogo(pagopaLogoBase64);
-        receipt.setPaymentSubject(tronca(v != null && v.getCausaleVersamento() != null
-                ? CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()) : null, MAX_OGGETTO));
+        receipt.setPaymentSubject(tronca(p != null && p.getCausaleVersamento() != null
+                ? CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()) : null, MAX_OGGETTO));
         receipt.setOrganization(mapOrganization(d));
         receipt.setPayer(dati.payer());
         receipt.setPsp(tronca(pspOf(rpt), MAX_PSP));

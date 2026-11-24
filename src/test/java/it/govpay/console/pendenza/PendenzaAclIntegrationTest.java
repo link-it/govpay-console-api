@@ -147,17 +147,8 @@ class PendenzaAclIntegrationTest {
     private void newPendenza(String idPendenza, UnitaOperativa uo, TipoVersamento tv,
                              TipoVersamentoDominio tvd) {
         Long idUo = uo != null ? uo.getId() : null;
-        Pendenza pendenza = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), domA.getId(), tv.getId(),
+        PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), domA.getId(), tv.getId(),
                 tvd.getId(), idUo, idPendenza, null, "CF1234567890ABCDE", 100.0, StatoPendenza.NON_ESEGUITO, 0));
-        em.flush();
-        if (idUo != null) {
-            // La lista legge ancora la pendenza come versamento, dove la unita' operativa
-            // e' una colonna propria.
-            em.createNativeQuery("update versamenti set id_uo = :uo where id = :id")
-                    .setParameter("uo", idUo)
-                    .setParameter("id", pendenza.getId())
-                    .executeUpdate();
-        }
     }
 
     private String newUtenzaConDominioIntero(String principal) {

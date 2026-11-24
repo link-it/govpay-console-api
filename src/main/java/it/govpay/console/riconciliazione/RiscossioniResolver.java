@@ -8,27 +8,32 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
-import it.govpay.pendenze.entity.Pagamento;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.repository.ConsoleRptRepository;
-import it.govpay.console.repository.SingoloVersamentoRepository;
+import it.govpay.pendenze.entity.Pagamento;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 /**
- * Batch-fetch di {@code Rpt}/{@link SingoloVersamento} per una lista di
- * {@link Pagamento}, necessari a {@link RiconciliazioneMapper} per risolvere
- * {@code _links.ricevuta}/{@code _links.pendenza} — condiviso tra
- * {@link RiconciliazioneDetailService} e la registrazione (`PUT`, caso
- * idempotente con riscossioni già presenti) per evitare la duplicazione.
+ * Lettura in blocco di {@code Rpt} e pendenza per una lista di {@link Pagamento}, necessarie a
+ * {@link RiconciliazioneMapper} per risolvere {@code _links.ricevuta}/{@code _links.pendenza}:
+ * condiviso tra {@link RiconciliazioneDetailService} e la registrazione (`PUT`, caso
+ * idempotente con riscossioni già presenti) per evitare la duplicazione. Una query per
+ * risorsa, indipendente dal numero di riscossioni.
  */
 @Component
 public class RiscossioniResolver {
 
-    private final ConsoleRptRepository rptRepository;
-    private final SingoloVersamentoRepository singoloVersamentoRepository;
+    /** Riferimento pubblico di una pendenza: {@code (idA2A, idPendenza)}. */
+    public record RiferimentoPendenza(String idA2A, String idPendenza) {
+    }
 
-    public RiscossioniResolver(ConsoleRptRepository rptRepository, SingoloVersamentoRepository singoloVersamentoRepository) {
+    private final ConsoleRptRepository rptRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public RiscossioniResolver(ConsoleRptRepository rptRepository) {
         this.rptRepository = rptRepository;
-        this.singoloVersamentoRepository = singoloVersamentoRepository;
     }
 
     /** {@code idRpt -> iur} delle RT collegate alle riscossioni, senza leggere i corpi XML. */
@@ -42,13 +47,22 @@ public class RiscossioniResolver {
                 .collect(Collectors.toMap(ConsoleRptRepository.RptIur::getId, ConsoleRptRepository.RptIur::getIur));
     }
 
-    public Map<Long, SingoloVersamento> loadSingoliVersamenti(List<Pagamento> riscossioni) {
+    /**
+     * {@code idVocePendenza -> (idA2A, idPendenza)} della pendenza di ciascuna voce
+     * ({@code Pagamento.idSingoloVersamento}): una sola query, che legge solo le tre colonne.
+     */
+    public Map<Long, RiferimentoPendenza> loadPendenze(List<Pagamento> riscossioni) {
         Set<Long> ids = riscossioni.stream().map(Pagamento::getIdSingoloVersamento).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return singoloVersamentoRepository.findByIdIn(ids).stream()
-                .collect(Collectors.toMap(SingoloVersamento::getId, sv -> sv));
+        return entityManager.createQuery(
+                        "select v.id, a.codApplicazione, p.idPendenza from VocePendenza v "
+                                + "join v.pendenza p join Applicazione a on a.id = p.idApplicazione "
+                                + "where v.id in :ids", Object[].class)
+                .setParameter("ids", ids).getResultList().stream()
+                .collect(Collectors.toMap(r -> (Long) r[0],
+                        r -> new RiferimentoPendenza((String) r[1], (String) r[2])));
     }
 }

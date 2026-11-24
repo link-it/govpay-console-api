@@ -30,7 +30,7 @@ import it.gov.digitpa.schemas._2011.pagamenti.StTipoIdentificativoUnivocoPersFG;
 import it.govpay.console.entity.Dominio;
 import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.UnitaOperativa;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.stampe.client.model.Receipt;
 import it.govpay.stampe.client.model.ReceiptItem;
@@ -47,8 +47,11 @@ class RicevutaPdfPayloadMapperTest {
 
     /** Nessuno stub di default: {@code Optional.empty()} finche' un test non lo configura diversamente. */
     private final UnitaOperativaRepository unitaOperativaRepository = mock(UnitaOperativaRepository.class);
-    /** Versamento corrente associato a ciascuna Rpt costruita dagli helper (la Rpt tiene solo l'id). */
-    private final Map<Rpt, Versamento> versamenti = new IdentityHashMap<>();
+    /** Pendenza e dominio correnti associati a ciascuna Rpt costruita dagli helper (la Rpt tiene solo l'id). */
+    private record Caso(Pendenza pendenza, Dominio dominio) {
+    }
+
+    private final Map<Rpt, Caso> casi = new IdentityHashMap<>();
     private final RicevutaPdfPayloadMapper mapper = new RicevutaPdfPayloadMapper(unitaOperativaRepository, "");
 
     // ---------- SANP_230 (ctRicevutaTelematica) ----------
@@ -57,7 +60,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230LeggeDataOperazioneDallRptEDataApplicativaDallaRt() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         // RPT.dataOraMessaggioRichiesta = 2026-06-09T08:15 -> non mezzanotte, ore/minuti visibili
         assertThat(receipt.getOperationDate()).isEqualTo("09/06/2026 08:15");
@@ -71,7 +74,7 @@ class RicevutaPdfPayloadMapperTest {
         // mezzanotte esatta -> la data operazione deve mostrare solo la data
         rpt.setDataMsgRichiesta(OffsetDateTime.of(2026, 6, 9, 0, 0, 0, 0, ZoneOffset.ofHours(2)));
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getOperationDate()).isEqualTo("09/06/2026");
     }
@@ -80,7 +83,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230UsaIlSoggettoPagatoreDellaRtNonIlDebitoreCorrenteDellaPendenza() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getPayer().getFiscalCode()).isEqualTo("RSSMRA80A01H501U");
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi (storico RT)");
@@ -92,7 +95,7 @@ class RicevutaPdfPayloadMapperTest {
     void sanp230UsaLeVociDellaRtConIurVeroEStatoPerImporto() throws JAXBException {
         Rpt rpt = rptSanp230(true);
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getItems()).hasSize(2);
         ReceiptItem eseguita = receipt.getItems().get(0);
@@ -113,18 +116,18 @@ class RicevutaPdfPayloadMapperTest {
         Rpt rpt = rptSanp230(true);
         String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/>";
         String base64 = java.util.Base64.getEncoder().encodeToString(svg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        versamenti.get(rpt).getDominio().setLogo(base64.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        casi.get(rpt).dominio().setLogo(base64.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        assertThat(mapper.toReceipt(rpt, versamenti.get(rpt)).getCreditorLogo()).isEqualTo("data:image/svg+xml;base64," + base64);
+        assertThat(mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio()).getCreditorLogo()).isEqualTo("data:image/svg+xml;base64," + base64);
     }
 
     @Test
     void logoNonLeggibileInArchivioLasciaIlLogoDiDefault() throws JAXBException {
         // issue #124: valore salvato dalle vecchie PUT dell'API Backoffice
         Rpt rpt = rptSanp230(true);
-        versamenti.get(rpt).getDominio().setLogo("/domini/12345678901/logo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        casi.get(rpt).dominio().setLogo("/domini/12345678901/logo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        assertThat(mapper.toReceipt(rpt, versamenti.get(rpt)).getCreditorLogo()).isEmpty();
+        assertThat(mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio()).getCreditorLogo()).isEmpty();
     }
 
     private Rpt rptSanp230(boolean conXmlRpt) throws JAXBException {
@@ -190,7 +193,7 @@ class RicevutaPdfPayloadMapperTest {
             rpt.setXmlRpt(marshal(RPT.class, rpTelematico));
         }
 
-        Versamento v = new Versamento();
+        Pendenza v = new Pendenza();
         v.setCausaleVersamento("Causale versamento corrente (non e' la voce della ricevuta)");
         // Debitore corrente deliberatamente diverso dal soggetto pagatore storico della RT:
         // se il mapper tornasse a leggerlo da qui, i test sul payer lo scoprirebbero.
@@ -200,8 +203,7 @@ class RicevutaPdfPayloadMapperTest {
         d.setId(42L);
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Test");
-        v.setDominio(d);
-        versamenti.put(rpt, v);
+        casi.put(rpt, new Caso(v, d));
 
         return rpt;
     }
@@ -217,7 +219,7 @@ class RicevutaPdfPayloadMapperTest {
         ec.setUoProvincia("MI");
         when(unitaOperativaRepository.findByDominio_IdAndCodUo(eq(42L), eq("EC"))).thenReturn(Optional.of(ec));
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getOrganization().getAddress()).isEqualTo("Piazza Duomo, 1");
         assertThat(receipt.getOrganization().getLocation()).isEqualTo("20100 Milano (MI)");
@@ -228,7 +230,7 @@ class RicevutaPdfPayloadMapperTest {
         Rpt rpt = rptSanp230(true);
         // unitaOperativaRepository senza stub -> Optional.empty() di default
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getOrganization().getAddress()).isEmpty();
         assertThat(receipt.getOrganization().getLocation()).isEmpty();
@@ -241,7 +243,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptSenzaDateNellaRtNonRipiegaSulleColonneDbMaMostraNd() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getOperationDate()).isEqualTo("N/D");
         assertThat(receipt.getApplicationDate()).isEqualTo("N/D");
@@ -251,7 +253,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptUsaIlDebtorDellaRtNonIlPayerNeIlDebitoreCorrente() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi");
         assertThat(receipt.getPayer().getFiscalCode()).isEqualTo("RSSMRA80A01H501U");
@@ -261,7 +263,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptUsaLeVociDellaRtConReceiptIdComeIur() throws IOException {
         Rpt rpt = rptCtReceipt();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getItems()).hasSize(1);
         ReceiptItem item = receipt.getItems().get(0);
@@ -285,14 +287,13 @@ class RicevutaPdfPayloadMapperTest {
         rpt.setDataMsgRichiesta(OffsetDateTime.of(2026, 9, 1, 0, 0, 0, 0, ZoneOffset.UTC));
         rpt.setXmlRt(risorsa("rt-v2-ok.xml"));
 
-        Versamento v = new Versamento();
+        Pendenza v = new Pendenza();
         v.setCausaleVersamento("Causale versamento corrente");
         v.setDebitoreAnagrafica("Debitore attuale, diverso dal debtor della RT");
         Dominio d = new Dominio();
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Prova");
-        v.setDominio(d);
-        versamenti.put(rpt, v);
+        casi.put(rpt, new Caso(v, d));
 
         return rpt;
     }
@@ -304,7 +305,7 @@ class RicevutaPdfPayloadMapperTest {
             throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         // paymentDateTime = 2026-09-01T10:00:00+02:00 -> non mezzanotte, ore/minuti visibili
         assertThat(receipt.getOperationDate()).isEqualTo("01/09/2026 10:00");
@@ -316,7 +317,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptV2UsaIlDebtorDellaRtConIndirizzo() throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getPayer().getFullName()).isEqualTo("Mario Rossi");
         assertThat(receipt.getPayer().getAddress()).isEqualTo("Via Roma 1");
@@ -327,7 +328,7 @@ class RicevutaPdfPayloadMapperTest {
     void ctReceiptV2UsaLeVociDellaRtConReceiptIdComeIur() throws IOException {
         Rpt rpt = rptCtReceiptV2();
 
-        Receipt receipt = mapper.toReceipt(rpt, versamenti.get(rpt));
+        Receipt receipt = mapper.toReceipt(rpt, casi.get(rpt).pendenza(), casi.get(rpt).dominio());
 
         assertThat(receipt.getItems()).hasSize(1);
         ReceiptItem item = receipt.getItems().get(0);
@@ -351,14 +352,13 @@ class RicevutaPdfPayloadMapperTest {
         rpt.setDataMsgRichiesta(OffsetDateTime.of(2026, 9, 1, 0, 0, 0, 0, ZoneOffset.UTC));
         rpt.setXmlRt(risorsa("rt-v2_2-ok.xml"));
 
-        Versamento v = new Versamento();
+        Pendenza v = new Pendenza();
         v.setCausaleVersamento("Causale versamento corrente");
         v.setDebitoreAnagrafica("Debitore attuale, diverso dal debtor della RT");
         Dominio d = new Dominio();
         d.setCodDominio("12345678901");
         d.setRagioneSociale("Comune di Prova");
-        v.setDominio(d);
-        versamenti.put(rpt, v);
+        casi.put(rpt, new Caso(v, d));
 
         return rpt;
     }

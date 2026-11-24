@@ -5,13 +5,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import it.govpay.console.entity.Versamento;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * Regola di visibilità ACL di un {@link Versamento} per l'operatore corrente,
+ * Regola di visibilità ACL di una pendenza per l'operatore corrente,
  * single-source per tutti i domini che leggono le pendenze (pendenze, ricevute,
  * avvisi). Replica i 3 livelli di V1:
  * <ul>
@@ -33,49 +33,15 @@ public final class VersamentoVisibilita {
     }
 
     /**
-     * Predicato query-side da applicare a una ricerca. {@code versamento} è il path
-     * all'entità {@link Versamento}: la root stessa per una query su versamenti, o
-     * {@code root.get("versamento")} per una query su un'entità collegata (es.
-     * {@code Rpt}).
-     */
-    public static Predicate predicate(CriteriaBuilder cb, Path<?> versamento, OperatoreCorrente operatore) {
-        Predicate p = cb.conjunction();
-
-        if (!operatore.tuttiIDomini()) {
-            Set<Long> dominiInteri = operatore.idDominiInteri();
-            Set<Long> uoVisibili = operatore.idUoVisibili();
-            if (isEmpty(dominiInteri) && isEmpty(uoVisibili)) {
-                return cb.disjunction();
-            }
-            Predicate viaDominio = isEmpty(dominiInteri)
-                    ? cb.disjunction()
-                    : versamento.get("dominio").get("id").in(dominiInteri);
-            Predicate viaUo = isEmpty(uoVisibili)
-                    ? cb.disjunction()
-                    : versamento.get("unitaOperativa").get("id").in(uoVisibili);
-            p = cb.and(p, cb.or(viaDominio, viaUo));
-        }
-
-        if (!operatore.tuttiITipiVersamento()) {
-            Set<Long> tipi = operatore.idTipiVersamentoVisibili();
-            if (isEmpty(tipi)) {
-                return cb.disjunction();
-            }
-            p = cb.and(p, versamento.get("tipoVersamento").get("id").in(tipi));
-        }
-
-        return p;
-    }
-
-    /**
      * Predicato query-side per una pendenza del modello v3, dai path dei suoi assi (stessa
      * regola di {@link #isVisibile(Long, Long, Long, Supplier, OperatoreCorrente)}): la
-     * unita' operativa sta sulla posizione e puo' mancare, e una pendenza senza unita'
-     * operativa vale come quella {@code EC} del suo dominio.
+     * unita' operativa sta sulla posizione (per una pendenza senza opzione, e' quella
+     * storica) e puo' mancare, e una pendenza senza unita' operativa vale come quella
+     * {@code EC} del suo dominio.
      *
      * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
      */
-    public static Predicate predicate(CriteriaBuilder cb, Path<Long> idDominio, Path<Long> idUo,
+    public static Predicate predicate(CriteriaBuilder cb, Path<Long> idDominio, Expression<Long> idUo,
                                       Path<Long> idTipoVersamento, Set<Long> dominiConUoEcVisibile,
                                       OperatoreCorrente operatore) {
         Predicate p = cb.conjunction();
@@ -109,20 +75,6 @@ public final class VersamentoVisibilita {
         return p;
     }
 
-    /** Check post-fetch su una singola entità già caricata. */
-    public static boolean isVisibile(Versamento v, OperatoreCorrente operatore) {
-        if (!isDominioOrUoVisible(v, operatore)) {
-            return false;
-        }
-        if (!operatore.tuttiITipiVersamento()) {
-            if (v.getTipoVersamento() == null) {
-                return false;
-            }
-            return operatore.idTipiVersamentoVisibili().contains(v.getTipoVersamento().getId());
-        }
-        return true;
-    }
-
     /**
      * Check post-fetch su una pendenza del modello v3, identificata dalle chiavi dei
      * suoi assi: l'unita' operativa sta sulla posizione debitoria e puo' mancare.
@@ -153,20 +105,6 @@ public final class VersamentoVisibilita {
                     && operatore.idTipiVersamentoVisibili().contains(idTipoVersamento);
         }
         return true;
-    }
-
-    private static boolean isDominioOrUoVisible(Versamento v, OperatoreCorrente operatore) {
-        if (operatore.tuttiIDomini()) {
-            return true;
-        }
-        if (v.getDominio() == null) {
-            return false;
-        }
-        if (operatore.idDominiInteri().contains(v.getDominio().getId())) {
-            return true;
-        }
-        return v.getUnitaOperativa() != null
-                && operatore.idUoVisibili().contains(v.getUnitaOperativa().getId());
     }
 
     private static boolean isEmpty(Set<Long> set) {

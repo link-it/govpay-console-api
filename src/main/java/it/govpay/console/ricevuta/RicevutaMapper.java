@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.pendenze.entity.Rpt;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.console.model.Link;
 import it.govpay.console.model.PendenzaRef;
 import it.govpay.console.model.Ricevuta;
@@ -20,7 +20,7 @@ import it.govpay.console.ricevuta.pagopa.RptRtJsonConverter;
  * Mapper {@link Rpt} → modelli ricevuta:
  * <ul>
  *   <li>{@link #toSummary(Rpt)} — proiezione metadata-only per le liste;</li>
- *   <li>{@link #toRicevuta(Rpt, Versamento)} — dettaglio canonico con conversione JSON di
+ *   <li>{@link #toRicevuta(Rpt, Pendenza, String)} — dettaglio canonico con conversione JSON di
  *       {@code rpt}/{@code rt} (via {@link RptRtJsonConverter}), riferimento alla
  *       pendenza e hyperlink ai sub-resource.</li>
  * </ul>
@@ -56,7 +56,11 @@ public class RicevutaMapper {
     }
 
     /** Dettaglio canonico: i 9 metadati della summary + rpt/rt JSON + pendenza + _links. */
-    public Ricevuta toRicevuta(Rpt rpt, Versamento versamento) {
+    /**
+     * @param pendenza pendenza della ricevuta
+     * @param idA2A    codice dell'applicazione della pendenza
+     */
+    public Ricevuta toRicevuta(Rpt rpt, Pendenza pendenza, String idA2A) {
         if (rpt == null) {
             return null;
         }
@@ -74,26 +78,25 @@ public class RicevutaMapper {
         // serializza esplicitamente "rpt": null.
         r.setRpt(JsonNullable.of(rptRtJsonConverter.toRptMap(rpt)));
         r.setRt(rptRtJsonConverter.toRtMap(rpt));
-        r.setPendenza(pendenzaRef(versamento));
-        r.setLinks(buildLinks(rpt, versamento));
+        r.setPendenza(pendenzaRef(pendenza, idA2A));
+        r.setLinks(buildLinks(rpt, pendenza, idA2A));
         return r;
     }
 
-    private static PendenzaRef pendenzaRef(Versamento v) {
-        if (v == null || v.getApplicazione() == null) {
+    private static PendenzaRef pendenzaRef(Pendenza p, String idA2A) {
+        if (p == null || idA2A == null) {
             return null;
         }
-        PendenzaRef ref = new PendenzaRef(v.getApplicazione().getCodApplicazione(), v.getCodVersamentoEnte());
-        ref.setCausaleBreve(CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()));
+        PendenzaRef ref = new PendenzaRef(idA2A, p.getIdPendenza());
+        ref.setCausaleBreve(CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()));
         return ref;
     }
 
-    private static RicevutaLinks buildLinks(Rpt rpt, Versamento v) {
+    private static RicevutaLinks buildLinks(Rpt rpt, Pendenza p, String idA2A) {
         String base = "/ricevute/" + rpt.getCodDominio() + "/" + rpt.getIuv() + "/" + segment(rpt.getIur());
         RicevutaLinks links = new RicevutaLinks(new Link(base + "/rpt"), new Link(base + "/rt"));
-        if (v != null && v.getApplicazione() != null) {
-            links.setPendenza(new Link(
-                    "/pendenze/" + v.getApplicazione().getCodApplicazione() + "/" + v.getCodVersamentoEnte()));
+        if (p != null && idA2A != null) {
+            links.setPendenza(new Link("/pendenze/" + idA2A + "/" + p.getIdPendenza()));
         }
         return links;
     }

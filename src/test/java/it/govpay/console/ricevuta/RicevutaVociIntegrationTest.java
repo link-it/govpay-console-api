@@ -37,7 +37,12 @@ import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
@@ -51,9 +56,6 @@ import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 /**
  * Integration test di {@code GET /ricevute/.../} per {@code voci[]}: ACL non
@@ -82,7 +84,7 @@ class RicevutaVociIntegrationTest {
     @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
+    @PersistenceContext private EntityManager em;
     @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private ConsolePagamentoRepository pagamentoRepository;
     @Autowired private ConsoleRendicontazioneRepository rendicontazioneRepository;
@@ -289,30 +291,20 @@ class RicevutaVociIntegrationTest {
 
     // ----- fixture helpers -----------------------------------------------------------
 
-    private Versamento newVersamento(String codVersamentoEnte) {
+    private Pendenza newVersamento(String codVersamentoEnte) {
         OffsetDateTime data = date(2026, 6, 20);
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(codVersamentoEnte);
-        v.setImportoTotale(100.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), null, codVersamentoEnte, null, "RSSMRA80A01H501U", 100.0,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(100.0);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(data);
-        v.setDataOraUltimoAggiornamento(data);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(data);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+        return v;
     }
 
     private Rpt newRpt(String iuv, String ccp) {
-        Versamento v = newVersamento("PEND-" + ccp);
+        Pendenza v = newVersamento("PEND-" + ccp);
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");
         r.setCodMsgRichiesta("MSG-RICHIESTA");

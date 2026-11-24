@@ -27,6 +27,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -129,6 +130,8 @@ public class OperazioneSearchService {
         CriteriaQuery<Operazione> q = cb.createQuery(Operazione.class);
         Root<Operazione> root = q.from(Operazione.class);
 
+        // La pendenza serve al numero avviso di ogni riga: letta nella stessa query, non una per riga.
+        root.fetch("pendenza", JoinType.LEFT);
         Predicate specPredicate = spec.toPredicate(root, q, cb);
         Path<Long> numeroPath = root.get("lineaElaborazione");
 

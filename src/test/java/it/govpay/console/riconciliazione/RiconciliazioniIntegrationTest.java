@@ -1,7 +1,5 @@
 package it.govpay.console.riconciliazione;
 
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.EntityManager;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -33,12 +31,18 @@ import it.govpay.pendenze.entity.Pagamento;
 import it.govpay.pendenze.model.StatoPagamentoRicevuta;
 import it.govpay.pendenze.model.TipoPagamento;
 import it.govpay.pendenze.entity.Rpt;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.pendenze.entity.VocePendenza;
+import it.govpay.pendenze.model.StatoVocePendenza;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
@@ -47,12 +51,10 @@ import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.ConsolePagamentoRepository;
 import it.govpay.console.repository.ConsoleRptRepository;
-import it.govpay.console.repository.SingoloVersamentoRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 
 /**
  * Integration test di {@code GET /riconciliazioni} e
@@ -85,8 +87,6 @@ class RiconciliazioniIntegrationTest {
     @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private SingoloVersamentoRepository singoloVersamentoRepository;
     @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private AclRepository aclRepository;
 
@@ -95,7 +95,7 @@ class RiconciliazioniIntegrationTest {
     private Incasso a2Acquisita;
     private Applicazione app;
     private Rpt rptA21;
-    private SingoloVersamento svA22;
+    private VocePendenza svA22;
 
     @BeforeEach
     void setup() {
@@ -327,7 +327,7 @@ class RiconciliazioniIntegrationTest {
                 .andExpect(jsonPath("$.riscossioni[0]._links.ricevuta.href",
                         is("/ricevute/" + DOM_A + "/IUV-A2-1/CCP-A2-1")))
                 .andExpect(jsonPath("$.riscossioni[0]._links.pendenza").doesNotExist())
-                // riscossione MBT: link a pendenza risolto via SingoloVersamento->Versamento->Applicazione
+                // riscossione MBT: link a pendenza risolto via VocePendenza->Pendenza->Applicazione
                 .andExpect(jsonPath("$.riscossioni[1]._links.pendenza.href",
                         is("/pendenze/APP-1/PEND-A2-2")))
                 .andExpect(jsonPath("$.riscossioni[1]._links.ricevuta").doesNotExist());
@@ -430,31 +430,21 @@ class RiconciliazioniIntegrationTest {
         pagamentoRepository.save(p);
     }
 
-    private Versamento newVersamento(Dominio dominio, String codVersamentoEnte,
+    private Pendenza newVersamento(Dominio dominio, String codVersamentoEnte,
                                      TipoVersamento tv, TipoVersamentoDominio tvd) {
         OffsetDateTime data = date(2026, 6, 20);
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(codVersamentoEnte);
-        v.setImportoTotale(25.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(entityManager, new Dati(app.getId(), dominio.getId(),
+                tv.getId(), tvd.getId(), null, codVersamentoEnte, null, "RSSMRA80A01H501U", 25.0,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(25.0);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(data);
-        v.setDataOraUltimoAggiornamento(data);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(data);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+        return v;
     }
 
     private Rpt newRpt(Dominio dominio, String iuv, String ccp, TipoVersamento tv, TipoVersamentoDominio tvd) {
-        Versamento v = newVersamento(dominio, "PEND-" + ccp, tv, tvd);
+        Pendenza v = newVersamento(dominio, "PEND-" + ccp, tv, tvd);
         Rpt r = new Rpt();
         r.setCodStazione("STAZIONE-TEST");
         r.setCodMsgRichiesta("MSG-RICHIESTA");
@@ -469,16 +459,18 @@ class RiconciliazioniIntegrationTest {
         return rptRepository.save(r);
     }
 
-    private SingoloVersamento newSingoloVersamento(Dominio dominio, String codVersamentoEnte,
-                                                    TipoVersamento tv, TipoVersamentoDominio tvd) {
-        Versamento v = newVersamento(dominio, codVersamentoEnte, tv, tvd);
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte("SING-" + codVersamentoEnte);
-        sv.setStatoSingoloVersamento("ESEGUITO");
-        sv.setImportoSingoloVersamento(25.0);
-        sv.setIndiceDati(1);
-        sv.setVersamento(v);
-        return singoloVersamentoRepository.save(sv);
+    private VocePendenza newSingoloVersamento(Dominio dominio, String idPendenza,
+                                             TipoVersamento tv, TipoVersamentoDominio tvd) {
+        Pendenza p = newVersamento(dominio, idPendenza, tv, tvd);
+        VocePendenza voce = new VocePendenza();
+        voce.setIdVocePendenza("SING-" + idPendenza);
+        voce.setIndice(1);
+        voce.setImporto(25.0);
+        voce.setDescrizione("Voce");
+        voce.setStato(StatoVocePendenza.ESEGUITO);
+        p.addVocePendenza(voce);
+        entityManager.persist(voce);
+        return voce;
     }
 
     private static OffsetDateTime date(int y, int m, int d) {

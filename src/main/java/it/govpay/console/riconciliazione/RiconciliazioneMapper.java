@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Incasso;
 import it.govpay.pendenze.entity.Pagamento;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.console.riconciliazione.RiscossioniResolver.RiferimentoPendenza;
 import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.Link;
 import it.govpay.console.model.Riconciliazione;
@@ -57,7 +57,7 @@ public class RiconciliazioneMapper {
      * + {@code _links}.
      */
     public Riconciliazione toDetail(Incasso incasso, Map<String, Dominio> domini, List<Pagamento> pagamenti,
-                                    Map<Long, String> iurRptById, Map<Long, SingoloVersamento> singoliVersamentiById) {
+                                    Map<Long, String> iurRptById, Map<Long, RiferimentoPendenza> pendenzeByIdVoce) {
         Riconciliazione d = new Riconciliazione();
         d.setId(incasso.getIdentificativo());
         d.setDominio(toDominioRef(incasso.getCodDominio(), domini));
@@ -77,7 +77,7 @@ public class RiconciliazioneMapper {
             d.setIuv(incasso.getIuv());
         }
         d.setRiscossioni(pagamenti.stream()
-                .map(p -> toRiscossione(p, iurRptById, singoliVersamentiById))
+                .map(p -> toRiscossione(p, iurRptById, pendenzeByIdVoce))
                 .toList());
 
         RiconciliazioneLinks links = new RiconciliazioneLinks(
@@ -96,15 +96,14 @@ public class RiconciliazioneMapper {
     }
 
     /**
-     * {@code _links.pendenza} risolto via {@code Pagamento.idSingoloVersamento
-     * -> SingoloVersamento -> Versamento -> (codVersamentoEnte, applicazione.codApplicazione)}
-     * (pattern identico a {@code RicevutaMapper._links.pendenza}); {@code
+     * {@code _links.pendenza} risolto via {@code Pagamento.idSingoloVersamento -> VocePendenza ->
+     * Pendenza -> (idPendenza, codice applicazione)}; {@code
      * _links.ricevuta} via {@code Pagamento.rpt -> Rpt.iur} (lo {@code idRicevuta}
      * del path e' il {@code ccp}, non lo {@code iur} — vedi {@code RicevutaMapper}).
      * Entrambe le mappe sono batch-fetched dal chiamante, nessuna query per riga.
      */
     private Riscossione toRiscossione(Pagamento p, Map<Long, String> iurRptById,
-                                      Map<Long, SingoloVersamento> singoliVersamentiById) {
+                                      Map<Long, RiferimentoPendenza> pendenzeByIdVoce) {
         Riscossione r = new Riscossione();
         r.setIdDominio(p.getCodDominio());
         r.setIuv(p.getIuv());
@@ -117,13 +116,11 @@ public class RiconciliazioneMapper {
         r.setStato(p.getStato() != null ? StatoRiscossione.valueOf(p.getStato().name()) : null);
 
         RiscossioneLinks links = new RiscossioneLinks();
-        SingoloVersamento sv = p.getIdSingoloVersamento() != null
-                ? singoliVersamentiById.get(p.getIdSingoloVersamento())
+        RiferimentoPendenza pendenza = p.getIdSingoloVersamento() != null
+                ? pendenzeByIdVoce.get(p.getIdSingoloVersamento())
                 : null;
-        if (sv != null) {
-            String idA2A = sv.getVersamento().getApplicazione().getCodApplicazione();
-            String idPendenza = sv.getVersamento().getCodVersamentoEnte();
-            links.setPendenza(new Link("/pendenze/" + idA2A + "/" + idPendenza));
+        if (pendenza != null) {
+            links.setPendenza(new Link("/pendenze/" + pendenza.idA2A() + "/" + pendenza.idPendenza()));
         }
         String iurRpt = p.getRpt() != null ? iurRptById.get(p.getRpt().getId()) : null;
         if (iurRpt != null) {

@@ -4,13 +4,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import it.govpay.console.entity.PendenzaUoStorica;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.NotFoundException;
+import it.govpay.pendenze.entity.OpzionePagamento;
 import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.pendenze.repository.PendenzaRepository;
 import it.govpay.pendenze.service.PosizioneDebitoriaService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 /**
  * Lettura di una pendenza per identificativo, con la verifica di visibilita' per l'operatore:
@@ -32,6 +36,9 @@ public class PendenzaLettura {
     private final PendenzaRepository pendenzaRepository;
     private final UnitaOperativaRepository unitaOperativaRepository;
     private final PendenzaAnagrafiche anagrafiche;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public PendenzaLettura(PosizioneDebitoriaService posizioneDebitoriaService,
                            PendenzaRepository pendenzaRepository,
@@ -69,6 +76,29 @@ public class PendenzaLettura {
             throw nonTrovata(idA2A, idPendenza);
         }
         return new Letta(p, contesto, idUnitaOperativa);
+    }
+
+    /**
+     * Visibilita' di una pendenza gia' letta, per chi la raggiunge da un'altra risorsa
+     * (ricevute): stessa regola della lettura. L'unita' operativa e' quella della posizione;
+     * per una pendenza senza opzione di pagamento, che non ha posizione, e' quella storica
+     * ({@link PendenzaUoStorica}). Senza unita' operativa la pendenza vale come quella
+     * {@code EC} del suo dominio.
+     *
+     * @param pendenza pendenza con l'opzione e la posizione caricate, se presenti
+     */
+    public boolean isVisibile(Pendenza pendenza, OperatoreCorrente operatore) {
+        OpzionePagamento opzione = pendenza.getOpzionePagamento();
+        Long idUnitaOperativa;
+        if (opzione != null) {
+            idUnitaOperativa = opzione.getPosizioneDebitoria().getIdUnitaOperativa();
+        } else {
+            PendenzaUoStorica storica = entityManager.find(PendenzaUoStorica.class, pendenza.getId());
+            idUnitaOperativa = storica != null ? storica.getIdUo() : null;
+        }
+        return VersamentoVisibilita.isVisibile(pendenza.getIdDominio(), idUnitaOperativa,
+                pendenza.getIdTipoVersamento(),
+                () -> unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili()), operatore);
     }
 
     private static NotFoundException nonTrovata(String idA2A, String idPendenza) {
