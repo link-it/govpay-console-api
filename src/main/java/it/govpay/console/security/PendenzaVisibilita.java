@@ -27,9 +27,9 @@ import jakarta.persistence.criteria.Predicate;
  * vincolo sul rispettivo asse. Insieme di domini/tipi autorizzati vuoto →
  * predicato sempre falso (risultato vuoto, mai 403).
  */
-public final class VersamentoVisibilita {
+public final class PendenzaVisibilita {
 
-    private VersamentoVisibilita() {
+    private PendenzaVisibilita() {
     }
 
     /**

@@ -50,26 +50,30 @@ INSERT INTO versamenti (id, cod_versamento_ente, importo_totale, importo_pagato,
                         debitore_identificativo, debitore_anagrafica, src_debitore_identificativo,
                         anomalo, ack, tipo, causale_versamento,
                         iuv_versamento, numero_avviso,
-                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio)
+                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio,
+                        aggiornabile, importo_incassato, numero_rata, send_abilitato, stato_pagamento)
 VALUES (7001, 'PEND-FIX-1', 100.0, 100.0,
         'ESEGUITO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'RSSMRA80A01H501U', 'Mario Rossi Fixture', 'RSSMRA80A01H501U',
         FALSE, TRUE, 'DOVUTO', 'TARI fixture causale',
         '1111111111111', '011111111111111111',
-        3001, 4001, 5001, 6001);
+        3001, 4001, 5001, 6001,
+        FALSE, 0, 1, FALSE, 'PAGATO');
 
 INSERT INTO versamenti (id, cod_versamento_ente, importo_totale, importo_pagato,
                         stato_versamento, data_creazione, data_ora_ultimo_aggiornamento,
                         debitore_identificativo, debitore_anagrafica, src_debitore_identificativo,
                         anomalo, ack, tipo, causale_versamento,
                         iuv_versamento, numero_avviso,
-                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio)
+                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio,
+                        aggiornabile, importo_incassato, numero_rata, send_abilitato, stato_pagamento)
 VALUES (7002, 'PEND-FIX-2', 50.0, 50.0,
         'ESEGUITO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'VRDLGI90B02H501T', 'Luigi Verdi Fixture', 'VRDLGI90B02H501T',
         FALSE, TRUE, 'DOVUTO', 'TARI fixture causale 2',
         '2222222222222', '022222222222222222',
-        3001, 4001, 5001, 6001);
+        3001, 4001, 5001, 6001,
+        FALSE, 0, 1, FALSE, 'PAGATO');
 
 -- Posizione debitoria, debitore e opzione di pagamento di ciascuna pendenza.
 INSERT INTO documenti (id, cod_documento, descrizione, id_applicazione, id_dominio,
@@ -96,11 +100,9 @@ INSERT INTO opzioni_pagamento (id, id_opzione_pagamento, id_pd_debitore, tipolog
 VALUES (9802, '00000000-0000-0000-0000-000000009802', 9702, 'SOLUZIONE_UNICA', 'ATTIVATA',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
 
--- Colonne del modello v3 sulle pendenze.
-UPDATE versamenti SET id_opzione_pagamento = 9801, numero_rata = 1, aggiornabile = FALSE,
-                      importo_incassato = 0, send_abilitato = FALSE WHERE id = 7001;
-UPDATE versamenti SET id_opzione_pagamento = 9802, numero_rata = 1, aggiornabile = FALSE,
-                      importo_incassato = 0, send_abilitato = FALSE WHERE id = 7002;
+-- Collegamento di ciascuna pendenza alla sua opzione di pagamento.
+UPDATE versamenti SET id_opzione_pagamento = 9801 WHERE id = 7001;
+UPDATE versamenti SET id_opzione_pagamento = 9802 WHERE id = 7002;
 
 INSERT INTO singoli_versamenti (id, cod_singolo_versamento_ente, stato_singolo_versamento,
                                 importo_singolo_versamento, descrizione, indice_dati,

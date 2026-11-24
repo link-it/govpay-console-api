@@ -18,7 +18,7 @@ import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.security.PendenzaVisibilita;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Expression;
@@ -273,13 +273,13 @@ public final class RptSpecifications {
 
     /**
      * Limita le ricevute a quelle delle pendenze visibili all'operatore (regola di
-     * {@link VersamentoVisibilita}, single-source con le pendenze).
+     * {@link PendenzaVisibilita}, single-source con le pendenze).
      *
      * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
      */
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore,
                                                           Set<Long> dominiConUoEcVisibile) {
-        return (root, q, cb) -> VersamentoVisibilita.predicate(cb,
+        return (root, q, cb) -> PendenzaVisibilita.predicate(cb,
                 pendenza(root, cb).<Long>get("idDominio"),
                 uoEffettiva(root, cb),
                 pendenza(root, cb).<Long>get("idTipoVersamento"),

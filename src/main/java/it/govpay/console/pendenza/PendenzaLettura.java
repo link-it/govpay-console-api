@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import it.govpay.console.entity.PendenzaUoStorica;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.security.PendenzaVisibilita;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.pendenze.entity.OpzionePagamento;
 import it.govpay.pendenze.entity.Pendenza;
@@ -69,7 +69,7 @@ public class PendenzaLettura {
                 anagrafiche.risolviContesto(p.getIdDominio(), p.getIdTipoPendenza(), idUnitaOperativa);
         Long idTipoVersamento = contesto.tipoVersamento() != null ? contesto.tipoVersamento().getId() : null;
 
-        if (!VersamentoVisibilita.isVisibile(p.getIdDominio(), idUnitaOperativa, idTipoVersamento,
+        if (!PendenzaVisibilita.isVisibile(p.getIdDominio(), idUnitaOperativa, idTipoVersamento,
                 () -> unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili()), operatore)) {
             log.debug("ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={} principal={}",
                     idA2A, idPendenza, operatore.principal());
@@ -96,7 +96,7 @@ public class PendenzaLettura {
             PendenzaUoStorica storica = entityManager.find(PendenzaUoStorica.class, pendenza.getId());
             idUnitaOperativa = storica != null ? storica.getIdUo() : null;
         }
-        return VersamentoVisibilita.isVisibile(pendenza.getIdDominio(), idUnitaOperativa,
+        return PendenzaVisibilita.isVisibile(pendenza.getIdDominio(), idUnitaOperativa,
                 pendenza.getIdTipoVersamento(),
                 () -> unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili()), operatore);
     }

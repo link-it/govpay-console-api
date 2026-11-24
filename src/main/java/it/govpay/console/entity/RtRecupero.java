@@ -16,7 +16,7 @@ import jakarta.persistence.Table;
  * {@code console-api} scrive la tripla {@code (codDominio, iuv, iur)} e
  * innesca il {@code /run} di {@code govpay-rt-batch}, che elabora la riga e la
  * elimina (successo) o la marca con {@code esito} (es. {@code NON_DISPONIBILE}
- * su 404 da BizEvents). Nessuna relazione JPA verso {@link Rpt}/{@link Versamento}:
+ * su 404 da BizEvents). Nessuna relazione JPA verso {@link Rpt}/{@code Pendenza}:
  * la tabella e' un canale di comunicazione fra i due progetti, non una vista sul
  * dominio pagamenti.
  *

@@ -337,12 +337,11 @@ class AvvisoIntegrationTest {
     }
 
     /**
-     * V1 ({@code AvvisoPagamentoV2Utils.java:441-446}): se il primo
-     * SingoloVersamento ha un IBAN postale (di accredito o di appoggio), il
-     * payload PDF deve avere {@code postal=true}.
+     * Se la prima voce ha un IBAN postale (di accredito o di appoggio),
+     * il payload PDF deve avere {@code postal=true}.
      */
     @Test
-    void postalTrueWhenSingoloVersamentoHasIbanPostale() throws Exception {
+    void postalTrueWhenVoceHasIbanPostale() throws Exception {
         IbanAccredito ibanPostale = new IbanAccredito();
         ibanPostale.setPostale(true);
         ibanPostale.setCodIban("IT60X0542811101000000123456");
@@ -372,7 +371,7 @@ class AvvisoIntegrationTest {
     /**
      * Pendenza a riferimento: {@code singoli_versamenti.id_iban_accredito} e'
      * nulla e l'IBAN postale va ereditato dal tipo entrata del dominio
-     * ({@code tributi}), come fa V1 in {@code SingoloVersamento.getIbanAccredito}.
+     * ({@code tributi}), come per ogni pendenza a riferimento.
      * E' il caso che in esercizio produceva il 422 da govpay-stampe.
      */
     @Test

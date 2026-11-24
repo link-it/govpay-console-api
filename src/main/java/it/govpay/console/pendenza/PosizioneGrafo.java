@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.security.PendenzaVisibilita;
 import it.govpay.console.web.NotFoundException;
 import it.govpay.pendenze.entity.OpzionePagamento;
 import it.govpay.pendenze.entity.PdDebitore;
@@ -93,7 +93,7 @@ public class PosizioneGrafo {
         for (Pendenza p : caricato.pendenze()) {
             PendenzaAnagrafiche.Contesto contesto = caricato.pagina().contesto(p);
             Long idTipoVersamento = contesto.tipoVersamento() != null ? contesto.tipoVersamento().getId() : null;
-            visibili.put(p.getId(), VersamentoVisibilita.isVisibile(posizione.getIdDominio(),
+            visibili.put(p.getId(), PendenzaVisibilita.isVisibile(posizione.getIdDominio(),
                     posizione.getIdUnitaOperativa(), idTipoVersamento, dominiConUoEc, operatore));
         }
         return visibili;

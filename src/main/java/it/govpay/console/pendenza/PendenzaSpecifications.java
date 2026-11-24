@@ -13,7 +13,7 @@ import it.govpay.console.common.PendenzaPredicates;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.security.PendenzaVisibilita;
 import it.govpay.pendenze.entity.Pendenza;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.From;
@@ -177,13 +177,13 @@ public final class PendenzaSpecifications {
 
     /**
      * Limita i risultati alle pendenze visibili all'operatore corrente. La regola e' quella
-     * di {@link VersamentoVisibilita}, single-source con il dettaglio.
+     * di {@link PendenzaVisibilita}, single-source con il dettaglio.
      *
      * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
      */
     public static Specification<Pendenza> visibiliPerOperatore(OperatoreCorrente operatore,
                                                                Set<Long> dominiConUoEcVisibile) {
-        return (root, q, cb) -> VersamentoVisibilita.predicate(cb,
+        return (root, q, cb) -> PendenzaVisibilita.predicate(cb,
                 root.<Long>get("idDominio"),
                 posizione(root).<Long>get("idUnitaOperativa"),
                 root.<Long>get("idTipoVersamento"),

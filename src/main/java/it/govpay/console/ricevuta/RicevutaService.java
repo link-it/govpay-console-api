@@ -57,7 +57,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * </ul>
  *
  * <p>ACL: 404 anti-leak su dominio non visibile o tipo versamento non autorizzato
- * (via {@link VersamentoVisibilita}).
+ * (via {@link PendenzaVisibilita}).
  *
  * <p>Per i rami binari (XML/PDF): come {@code /avviso}, scriviamo direttamente su
  * {@link HttpServletResponse} e restituiamo {@code null}; il controller risponde

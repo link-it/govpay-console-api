@@ -11,7 +11,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.model.Avviso;
 import it.govpay.console.model.StatoAvviso;
-import it.govpay.console.pendenza.IuvUtils;
+import it.govpay.common.utils.IuvUtils;
 import it.govpay.pendenze.entity.Pendenza;
 
 /**
@@ -82,7 +82,7 @@ public class AvvisoMapper {
             return null;
         }
         Stazione stazione = dominio.getStazione();
-        return new String(IuvUtils.buildQrCode002(
+        return IuvUtils.buildQrCode002(
                 dominio.getCodDominio(),
                 dominio.getAuxDigit(),
                 stazione != null && stazione.getApplicationCode() != null
@@ -90,7 +90,7 @@ public class AvvisoMapper {
                         : 0,
                 p.getIuv(),
                 BigDecimal.valueOf(p.getImporto()),
-                p.getNumeroAvviso()));
+                p.getNumeroAvviso());
     }
 
     private static String buildBarcode(Pendenza p, Dominio dominio) {

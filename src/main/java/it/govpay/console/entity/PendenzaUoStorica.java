@@ -4,6 +4,8 @@ import org.hibernate.annotations.Immutable;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -19,7 +21,13 @@ import jakarta.persistence.Table;
 @Table(name = "versamenti")
 public class PendenzaUoStorica {
 
+    /**
+     * La riga non si scrive mai da qui. La stessa tabella e' mappata dalla pendenza della libreria,
+     * che genera la chiave con {@code IDENTITY}: la dichiarazione uguale mantiene coerente la
+     * definizione della colonna.
+     */
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Long id;
 

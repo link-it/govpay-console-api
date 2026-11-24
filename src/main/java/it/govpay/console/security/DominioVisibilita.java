@@ -8,7 +8,7 @@ import jakarta.persistence.criteria.Predicate;
 
 /**
  * Regola di visibilità ACL su dominio, per entità legate direttamente a un
- * {@code Dominio} senza passare da {@link it.govpay.console.entity.Versamento}
+ * {@code Dominio} senza passare dalla pendenza
  * (nessun asse UO/tipoVersamento: es. i flussi di rendicontazione, che pagoPA
  * non attribuisce a una Unità Operativa specifica). Solo i domini "interi"
  * dell'operatore ({@link OperatoreCorrente#idDominiInteri()}) danno visibilità;
