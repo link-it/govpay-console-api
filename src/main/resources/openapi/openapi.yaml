@@ -7889,8 +7889,9 @@ components:
     PendenzaSummary:
       type: object
       description: |
-        Proiezione leggera della pendenza, usata nelle liste paginate. Non espone
-        dati personali del debitore (per quelli vedi `/informazioniDebitore`).
+        Proiezione leggera della pendenza, usata nelle liste paginate. Del debitore
+        riporta solo tipo e identificativo; anagrafica e contatti sono esposti
+        soltanto da `/informazioniDebitore`.
       required:
         - idA2A
         - idPendenza
@@ -7899,7 +7900,11 @@ components:
         - tipoPendenza
         - importo
         - causale
+        - dataCreazione
         - dataUltimoAggiornamento
+        - debitore
+        - opzionePagamento
+        - posizioneDebitoria
       properties:
         idA2A:
           type: string
@@ -7913,6 +7918,12 @@ components:
           $ref: '#/components/schemas/DominioRef'
         tipoPendenza:
           $ref: '#/components/schemas/TipoPendenzaRef'
+        debitore:
+          $ref: '#/components/schemas/RiferimentoDebitore'
+        opzionePagamento:
+          $ref: '#/components/schemas/OpzionePagamentoRef'
+        posizioneDebitoria:
+          $ref: '#/components/schemas/PosizioneDebitoriaRef'
         unitaOperativa:
           allOf:
             - $ref: '#/components/schemas/UnitaOperativaRef'
@@ -7937,6 +7948,10 @@ components:
         dataValidita:
           type: string
           format: date
+        dataCreazione:
+          type: string
+          format: date-time
+          description: Data di creazione della pendenza; e' anche l'ordinamento di default della lista.
         dataUltimoAggiornamento:
           type: string
           format: date-time
@@ -7946,6 +7961,12 @@ components:
         dataUltimaComunicazioneAca:
           type: string
           format: date-time
+        direzione:
+          type: string
+          description: Direzione interna all'ente creditore, se indicata.
+        divisione:
+          type: string
+          description: Divisione interna all'ente creditore, se indicata.
 
     Pendenza:
       description: |
@@ -7961,25 +7982,12 @@ components:
         - $ref: '#/components/schemas/PendenzaSummary'
         - type: object
           required:
-            - debitore
-            - opzionePagamento
-            - posizioneDebitoria
             - voci
             - _links
           properties:
-            debitore:
-              $ref: '#/components/schemas/RiferimentoDebitore'
-            opzionePagamento:
-              $ref: '#/components/schemas/OpzionePagamentoRef'
-            posizioneDebitoria:
-              $ref: '#/components/schemas/PosizioneDebitoriaRef'
             descrizione:
               type: string
             documento:
-              type: string
-            direzione:
-              type: string
-            divisione:
               type: string
             voci:
               type: array

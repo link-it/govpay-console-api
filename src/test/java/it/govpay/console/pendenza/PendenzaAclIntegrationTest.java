@@ -274,6 +274,25 @@ class PendenzaAclIntegrationTest {
     }
 
     @Test
+    void listaConUoEnteCreditoreIncludeLePendenzeSenzaUo() throws Exception {
+        String principal = newUtenzaConUoSpecifica("user-ec-lista", uoEc);
+        mvc.perform(get("/pendenze").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", org.hamcrest.Matchers.hasItem("P-TARI-NOUO")))
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("P-TARI-UOX"))));
+    }
+
+    @Test
+    void listaConUoSpecificaEscludeLePendenzeSenzaUo() throws Exception {
+        String principal = newUtenzaConUoSpecifica("user-uox-lista", uoX);
+        mvc.perform(get("/pendenze").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("P-TARI-NOUO"))));
+    }
+
+    @Test
     void pendenzaSenzaUoVisibilePerUtenteConDominioIntero() throws Exception {
         String principal = newUtenzaConDominioIntero("user-intero-2");
         mvc.perform(get("/pendenze/APP-A/P-TARI-NOUO").with(httpBasic(principal, PASSWORD)))

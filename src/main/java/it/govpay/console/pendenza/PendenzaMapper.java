@@ -1,7 +1,5 @@
 package it.govpay.console.pendenza;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -12,11 +10,9 @@ import java.util.List;
 import java.util.Set;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
-import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.UnitaOperativa;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.DominioRef;
 import it.govpay.console.model.OpzionePagamentoRef;
 import it.govpay.console.model.Pendenza;
@@ -44,8 +40,6 @@ import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 @Component
 public class PendenzaMapper {
 
-    private static final Logger log = LoggerFactory.getLogger(PendenzaMapper.class);
-
     /** Codice della unita' operativa che rappresenta l'ente creditore stesso. */
     static final String COD_UNITA_OPERATIVA_EC = "EC";
 
@@ -55,55 +49,42 @@ public class PendenzaMapper {
         this.clock = clock;
     }
 
-    public PendenzaSummary toSummary(Versamento v) {
-        if (v == null) {
-            return null;
-        }
-        Applicazione applicazione = v.getApplicazione();
-        Dominio dominio = v.getDominio();
-        return new PendenzaSummary(
-                applicazione != null ? applicazione.getCodApplicazione() : null,
-                v.getCodVersamentoEnte(),
-                mapStato(v.getStatoVersamento(), v.getDataScadenza()),
-                mapDominio(dominio),
-                mapTipoPendenza(resolveTipoPendenza(v)),
-                v.getImportoTotale(),
-                CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()),
-                v.getDataOraUltimoAggiornamento())
-                .unitaOperativa(mapUnitaOperativa(v.getUnitaOperativa()))
-                .numeroAvviso(v.getNumeroAvviso())
-                .iuvAvviso(v.getIuvVersamento())
-                .dataScadenza(v.getDataScadenza())
-                .dataValidita(toLocalDate(v.getDataValidita()))
-                .dataUltimaModificaAca(v.getDataUltimaModificaAca())
-                .dataUltimaComunicazioneAca(v.getDataUltimaComunicazioneAca());
-    }
-
     /**
-     * Stato di una pendenza letta come {@link Versamento}: {@code NON_ESEGUITO} con
-     * {@code dataScadenza} passata diventa {@link StatoPendenza#SCADUTO}; gli altri stati
-     * hanno il mapping diretto. {@code NON_PUBBLICATA} non e' derivabile da questa lettura,
-     * perche' la data di pubblicazione sta sulla posizione debitoria.
+     * Riga della lista per una pendenza del modello v3, con opzione di pagamento e posizione
+     * gia' caricate.
+     *
+     * @param idA2A    codice dell'applicazione della pendenza
+     * @param contesto anagrafiche di dominio, tipo pendenza e unita' operativa
      */
-    StatoPendenza mapStato(String statoGrezzo, OffsetDateTime dataScadenza) {
-        if (statoGrezzo == null) {
+    public PendenzaSummary toSummary(it.govpay.pendenze.entity.Pendenza p, String idA2A,
+                                     PendenzaAnagrafiche.Contesto contesto) {
+        if (p == null) {
             return null;
         }
-        StatoPendenza base = baseMapStato(statoGrezzo);
-        if (base == StatoPendenza.NON_ESEGUITO
-                && dataScadenza != null
-                && dataScadenza.isBefore(OffsetDateTime.now(clock))) {
-            return StatoPendenza.SCADUTO;
-        }
-        return base;
-    }
-
-    private static StatoPendenza baseMapStato(String statoGrezzo) {
-        StatoPendenza mapped = StatoVersamentoMapping.baseMap(statoGrezzo);
-        if (mapped == StatoPendenza.ANOMALO && !StatoVersamentoMapping.isRiconosciuto(statoGrezzo)) {
-            log.warn("Stato versamento sconosciuto, mappato a ANOMALO: {}", statoGrezzo);
-        }
-        return mapped;
+        OpzionePagamento opzione = p.getOpzionePagamento();
+        PosizioneDebitoria posizione = opzione.getPosizioneDebitoria();
+        return new PendenzaSummary(
+                idA2A,
+                p.getIdPendenza(),
+                mapStato(p.getStato(), p.getDataScadenzaAvviso(), posizione),
+                mapDominio(contesto.dominio()),
+                mapTipoPendenza(contesto.tipoVersamento()),
+                mapDebitore(opzione),
+                mapOpzione(opzione, p.getNumeroRata()),
+                mapPosizione(idA2A, contesto.dominio(), posizione),
+                p.getImporto(),
+                CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()),
+                p.getDataCreazione(),
+                p.getDataUltimoAggiornamento())
+                .direzione(p.getDirezione())
+                .divisione(p.getDivisione())
+                .unitaOperativa(mapUnitaOperativa(contesto.unitaOperativa()))
+                .numeroAvviso(p.getNumeroAvviso())
+                .iuvAvviso(p.getIuv())
+                .dataScadenza(p.getDataScadenzaAvviso())
+                .dataValidita(toLocalDate(p.getDataValidita()))
+                .dataUltimaModificaAca(p.getDataUltimaModificaAca())
+                .dataUltimaComunicazioneAca(p.getDataUltimaComunicazioneAca());
     }
 
     /**
@@ -156,19 +137,6 @@ public class PendenzaMapper {
     }
 
     /**
-     * Ricava il tipo pendenza passando per {@code TipoVersamentoDominio}
-     * (configurazione per-dominio), con fallback sul {@link TipoVersamento} globale
-     * se la configurazione del dominio non e' caricata.
-     */
-    private static TipoVersamento resolveTipoPendenza(Versamento v) {
-        if (v.getTipoVersamentoDominio() != null
-                && v.getTipoVersamentoDominio().getTipoVersamento() != null) {
-            return v.getTipoVersamentoDominio().getTipoVersamento();
-        }
-        return v.getTipoVersamento();
-    }
-
-    /**
      * Riferimento alla unita' operativa. La unita' {@code EC} rappresenta l'ente creditore
      * stesso e non una sotto-struttura scelta dal chiamante: non si espone.
      */
@@ -216,6 +184,7 @@ public class PendenzaMapper {
                 .iuvAvviso(p.getIuv())
                 .dataScadenza(p.getDataScadenzaAvviso())
                 .dataValidita(toLocalDate(p.getDataValidita()))
+                .dataCreazione(p.getDataCreazione())
                 .dataUltimoAggiornamento(p.getDataUltimoAggiornamento())
                 .dataUltimaModificaAca(p.getDataUltimaModificaAca())
                 .dataUltimaComunicazioneAca(p.getDataUltimaComunicazioneAca())

@@ -24,11 +24,11 @@ public final class PendenzaSortParser {
      * dei campi entity JPA per la query.
      */
     private static final Map<String, String> WHITELIST = Map.of(
-            "dataUltimoAggiornamento", "dataOraUltimoAggiornamento",
+            "dataUltimoAggiornamento", "dataUltimoAggiornamento",
             "dataCreazione", "dataCreazione",
             "dataValidita", "dataValidita",
-            "dataScadenza", "dataScadenza",
-            "stato", "statoVersamento");
+            "dataScadenza", "dataScadenzaAvviso",
+            "stato", "stato");
 
     public static final String DEFAULT_SORT_RAW = "-dataCreazione";
 

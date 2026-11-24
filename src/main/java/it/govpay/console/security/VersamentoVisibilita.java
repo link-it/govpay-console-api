@@ -1,5 +1,7 @@
 package it.govpay.console.security;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -62,6 +64,48 @@ public final class VersamentoVisibilita {
             p = cb.and(p, versamento.get("tipoVersamento").get("id").in(tipi));
         }
 
+        return p;
+    }
+
+    /**
+     * Predicato query-side per una pendenza del modello v3, dai path dei suoi assi (stessa
+     * regola di {@link #isVisibile(Long, Long, Long, Supplier, OperatoreCorrente)}): la
+     * unita' operativa sta sulla posizione e puo' mancare, e una pendenza senza unita'
+     * operativa vale come quella {@code EC} del suo dominio.
+     *
+     * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
+     */
+    public static Predicate predicate(CriteriaBuilder cb, Path<Long> idDominio, Path<Long> idUo,
+                                      Path<Long> idTipoVersamento, Set<Long> dominiConUoEcVisibile,
+                                      OperatoreCorrente operatore) {
+        Predicate p = cb.conjunction();
+
+        if (!operatore.tuttiIDomini()) {
+            Set<Long> dominiInteri = operatore.idDominiInteri();
+            Set<Long> uoVisibili = operatore.idUoVisibili();
+            List<Predicate> alternative = new ArrayList<>();
+            if (!isEmpty(dominiInteri)) {
+                alternative.add(idDominio.in(dominiInteri));
+            }
+            if (!isEmpty(uoVisibili)) {
+                alternative.add(idUo.in(uoVisibili));
+                if (!isEmpty(dominiConUoEcVisibile)) {
+                    alternative.add(cb.and(cb.isNull(idUo), idDominio.in(dominiConUoEcVisibile)));
+                }
+            }
+            if (alternative.isEmpty()) {
+                return cb.disjunction();
+            }
+            p = cb.and(p, cb.or(alternative.toArray(new Predicate[0])));
+        }
+
+        if (!operatore.tuttiITipiVersamento()) {
+            Set<Long> tipi = operatore.idTipiVersamentoVisibili();
+            if (isEmpty(tipi)) {
+                return cb.disjunction();
+            }
+            p = cb.and(p, idTipoVersamento.in(tipi));
+        }
         return p;
     }
 

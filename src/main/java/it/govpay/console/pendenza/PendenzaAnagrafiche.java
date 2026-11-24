@@ -1,5 +1,6 @@
 package it.govpay.console.pendenza;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +15,7 @@ import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.pendenze.entity.VocePendenza;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -28,6 +30,27 @@ class PendenzaAnagrafiche {
 
     /** Anagrafiche dei tre assi della pendenza; i valori assenti sono {@code null}. */
     record Contesto(Dominio dominio, TipoVersamento tipoVersamento, UnitaOperativa unitaOperativa) {
+    }
+
+    /**
+     * Anagrafiche di una pagina di pendenze, per chiave: una query per anagrafica,
+     * indipendente dal numero di righe.
+     *
+     * @param tipi         tipi pendenza, per chiave del tipo del dominio ({@code tipi_vers_domini.id})
+     * @param applicazioni codici applicazione (idA2A), per chiave
+     */
+    record Pagina(Map<Long, Dominio> domini, Map<Long, TipoVersamento> tipi,
+                  Map<Long, UnitaOperativa> unitaOperative, Map<Long, String> applicazioni) {
+
+        Contesto contesto(Pendenza pendenza) {
+            Long idUo = pendenza.getOpzionePagamento().getPosizioneDebitoria().getIdUnitaOperativa();
+            return new Contesto(domini.get(pendenza.getIdDominio()), tipi.get(pendenza.getIdTipoPendenza()),
+                    unitaOperative.get(idUo));
+        }
+
+        String idA2A(Pendenza pendenza) {
+            return applicazioni.get(pendenza.getIdApplicazione());
+        }
     }
 
     /** Anagrafiche delle voci, per chiave. */
@@ -62,6 +85,41 @@ class PendenzaAnagrafiche {
         UnitaOperativa uo = idUnitaOperativa == null ? null
                 : unitaOperativaRepository.findById(idUnitaOperativa).orElse(null);
         return new Contesto(dominio, tipo, uo);
+    }
+
+    /** Risolve le anagrafiche di una pagina di pendenze con opzione e posizione gia' caricate. */
+    Pagina risolviPagina(Collection<Pendenza> pendenze) {
+        Set<Long> idDomini = new HashSet<>();
+        Set<Long> idTipi = new HashSet<>();
+        Set<Long> idUo = new HashSet<>();
+        Set<Long> idApplicazioni = new HashSet<>();
+        for (Pendenza pendenza : pendenze) {
+            add(idDomini, pendenza.getIdDominio());
+            add(idTipi, pendenza.getIdTipoPendenza());
+            add(idApplicazioni, pendenza.getIdApplicazione());
+            add(idUo, pendenza.getOpzionePagamento().getPosizioneDebitoria().getIdUnitaOperativa());
+        }
+
+        Map<Long, Dominio> domini = new HashMap<>();
+        if (!idDomini.isEmpty()) {
+            dominioRepository.findAllById(idDomini).forEach(d -> domini.put(d.getId(), d));
+        }
+        Map<Long, UnitaOperativa> unitaOperative = new HashMap<>();
+        if (!idUo.isEmpty()) {
+            unitaOperativaRepository.findAllById(idUo).forEach(u -> unitaOperative.put(u.getId(), u));
+        }
+        Map<Long, TipoVersamento> tipi = new HashMap<>();
+        if (!idTipi.isEmpty()) {
+            for (Object[] riga : entityManager.createQuery(
+                            "select tvd.id, tv from TipoVersamentoDominio tvd join tvd.tipoVersamento tv "
+                                    + "where tvd.id in :ids", Object[].class)
+                    .setParameter("ids", idTipi).getResultList()) {
+                tipi.put((Long) riga[0], (TipoVersamento) riga[1]);
+            }
+        }
+        Map<Long, String> applicazioni = new HashMap<>(
+                codici("select a.id, a.codApplicazione from Applicazione a where a.id in :ids", idApplicazioni));
+        return new Pagina(domini, tipi, unitaOperative, applicazioni);
     }
 
     Voci risolviVoci(List<VocePendenza> voci) {

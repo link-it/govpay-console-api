@@ -14,7 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.function.Consumer;
+
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +36,6 @@ import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
@@ -43,8 +45,11 @@ import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import jakarta.persistence.EntityManager;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -76,7 +81,7 @@ class PendenzaControllerIntegrationTest {
     @Autowired
     private UnitaOperativaRepository unitaOperativaRepository;
     @Autowired
-    private VersamentoRepository versamentoRepository;
+    private EntityManager em;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired
@@ -146,46 +151,12 @@ class PendenzaControllerIntegrationTest {
                 "NON_ESEGUITO", 6);
 
         // Pendenza non eseguita ma con data scadenza nel PASSATO -> stato derivato a SCADUTO.
-        Versamento scaduta = new Versamento();
-        scaduta.setCodVersamentoEnte("PEND-SCADUTA");
-        scaduta.setImportoTotale(42.0);
-        scaduta.setStatoVersamento("NON_ESEGUITO");
-        scaduta.setDataCreazione(OffsetDateTime.now().minusHours(10));
-        scaduta.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(10));
-        scaduta.setDataScadenza(OffsetDateTime.now().minusDays(7));
-        scaduta.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        scaduta.setDebitoreAnagrafica("Mario Rossi");
-        scaduta.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        scaduta.setImportoPagato(0.0);
-        scaduta.setAnomalo(false);
-        scaduta.setAck(false);
-        scaduta.setTipo("DOVUTO");
-        scaduta.setDominio(domA);
-        scaduta.setApplicazione(app);
-        scaduta.setTipoVersamento(tv);
-        scaduta.setTipoVersamentoDominio(tvdA);
-        versamentoRepository.save(scaduta);
+        creaPendenza("PEND-SCADUTA", domA, app, tv, tvdA, null, "RSSMRA80A01H501U", null, 42.0,
+                "NON_ESEGUITO", 10, OffsetDateTime.now().minusDays(7), null);
 
         // Pendenza non eseguita con data scadenza nel FUTURO -> stato = NON_ESEGUITO.
-        Versamento futura = new Versamento();
-        futura.setCodVersamentoEnte("PEND-FUTURA");
-        futura.setImportoTotale(15.0);
-        futura.setStatoVersamento("NON_ESEGUITO");
-        futura.setDataCreazione(OffsetDateTime.now().minusHours(11));
-        futura.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(11));
-        futura.setDataScadenza(OffsetDateTime.now().plusDays(7));
-        futura.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        futura.setDebitoreAnagrafica("Mario Rossi");
-        futura.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        futura.setImportoPagato(0.0);
-        futura.setAnomalo(false);
-        futura.setAck(false);
-        futura.setTipo("DOVUTO");
-        futura.setDominio(domA);
-        futura.setApplicazione(app);
-        futura.setTipoVersamento(tv);
-        futura.setTipoVersamentoDominio(tvdA);
-        versamentoRepository.save(futura);
+        creaPendenza("PEND-FUTURA", domA, app, tv, tvdA, null, "RSSMRA80A01H501U", null, 15.0,
+                "NON_ESEGUITO", 11, OffsetDateTime.now().plusDays(7), null);
     }
 
     private Dominio newDominio(String cod, String rs) {
@@ -212,29 +183,36 @@ class PendenzaControllerIntegrationTest {
 
     private void newPendenza(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
                              TipoVersamentoDominio tvd, UnitaOperativa uo, String debitore,
-                             String numAvviso, double importo, String statoV1, int orderOffsetHours) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(importo);
-        v.setStatoVersamento(statoV1);
-        v.setDataCreazione(OffsetDateTime.now().minusHours(orderOffsetHours));
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(orderOffsetHours));
-        v.setDebitoreIdentificativo(debitore);
-        v.setDebitoreAnagrafica("Anagrafica " + debitore);
-        v.setSrcDebitoreIdentificativo(debitore);
-        v.setImportoPagato(0.0);
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setCausaleVersamento("Causale " + idPendenza);
-        v.setDataValidita(OffsetDateTime.parse("2026-03-15T10:30:00Z"));
-        v.setNumeroAvviso(numAvviso);
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        v.setUnitaOperativa(uo);
-        versamentoRepository.save(v);
+                             String numAvviso, double importo, String stato, int orderOffsetHours) {
+        creaPendenza(idPendenza, dom, app, tv, tvd, uo, debitore, numAvviso, importo, stato, orderOffsetHours,
+                null, p -> p.setDataValidita(OffsetDateTime.parse("2026-03-15T10:30:00Z")));
+    }
+
+    /** Crea una pendenza del modello v3 (con posizione, debitore e opzione), con data di creazione di {@code oreFa} ore fa. */
+    private Pendenza creaPendenza(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
+                                  TipoVersamentoDominio tvd, UnitaOperativa uo, String debitore,
+                                  String numAvviso, double importo, String stato, int oreFa,
+                                  OffsetDateTime dataScadenza, Consumer<Pendenza> personalizza) {
+        Pendenza p = PendenzaV3Fixtures.pendenza(em, new PendenzaV3Fixtures.Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), uo != null ? uo.getId() : null, idPendenza, numAvviso, debitore,
+                importo, stato(stato), oreFa).conScadenza(dataScadenza));
+        if (personalizza != null) {
+            personalizza.accept(p);
+        }
+        return p;
+    }
+
+    private static StatoPendenza stato(String valore) {
+        return switch (valore) {
+            case "ESEGUITA" -> StatoPendenza.ESEGUITO;
+            case "ANNULLATA" -> StatoPendenza.ANNULLATO;
+            default -> StatoPendenza.valueOf(valore);
+        };
+    }
+
+    private Pendenza pendenza(String idPendenza) {
+        return em.createQuery("select p from Pendenza p where p.idPendenza = :id", Pendenza.class)
+                .setParameter("id", idPendenza).getSingleResult();
     }
 
     @Test
@@ -360,24 +338,8 @@ class PendenzaControllerIntegrationTest {
         OffsetDateTime stessoAggiornamento = OffsetDateTime.now();
 
         for (int i = 1; i <= 3; i++) {
-            Versamento v = new Versamento();
-            v.setCodVersamentoEnte("PEND-ORDINE-" + i);
-            v.setImportoTotale(10.0);
-            v.setStatoVersamento("NON_ESEGUITO");
-            v.setDataCreazione(OffsetDateTime.now().minusDays(i));
-            v.setDataOraUltimoAggiornamento(stessoAggiornamento);
-            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setDebitoreAnagrafica("Mario Rossi");
-            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setImportoPagato(0.0);
-            v.setAnomalo(false);
-            v.setAck(false);
-            v.setTipo("DOVUTO");
-            v.setDominio(dom);
-            v.setApplicazione(app);
-            v.setTipoVersamento(tv);
-            v.setTipoVersamentoDominio(tvd);
-            versamentoRepository.save(v);
+            creaPendenza("PEND-ORDINE-" + i, dom, app, tv, tvd, null, "RSSMRA80A01H501U", null, 10.0,
+                    "NON_ESEGUITO", i * 24, null, p -> p.setDataUltimoAggiornamento(stessoAggiornamento));
         }
 
         mvc.perform(get("/pendenze").param("idPendenza", "PEND-ORDINE").with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -412,13 +374,11 @@ class PendenzaControllerIntegrationTest {
     /** Gli stati ESEGUITO_ALTRO_CANALE e ESEGUITO_SENZA_RPT sono stati a se', non varianti di ESEGUITO. */
     @Test
     void filterByStatoEseguitoAltroCanaleESenzaRptSonoDistinti() throws Exception {
-        Versamento altroCanale = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        altroCanale.setStatoVersamento("ESEGUITO_ALTRO_CANALE");
-        versamentoRepository.save(altroCanale);
+        Pendenza altroCanale = pendenza("PEND-A-001");
+        altroCanale.setStato(stato("ESEGUITO_ALTRO_CANALE"));
 
-        Versamento senzaRpt = versamentoRepository.findDetail(APP_COD, "PEND-A-003").orElseThrow();
-        senzaRpt.setStatoVersamento("ESEGUITO_SENZA_RPT");
-        versamentoRepository.save(senzaRpt);
+        Pendenza senzaRpt = pendenza("PEND-A-003");
+        senzaRpt.setStato(stato("ESEGUITO_SENZA_RPT"));
 
         mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -434,12 +394,35 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-003")));
     }
 
-    /** NON_PUBBLICATA dipende dalla posizione debitoria, che la lista non legge ancora: nessun risultato. */
+    /** NON_PUBBLICATA: pubblicazione futura sulla posizione. Prevale su NON_ESEGUITO e su SCADUTO. */
     @Test
-    void filterByStatoNonPubblicataNonTrovaNulla() throws Exception {
+    void filterByStatoNonPubblicata() throws Exception {
+        pendenza("PEND-A-001").getOpzionePagamento().getPosizioneDebitoria()
+                .setDataPubblicazione(LocalDate.now().plusDays(3));
+        pendenza("PEND-SCADUTA").getOpzionePagamento().getPosizioneDebitoria()
+                .setDataPubblicazione(LocalDate.now().plusDays(3));
+
         mvc.perform(get("/pendenze").param("stato", "NON_PUBBLICATA").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results", org.hamcrest.Matchers.empty()));
+                .andExpect(jsonPath("$.results[*].idPendenza", containsInAnyOrder("PEND-A-001", "PEND-SCADUTA")))
+                .andExpect(jsonPath("$.results[0].stato", is("NON_PUBBLICATA")));
+        mvc.perform(get("/pendenze").param("idDominio", "11111111111").param("stato", "NON_ESEGUITO")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", containsInAnyOrder("PEND-A-003", "PEND-FUTURA")));
+        mvc.perform(get("/pendenze").param("stato", "SCADUTO").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", empty()));
+    }
+
+    /** Una pubblicazione nel giorno corrente vale come pubblicata. */
+    @Test
+    void pubblicazioneOggiNonEnonPubblicata() throws Exception {
+        pendenza("PEND-A-001").getOpzionePagamento().getPosizioneDebitoria().setDataPubblicazione(LocalDate.now());
+
+        mvc.perform(get("/pendenze").param("stato", "NON_PUBBLICATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", empty()));
     }
 
     /** Acceptance criteria issue #66: valore V1 non valido per 'stato' elenca i valori ammessi. */
@@ -460,50 +443,20 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-B-002")));
     }
 
-    /**
-     * Il mapper mappa lo stato grezzo letterale SCADUTA/SCADUTO direttamente a
-     * SCADUTO, indipendentemente da data_scadenza: il filtro deve trovarla,
-     * non solo la variante derivata da NON_ESEGUITO + scadenza passata.
-     */
     @Test
-    void filterByStatoScadutoTrovaAncheIlValoreGrezzoLetterale() throws Exception {
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        v.setStatoVersamento("SCADUTA");
-        v.setDataScadenza(null);
-        versamentoRepository.save(v);
-
-        mvc.perform(get("/pendenze").param("stato", "SCADUTO").with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[*].idPendenza",
-                        containsInAnyOrder("PEND-A-001", "PEND-SCADUTA")));
-    }
-
-    /**
-     * PARZIALMENTE_ESEGUITO e' il nome V1 canonico dello stato (oltre alle
-     * varianti ESEGUITA_PARZIALE/ESEGUITO_PARZIALE): il mapper lo mostra come
-     * PARZIALMENTE_ESEGUITO, quindi il filtro deve trovarlo con lo stesso nome.
-     */
-    @Test
-    void filterByStatoParzialmenteEseguitoTrovaAncheLeVarianti() throws Exception {
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        v.setStatoVersamento("PARZIALMENTE_ESEGUITO");
-        versamentoRepository.save(v);
+    void filterByStatoParzialmenteEseguito() throws Exception {
+        Pendenza v = pendenza("PEND-A-001");
+        v.setStato(stato("PARZIALMENTE_ESEGUITO"));
 
         mvc.perform(get("/pendenze").param("stato", "PARZIALMENTE_ESEGUITO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-001")));
     }
 
-    /**
-     * ANOMALO nel mapper e' il catch-all per qualunque valore grezzo non
-     * riconosciuto: il filtro deve trovare anche quelle righe, non solo i
-     * letterali ANOMALA/ANOMALO.
-     */
     @Test
-    void filterByStatoAnomaloTrovaAncheValoriGrezziSconosciuti() throws Exception {
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        v.setStatoVersamento("QUALCOSA_DI_INESISTENTE");
-        versamentoRepository.save(v);
+    void filterByStatoAnomalo() throws Exception {
+        Pendenza v = pendenza("PEND-A-001");
+        v.setStato(StatoPendenza.ANOMALO);
 
         mvc.perform(get("/pendenze").param("stato", "ANOMALO").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -544,9 +497,8 @@ class PendenzaControllerIntegrationTest {
 
     @Test
     void filterByIuv() throws Exception {
-        Versamento withIuv = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        withIuv.setIuvVersamento("IUV-TEST-001");
-        versamentoRepository.save(withIuv);
+        Pendenza withIuv = pendenza("PEND-A-001");
+        withIuv.setIuv("IUV-TEST-001");
 
         mvc.perform(get("/pendenze").param("iuv", "IUV-TEST-001").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -555,9 +507,8 @@ class PendenzaControllerIntegrationTest {
 
     @Test
     void filterByDirezione() throws Exception {
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        Pendenza v = pendenza("PEND-A-001");
         v.setDirezione("DIR-1");
-        versamentoRepository.save(v);
 
         mvc.perform(get("/pendenze").param("direzione", "DIR-1").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -566,9 +517,8 @@ class PendenzaControllerIntegrationTest {
 
     @Test
     void filterByDivisione() throws Exception {
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        Pendenza v = pendenza("PEND-A-001");
         v.setDivisione("DIV-1");
-        versamentoRepository.save(v);
 
         mvc.perform(get("/pendenze").param("divisione", "DIV-1").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -578,12 +528,10 @@ class PendenzaControllerIntegrationTest {
     /** direzione/divisione: cardinalita' allineata a /ricevute (issue #68), semantica OR come idTipoPendenza. */
     @Test
     void filterByDirezioneMultiploUnisceIRisultati() throws Exception {
-        Versamento v1 = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        Pendenza v1 = pendenza("PEND-A-001");
         v1.setDirezione("DIR-1");
-        versamentoRepository.save(v1);
-        Versamento v2 = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
+        Pendenza v2 = pendenza("PEND-A-002");
         v2.setDirezione("DIR-2");
-        versamentoRepository.save(v2);
 
         mvc.perform(get("/pendenze").param("direzione", "DIR-1")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -599,12 +547,10 @@ class PendenzaControllerIntegrationTest {
 
     @Test
     void filterByDivisioneMultiploUnisceIRisultati() throws Exception {
-        Versamento v1 = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
+        Pendenza v1 = pendenza("PEND-A-001");
         v1.setDivisione("DIV-1");
-        versamentoRepository.save(v1);
-        Versamento v2 = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
+        Pendenza v2 = pendenza("PEND-A-002");
         v2.setDivisione("DIV-2");
-        versamentoRepository.save(v2);
 
         mvc.perform(get("/pendenze").param("divisione", "DIV-1,DIV-2")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -659,27 +605,10 @@ class PendenzaControllerIntegrationTest {
     }
 
     private void salvaVersamentoCombinazione(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
-                                             TipoVersamentoDominio tvd, String statoV1, int giorniFa,
+                                             TipoVersamentoDominio tvd, String stato, int giorniFa,
                                              OffsetDateTime dataScadenza) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(10.0);
-        v.setStatoVersamento(statoV1);
-        v.setDataCreazione(OffsetDateTime.now().minusDays(giorniFa));
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDataScadenza(dataScadenza);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setImportoPagato(0.0);
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
+        creaPendenza(idPendenza, dom, app, tv, tvd, null, "RSSMRA80A01H501U", null, 10.0, stato,
+                giorniFa * 24, dataScadenza, null);
     }
 
     /** ACL prevale anche sui nuovi filtri: dominio non visibile -> lista vuota, non 403. */
@@ -824,43 +753,31 @@ class PendenzaControllerIntegrationTest {
     }
 
     @Test
-    void pendenzaSummaryHasExactlyFifteenFields() throws Exception {
-        // Pendenza dedicata con TUTTI i 15 campi del summary popolati (creata nel
+    void pendenzaSummaryHasExactlyTwentyOneFields() throws Exception {
+        // Pendenza dedicata con TUTTI i 21 campi del summary popolati (creata nel
         // test per non alterare i conteggi degli altri): la proiezione deve esporne
-        // esattamente 15, cosi' l'aggiunta accidentale di un 16esimo campo rompe il test.
-        Versamento base = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        Versamento full = new Versamento();
-        full.setCodVersamentoEnte("PEND-15");
-        full.setImportoTotale(123.0);
-        full.setStatoVersamento("NON_ESEGUITO");
-        full.setDataCreazione(OffsetDateTime.now().minusHours(12));
-        full.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(12));
-        full.setDataScadenza(OffsetDateTime.now().plusDays(10));
-        full.setDataValidita(OffsetDateTime.parse("2026-04-01T08:00:00Z"));
-        full.setDataUltimaModificaAca(OffsetDateTime.now().minusDays(1));
-        full.setDataUltimaComunicazioneAca(OffsetDateTime.now().minusDays(2));
-        full.setCausaleVersamento("Causale completa");
-        full.setNumeroAvviso("009999999999999999");
-        full.setIuvVersamento("9999999999999");
-        full.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        full.setDebitoreAnagrafica("Mario Rossi");
-        full.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        full.setImportoPagato(0.0);
-        full.setAnomalo(false);
-        full.setAck(false);
-        full.setTipo("DOVUTO");
-        full.setDominio(base.getDominio());
-        full.setApplicazione(base.getApplicazione());
-        full.setTipoVersamento(base.getTipoVersamento());
-        full.setTipoVersamentoDominio(base.getTipoVersamentoDominio());
-        full.setUnitaOperativa(base.getUnitaOperativa());
-        versamentoRepository.save(full);
+        // esattamente 21, cosi' l'aggiunta accidentale di un 22esimo campo rompe il test.
+        Pendenza base = pendenza("PEND-A-001");
+        UnitaOperativa uo = unitaOperativaRepository.findById(
+                base.getOpzionePagamento().getPosizioneDebitoria().getIdUnitaOperativa()).orElseThrow();
+        creaPendenza("PEND-15", dominioRepository.findById(base.getIdDominio()).orElseThrow(),
+                applicazioneRepository.findById(base.getIdApplicazione()).orElseThrow(),
+                tipoVersamentoRepository.findById(base.getIdTipoVersamento()).orElseThrow(),
+                tipoVersamentoDominioRepository.findById(base.getIdTipoPendenza()).orElseThrow(),
+                uo, "RSSMRA80A01H501U", "009999999999999999", 123.0, "NON_ESEGUITO", 12,
+                OffsetDateTime.now().plusDays(10), full -> {
+                    full.setDataValidita(OffsetDateTime.parse("2026-04-01T08:00:00Z"));
+                    full.setDataUltimaModificaAca(OffsetDateTime.now().minusDays(1));
+                    full.setDataUltimaComunicazioneAca(OffsetDateTime.now().minusDays(2));
+                    full.setCausaleVersamento("Causale completa");
+                    full.setIuv("9999999999999");
+                });
 
         mvc.perform(get("/pendenze").param("idPendenza", "PEND-15")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(1)))
-                .andExpect(jsonPath("$.results[0].*", hasSize(15)))
+                .andExpect(jsonPath("$.results[0].*", hasSize(21)))
                 .andExpect(jsonPath("$.results[0].idA2A").exists())
                 .andExpect(jsonPath("$.results[0].idPendenza").exists())
                 .andExpect(jsonPath("$.results[0].stato").exists())
@@ -875,7 +792,40 @@ class PendenzaControllerIntegrationTest {
                 .andExpect(jsonPath("$.results[0].dataValidita").exists())
                 .andExpect(jsonPath("$.results[0].dataUltimoAggiornamento").exists())
                 .andExpect(jsonPath("$.results[0].dataUltimaModificaAca").exists())
-                .andExpect(jsonPath("$.results[0].dataUltimaComunicazioneAca").exists());
+                .andExpect(jsonPath("$.results[0].dataUltimaComunicazioneAca").exists())
+                .andExpect(jsonPath("$.results[0].debitore").exists())
+                .andExpect(jsonPath("$.results[0].opzionePagamento").exists())
+                .andExpect(jsonPath("$.results[0].posizioneDebitoria").exists())
+                .andExpect(jsonPath("$.results[0].dataCreazione").exists())
+                .andExpect(jsonPath("$.results[0].direzione", is("Dir-X")))
+                .andExpect(jsonPath("$.results[0].divisione", is("Div-Y")));
+    }
+
+    /** Ogni riga porta debitore (solo tipo e identificativo), opzione e posizione della pendenza. */
+    @Test
+    void summaryRiportaDebitoreOpzioneEPosizione() throws Exception {
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-A-001").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].debitore.tipo", is("F")))
+                .andExpect(jsonPath("$.results[0].debitore.identificativo", is("RSSMRA80A01H501U")))
+                .andExpect(jsonPath("$.results[0].debitore.anagrafica").doesNotExist())
+                .andExpect(jsonPath("$.results[0].opzionePagamento.tipologia", is("SOLUZIONE_UNICA")))
+                .andExpect(jsonPath("$.results[0].opzionePagamento.stato", is("DISPONIBILE")))
+                .andExpect(jsonPath("$.results[0].opzionePagamento.numeroRata").doesNotExist())
+                .andExpect(jsonPath("$.results[0].posizioneDebitoria.idPosizioneDebitoria",
+                        is(APP_COD + "11111111111" + "DOC-PEND-A-001")));
+    }
+
+    /** Di un piano rateale la lista indica la rata della pendenza. */
+    @Test
+    void summaryDiUnPianoRatealeRiportaNumeroRata() throws Exception {
+        PendenzaV3Fixtures.pendenza(em, datiPendenza("PEND-RATA", "RSSMRA80A01H501U", StatoPendenza.NON_ESEGUITO)
+                .conTipologia(it.govpay.pendenze.model.TipologiaOpzionePagamento.PIANO_RATEALE));
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-RATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].opzionePagamento.tipologia", is("PIANO_RATEALE")))
+                .andExpect(jsonPath("$.results[0].opzionePagamento.numeroRata", is(1)));
     }
 
     @Test
@@ -910,9 +860,8 @@ class PendenzaControllerIntegrationTest {
         appB.setCodApplicazione("APP-B");
         applicazioneRepository.save(appB);
 
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-002").orElseThrow();
-        v.setApplicazione(appB);
-        versamentoRepository.save(v);
+        Pendenza v = pendenza("PEND-A-002");
+        v.setIdApplicazione(appB.getId());
 
         mvc.perform(get("/pendenze").param("idA2A", "APP-B").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
@@ -926,9 +875,8 @@ class PendenzaControllerIntegrationTest {
         appB.setCodApplicazione("APP-B");
         applicazioneRepository.save(appB);
 
-        Versamento v = versamentoRepository.findDetail(APP_COD, "PEND-A-001").orElseThrow();
-        v.setApplicazione(appB);
-        versamentoRepository.save(v);
+        Pendenza v = pendenza("PEND-A-001");
+        v.setIdApplicazione(appB.getId());
 
         mvc.perform(get("/pendenze").param("idDominio", "11111111111")
                         .param("idA2A", "APP-B").param("stato", "NON_ESEGUITO")
@@ -1020,25 +968,72 @@ class PendenzaControllerIntegrationTest {
         return tipoVersamentoRepository.save(tv);
     }
 
-    private Versamento salvaVersamentoTipo(String idPendenza, Dominio dom, Applicazione app,
-                                           TipoVersamento tv, TipoVersamentoDominio tvd, String statoV1) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(10.0);
-        v.setStatoVersamento(statoV1);
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setImportoPagato(0.0);
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+    private Pendenza salvaVersamentoTipo(String idPendenza, Dominio dom, Applicazione app,
+                                         TipoVersamento tv, TipoVersamentoDominio tvd, String stato) {
+        return creaPendenza(idPendenza, dom, app, tv, tvd, null, "RSSMRA80A01H501U", null, 10.0, stato, 0,
+                null, null);
+    }
+
+    // ---- Modello v3: debitore dell'opzione, opzione obbligatoria, numero di query ----
+
+    /** Il filtro per debitore trova le pendenze di quel debitore, non quelle degli altri debitori della posizione. */
+    @Test
+    void filterByIdentificativoDebitoreDistingueIDebitoriDellaPosizione() throws Exception {
+        Dati dati = datiPendenza("PEND-SECONDO", "01234567890", StatoPendenza.NON_ESEGUITO);
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em, dati, "VRDLGI90B02H501T", false);
+
+        mvc.perform(get("/pendenze").param("identificativoDebitore", "01234567890")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-SECONDO")));
+        // Il primo debitore della posizione non e' il debitore di questa pendenza.
+        mvc.perform(get("/pendenze").param("identificativoDebitore", "VRDLGI90B02H501T")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
+    }
+
+    @Test
+    void filterByIdentificativoDebitoreSenzaDistinzioneMaiuscole() throws Exception {
+        mvc.perform(get("/pendenze").param("identificativoDebitore", "vrdlgi90b02h501t")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-A-002")));
+    }
+
+    /** Un debitore rimosso ha le pendenze annullate: restano in lista, filtrabili come ANNULLATO. */
+    @Test
+    void pendenzeDiUnDebitoreRimossoRestanoInListaComeAnnullate() throws Exception {
+        Dati dati = datiPendenza("PEND-RIMOSSO", "01234567890", StatoPendenza.ANNULLATO);
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em, dati, "VRDLGI90B02H501T", true);
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-RIMOSSO").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-RIMOSSO")))
+                .andExpect(jsonPath("$.results[0].stato", is("ANNULLATO")));
+    }
+
+    /** Come il dettaglio, la lista non ammette pendenze senza opzione di pagamento: ogni riga si puo' aprire. */
+    @Test
+    void pendenzaSenzaOpzioneNonCompareInLista() throws Exception {
+        PendenzaV3Fixtures.pendenzaSenzaOpzione(em, datiPendenza("PEND-SENZA-OPZIONE", "RSSMRA80A01H501U",
+                StatoPendenza.NON_ESEGUITO));
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-SENZA-OPZIONE")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results", empty()));
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SENZA-OPZIONE").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    private Dati datiPendenza(String idPendenza, String debitore, StatoPendenza stato) {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+        return new Dati(app.getId(), dom.getId(), tv.getId(), tvd.getId(), null, idPendenza, null, debitore,
+                10.0, stato, 0);
     }
 }
