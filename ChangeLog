@@ -1,3 +1,72 @@
+2026-11-24  Giuliano Pintori <pintori@link.it>
+
+	* [Pendenze] Issue #127 Lettura delle pendenze sul modello v3 di
+	govpay-common-pendenze. BREAKING CHANGE del contratto.
+	La console legge posizioni debitorie, opzioni di pagamento (una o piu' per
+	debitore), pendenze e voci con le entity della libreria, non piu' la sola
+	tabella versamenti. Richiede lo schema del core alla patch 3.11.0 o
+	successiva con le tabelle del modello v3 (documenti, opzioni_pagamento,
+	pd_debitori, debitori).
+	Stati della pendenza: NON_PAGATA -> NON_ESEGUITO, PAGATA -> ESEGUITO,
+	PAGATA_PARZIALE -> PARZIALMENTE_ESEGUITO, ANNULLATA -> ANNULLATO,
+	RICONCILIATA -> INCASSATO, ANOMALA -> ANOMALO; nuovi ESEGUITO_ALTRO_CANALE,
+	ESEGUITO_SENZA_RPT e NON_PUBBLICATA (posizione con data di pubblicazione
+	futura, prevale su SCADUTO). SCADUTA diventa SCADUTO ed e' derivato da
+	NON_ESEGUITO con scadenza passata; il filtro ?stato= usa gli stessi valori.
+	Stati della voce: NON_PAGATA -> NON_ESEGUITO, PAGATA -> ESEGUITO,
+	ANOMALA -> ANOMALO, anche nell'input dei tracciati.
+	Pendenza e lista: nuovi campi debitore (tipo e identificativo del debitore
+	dell'opzione), opzionePagamento (con numero di rata), posizioneDebitoria,
+	dataCreazione, direzione e divisione; la unita' operativa EC non e' piu'
+	esposta. Il debitore di una pendenza e' quello della sua opzione, non il
+	primo della posizione, e la ricerca per debitore e' case-insensitive.
+	Visibilita': la unita' operativa sta sulla posizione; una posizione senza
+	unita' operativa vale come quella EC del dominio. Le pendenze senza opzione
+	di pagamento non compaiono in lista ne' nel dettaglio.
+	Verifica: query della lista a numero costante rispetto alle righe, misurate
+	con le statistiche di Hibernate.
+
+	* [Posizioni debitorie] Issue #127 Nuovo GET
+	/posizioni-debitorie/{idA2A}/{idPosizioneDebitoria} (IUPD): debitori con
+	anagrafica completa (anche rimossi, rimosso=true), opzioni di pagamento e
+	pendenze. Una posizione si apre se l'operatore vede dominio, unita'
+	operativa e almeno una pendenza; le pendenze di tipi non visibili sono
+	omesse. Ogni 200 e' tracciato in gp_audit (POSIZIONE_VISUALIZZA_DEBITORI).
+	La pendenza ha il link _links.posizioneDebitoria.
+
+	* [Debitore] Issue #127 GET /pendenze/{idA2A}/{idPendenza}/informazioniDebitore
+	restituisce l'anagrafica del debitore dell'opzione della pendenza; audit
+	invariato.
+
+	* [Avvisi] Issue #127 L'avviso di una pendenza si genera dal modello v3, un
+	bollettino per pendenza; per le opzioni a soglia (SOLUZIONE_UNICA_ENTRO e
+	OLTRE) il PDF riporta il pagamento con soglia. Il nome del file e'
+	{idDominio}_{numeroAvviso}.pdf. Un debitore senza anagrafica risponde 422
+	(prima la stampa partiva con il nome vuoto).
+	Nuovo GET /posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}/avviso: PDF
+	complessivo del debitore indicato con idDebitore (obbligatorio con piu'
+	debitori attivi), con rate, opzioni alternative, coppia ENTRO/OLTRE su una
+	pagina e violazione del Codice della Strada (ridotto e scontato). L'operatore
+	deve vedere tutte le pendenze da stampare, altrimenti 404.
+	Le stampe inviano creditor.pay_on_website dalla colonna domini.pagamento_sito:
+	per gli enti che la hanno attiva il testo "Dove pagare" riporta anche il
+	sito dell'ente (govpay-stampe-api: i PDF cambiano per questi domini).
+	Il client di govpay-stampe e' riallineato alla specifica di govpay-pendenze-api
+	(PaymentNotice.options, pay_on_website, /cds_violation).
+
+	* [Ricevute] Issue #127 Ricevute, riconciliazioni e tracciati leggono la
+	pendenza dal modello v3, con le stesse risposte. Una ricevuta resta
+	consultabile anche se la pendenza non ha opzione di pagamento (dati storici
+	non migrati), con la unita' operativa storica (versamenti.id_uo); il filtro
+	idUnitaOperativa=EC include le posizioni senza unita' operativa. Il soggetto
+	pagatore di un'operazione di tracciato e' il debitore dell'opzione. Le
+	query di GET /ricevute cambiano (join con pendenza, opzione e posizione):
+	gli indici non sono stati ricontrollati con EXPLAIN su un database reale.
+
+	* [Interno] Issue #127 Rimosse le entity Versamento, SingoloVersamento e
+	Documento della console e i relativi repository; IuvUtils e' quello di
+	govpay-common.
+
 2026-11-11  Giuliano Pintori <pintori@link.it>
 
 	* [Domini] Issue #124 Logo del dominio: verifica di stampabilita' al
