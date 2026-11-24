@@ -26,10 +26,10 @@ import jakarta.persistence.PersistenceContext;
  * anagrafica, indipendente dal numero di voci.
  */
 @Component
-class PendenzaAnagrafiche {
+public class PendenzaAnagrafiche {
 
     /** Anagrafiche dei tre assi della pendenza; i valori assenti sono {@code null}. */
-    record Contesto(Dominio dominio, TipoVersamento tipoVersamento, UnitaOperativa unitaOperativa) {
+    public record Contesto(Dominio dominio, TipoVersamento tipoVersamento, UnitaOperativa unitaOperativa) {
     }
 
     /**
@@ -39,16 +39,16 @@ class PendenzaAnagrafiche {
      * @param tipi         tipi pendenza, per chiave del tipo del dominio ({@code tipi_vers_domini.id})
      * @param applicazioni codici applicazione (idA2A), per chiave
      */
-    record Pagina(Map<Long, Dominio> domini, Map<Long, TipoVersamento> tipi,
+    public record Pagina(Map<Long, Dominio> domini, Map<Long, TipoVersamento> tipi,
                   Map<Long, UnitaOperativa> unitaOperative, Map<Long, String> applicazioni) {
 
-        Contesto contesto(Pendenza pendenza) {
+        public Contesto contesto(Pendenza pendenza) {
             Long idUo = pendenza.getOpzionePagamento().getPosizioneDebitoria().getIdUnitaOperativa();
             return new Contesto(domini.get(pendenza.getIdDominio()), tipi.get(pendenza.getIdTipoPendenza()),
                     unitaOperative.get(idUo));
         }
 
-        String idA2A(Pendenza pendenza) {
+        public String idA2A(Pendenza pendenza) {
             return applicazioni.get(pendenza.getIdApplicazione());
         }
     }
@@ -88,7 +88,7 @@ class PendenzaAnagrafiche {
     }
 
     /** Risolve le anagrafiche di una pagina di pendenze con opzione e posizione gia' caricate. */
-    Pagina risolviPagina(Collection<Pendenza> pendenze) {
+    public Pagina risolviPagina(Collection<Pendenza> pendenze) {
         Set<Long> idDomini = new HashSet<>();
         Set<Long> idTipi = new HashSet<>();
         Set<Long> idUo = new HashSet<>();

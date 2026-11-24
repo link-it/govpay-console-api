@@ -6,8 +6,10 @@ import org.springframework.stereotype.Component;
 
 import it.govpay.console.model.DebitorePosizione;
 import it.govpay.console.model.OpzionePagamentoPosizione;
+import it.govpay.console.model.Link;
 import it.govpay.console.model.PendenzaSummary;
 import it.govpay.console.model.PosizioneDebitoria;
+import it.govpay.console.model.PosizioneDebitoriaLinks;
 import it.govpay.console.soggetto.SoggettoMapper;
 import it.govpay.pendenze.entity.OpzionePagamento;
 import it.govpay.pendenze.entity.PdDebitore;
@@ -32,7 +34,8 @@ class PosizioneMapper {
                 posizione.getDescrizione(),
                 posizione.getDataCreazione(),
                 posizione.getDataUltimoAggiornamento(),
-                debitori)
+                debitori,
+                new PosizioneDebitoriaLinks(new Link("/posizioni-debitorie/" + idA2A + "/" + idPosizioneDebitoria + "/avviso")))
                 .unitaOperativa(PendenzaMapper.mapUnitaOperativa(pagina.unitaOperative().get(posizione.getIdUnitaOperativa())))
                 .dataPubblicazione(posizione.getDataPubblicazione());
     }

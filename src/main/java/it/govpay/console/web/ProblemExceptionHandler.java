@@ -32,6 +32,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.util.UrlPathHelper;
 
 import it.govpay.console.audit.AuditService;
+import it.govpay.console.avviso.AvvisoAnagraficaAssenteException;
 import it.govpay.console.avviso.AvvisoMbtException;
 import it.govpay.console.avviso.AvvisoNonDisponibileException;
 import it.govpay.console.avviso.StampeNotConfiguredException;
@@ -186,6 +187,7 @@ public class ProblemExceptionHandler {
     }
 
     @ExceptionHandler({ AvvisoMbtException.class, AvvisoNonDisponibileException.class,
+            AvvisoAnagraficaAssenteException.class,
             UnprocessableEntityException.class })
     public ResponseEntity<Problem> handleUnprocessable(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, ex);

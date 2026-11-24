@@ -69,7 +69,7 @@ public final class PendenzaV3Fixtures {
                     tipologia, datiAllegati, proprieta);
         }
 
-        Dati conTipologia(TipologiaOpzionePagamento valore) {
+        public Dati conTipologia(TipologiaOpzionePagamento valore) {
             return new Dati(idApplicazione, idDominio, idTipoVersamento, idTipoPendenza, idUnitaOperativa,
                     idPendenza, numeroAvviso, debitore, importo, stato, oreDaOra, dataPubblicazione,
                     dataScadenza, valore, datiAllegati, proprieta);
@@ -184,6 +184,16 @@ public final class PendenzaV3Fixtures {
         opzione.addPendenza(pendenza);
         em.persist(opzione);
         return pendenza;
+    }
+
+    /** Aggiunge a {@code esistente} una rata nella sua stessa opzione di pagamento. */
+    public static Pendenza rataNellaStessaOpzione(EntityManager em, Pendenza esistente, Dati dati, int numeroRata) {
+        OffsetDateTime riferimento = OffsetDateTime.now().minusHours(dati.oreDaOra());
+        Pendenza rata = nuovaPendenza(dati, riferimento);
+        rata.setNumeroRata(numeroRata);
+        esistente.getOpzionePagamento().addPendenza(rata);
+        em.persist(rata);
+        return rata;
     }
 
     /** Persiste la sola pendenza, senza opzione di pagamento ne' posizione debitoria. */

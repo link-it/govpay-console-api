@@ -14,16 +14,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.common.metrics.ExternalCallMetricsRecorder;
-import it.govpay.console.entity.SingoloVersamento;
-import it.govpay.console.entity.Versamento;
+import it.govpay.console.entity.Dominio;
+import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.model.Avviso;
 import it.govpay.console.model.LinguaSecondaria;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.pendenza.PendenzaLettura;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.NotAcceptableMediaTypeException;
 import it.govpay.console.web.NotFoundException;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.stampe.client.model.PaymentNotice;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,20 +33,23 @@ public class AvvisoService {
 
     private static final Logger log = LoggerFactory.getLogger(AvvisoService.class);
 
-    private final VersamentoRepository repository;
+    private final PendenzaLettura lettura;
+    private final IbanPostaleResolver ibanPostaleResolver;
     private final AvvisoMapper avvisoMapper;
     private final AvvisoPdfPayloadMapper pdfPayloadMapper;
     private final StampeClient stampeClient;
     private final CurrentOperatorService currentOperatorService;
     private final ExternalCallMetricsRecorder externalCallMetricsRecorder;
 
-    public AvvisoService(VersamentoRepository repository,
+    public AvvisoService(PendenzaLettura lettura,
+                         IbanPostaleResolver ibanPostaleResolver,
                          AvvisoMapper avvisoMapper,
                          AvvisoPdfPayloadMapper pdfPayloadMapper,
                          StampeClient stampeClient,
                          CurrentOperatorService currentOperatorService,
                          ExternalCallMetricsRecorder externalCallMetricsRecorder) {
-        this.repository = repository;
+        this.lettura = lettura;
+        this.ibanPostaleResolver = ibanPostaleResolver;
         this.avvisoMapper = avvisoMapper;
         this.pdfPayloadMapper = pdfPayloadMapper;
         this.currentOperatorService = currentOperatorService;
@@ -72,32 +75,29 @@ public class AvvisoService {
         log.debug("getAvviso idA2A={} idPendenza={} lingua={} operatore={}",
                 idA2A, idPendenza, lingua, operatore.principal());
 
-        Versamento versamento = repository.findDetail(idA2A, idPendenza)
-                .orElseThrow(() -> new NotFoundException(
-                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
+        PendenzaLettura.Letta letta = lettura.leggiVisibile(idA2A, idPendenza, operatore);
+        Pendenza pendenza = letta.pendenza();
+        Dominio dominio = letta.contesto().dominio();
 
-        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
-            log.debug("getAvviso ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={}",
-                    idA2A, idPendenza);
-            throw new NotFoundException(
-                    "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
-        }
-
-        if (versamento.getNumeroAvviso() == null || versamento.getNumeroAvviso().isBlank()) {
+        if (pendenza.getNumeroAvviso() == null || pendenza.getNumeroAvviso().isBlank()) {
             throw new NotFoundException(
                     "Pendenza priva di numeroAvviso: avviso non disponibile.");
         }
 
         MediaType chosen = chooseContentType(request);
         if (MediaType.APPLICATION_PDF.equals(chosen)) {
-            if (isPendenzaMbt(versamento)) {
+            if (AvvisoPdfPayloadMapper.isPendenzaMbt(pendenza)) {
                 throw new AvvisoMbtException(
                         "Avviso PDF non disponibile per pendenze con Marca da Bollo Telematica.");
             }
-            PaymentNotice payload = pdfPayloadMapper.toPaymentNotice(versamento, lingua);
-            String filename = buildFilename(versamento);
-            log.debug("getAvviso PDF streaming idPendenza={} lingua={}",
-                    versamento.getCodVersamentoEnte(), lingua);
+            if (AvvisoPdfPayloadMapper.isAnagraficaDebitoreAssente(pendenza)) {
+                throw new AvvisoAnagraficaAssenteException(
+                        "Avviso PDF non disponibile: anagrafica del debitore assente.");
+            }
+            IbanAccredito postale = ibanPostaleResolver.risolvi(pendenza);
+            PaymentNotice payload = pdfPayloadMapper.toPaymentNotice(pendenza, dominio, postale, lingua);
+            String filename = buildFilename(dominio, pendenza);
+            log.debug("getAvviso PDF streaming idPendenza={} lingua={}", idPendenza, lingua);
             response.setContentType(MediaType.APPLICATION_PDF_VALUE);
             response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
                     "attachment; filename=\"" + filename + "\"");
@@ -111,40 +111,14 @@ public class AvvisoService {
             }
             return null;
         }
-        Avviso avviso = avvisoMapper.toAvviso(versamento);
+        Avviso avviso = avvisoMapper.toAvviso(pendenza, dominio);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(avviso);
     }
 
-    /**
-     * la pendenza e' una Marca da Bollo Telematica se almeno un singolo versamento
-     * ha {@code hashDocumento}, {@code provinciaResidenza} e {@code tipoBollo}
-     * tutti valorizzati.
-     */
-    private static boolean isPendenzaMbt(Versamento v) {
-        if (v.getSingoliVersamenti() == null) {
-            return false;
-        }
-        for (SingoloVersamento sv : v.getSingoliVersamenti()) {
-            if (sv.getHashDocumento() != null
-                    && sv.getProvinciaResidenza() != null
-                    && sv.getTipoBollo() != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String buildFilename(Versamento v) {
-        // Per pendenze con documento aggiungiamo come suffisso il codRata (fallback: numeroAvviso)
-    	// per evitare la collisione sui file delle N rate dello stesso documento.
-        String dom = v.getDominio() != null ? v.getDominio().getCodDominio() : "AVV";
-        if (v.getDocumento() != null && v.getDocumento().getCodDocumento() != null) {
-            String rata = v.getCodRata() != null && !v.getCodRata().isBlank()
-                    ? v.getCodRata()
-                    : v.getNumeroAvviso();
-            return dom + "_DOC_" + v.getDocumento().getCodDocumento() + "_" + rata + ".pdf";
-        }
-        return dom + "_" + v.getNumeroAvviso() + ".pdf";
+    /** Il numero avviso e' unico: distingue anche le rate di una stessa opzione. */
+    private static String buildFilename(Dominio dominio, Pendenza p) {
+        String dom = dominio != null ? dominio.getCodDominio() : "AVV";
+        return dom + "_" + p.getNumeroAvviso() + ".pdf";
     }
 
     private static MediaType chooseContentType(HttpServletRequest request) {

@@ -191,6 +191,8 @@ class PosizioneControllerIntegrationTest {
                 .andExpect(jsonPath("$.idPosizioneDebitoria", is(iupd("POS-1"))))
                 .andExpect(jsonPath("$.dominio.idDominio", is(DOM_VISIBILE)))
                 .andExpect(jsonPath("$.descrizione", is("Posizione POS-1")))
+                .andExpect(jsonPath("$._links.avviso.href",
+                        is("/posizioni-debitorie/" + APP_COD + "/" + iupd("POS-1") + "/avviso")))
                 .andExpect(jsonPath("$.debitori", hasSize(2)))
                 .andExpect(jsonPath("$.debitori[0].soggetto.identificativo", is("VRDLGI90B02H501T")))
                 .andExpect(jsonPath("$.debitori[0].rimosso", is(false)))

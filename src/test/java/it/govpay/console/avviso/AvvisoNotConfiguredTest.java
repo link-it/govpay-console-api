@@ -5,8 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.OffsetDateTime;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,14 +22,17 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import it.govpay.common.auth.GovpayPasswordEncoder;
 
 /**
@@ -66,8 +67,8 @@ class AvvisoNotConfiguredTest {
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired
-    private VersamentoRepository versamentoRepository;
+    @PersistenceContext
+    private EntityManager em;
 
     @BeforeEach
     void setup() {
@@ -106,26 +107,8 @@ class AvvisoNotConfiguredTest {
         tvd.setTipoVersamento(tv);
         tipoVersamentoDominioRepository.save(tvd);
 
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-503");
-        v.setImportoTotale(50.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("XXX");
-        v.setDebitoreAnagrafica("Test");
-        v.setSrcDebitoreIdentificativo("XXX");
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setIuvVersamento("1234567890123");
-        v.setNumeroAvviso("012345678901234567");
-        v.setDominio(domA);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
+        PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), domA.getId(), tv.getId(), tvd.getId(), null,
+                "PEND-503", "012345678901234567", "XXX", 50.0, StatoPendenza.NON_ESEGUITO, 0));
     }
 
     @Test

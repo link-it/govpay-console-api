@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import it.govpay.stampe.client.model.CdsViolation;
 import it.govpay.stampe.client.model.PaymentNotice;
 import it.govpay.stampe.client.model.Receipt;
 
@@ -53,6 +54,7 @@ public class StampeClient {
     /** Path del microservizio sul base-url (allineato a govpay-stampe.yaml). */
     private static final String PAYMENT_NOTICE_PATH = "/standard";
     private static final String RECEIPT_PATH = "/receipt";
+    private static final String CDS_VIOLATION_PATH = "/cds_violation";
 
     private final StampeRawClient rawClient;
     private final ObjectMapper objectMapper;
@@ -68,6 +70,10 @@ public class StampeClient {
 
     public void streamPaymentNotice(PaymentNotice payload, OutputStream output) {
         streamToOutput(PAYMENT_NOTICE_PATH, payload, output);
+    }
+
+    public void streamCdsViolation(CdsViolation payload, OutputStream output) {
+        streamToOutput(CDS_VIOLATION_PATH, payload, output);
     }
 
     public void streamReceipt(Receipt payload, OutputStream output) {

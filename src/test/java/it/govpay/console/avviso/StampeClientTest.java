@@ -22,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import it.govpay.stampe.client.model.CdsViolation;
 import it.govpay.stampe.client.model.PaymentNotice;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -49,6 +50,22 @@ class StampeClientTest {
         client.streamPaymentNotice(new PaymentNotice(), output);
 
         assertThat(output.toByteArray()).isEqualTo("%PDF-finto".getBytes());
+        server.verify();
+    }
+
+    @Test
+    void streamCdsViolation_chiamaIlPathDedicato() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        StampeClient client = new StampeClient(new StampeRawClient(restTemplate), JsonMapper.shared(), BASE_URL);
+        server.expect(requestTo(BASE_URL + "/cds_violation"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("%PDF-cds".getBytes(), MediaType.APPLICATION_PDF));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        client.streamCdsViolation(new CdsViolation(), output);
+
+        assertThat(output.toByteArray()).isEqualTo("%PDF-cds".getBytes());
         server.verify();
     }
 

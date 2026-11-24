@@ -15,9 +15,14 @@ import org.yaml.snakeyaml.Yaml;
 
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.OpzionePagamento;
+import it.govpay.pendenze.entity.PdDebitore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.entity.PosizioneDebitoria;
+import it.govpay.pendenze.model.TipoSoggetto;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 import it.govpay.stampe.client.model.PaymentNotice;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -44,7 +49,7 @@ class StampePayloadContractTest {
     @SuppressWarnings("unchecked")
     void paymentNoticeSatisfiesStampeRequiredFields() throws Exception {
         Map<String, Object> schemas = loadSchemas();
-        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(sample(), null), Map.class);
+        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(sample(), dominio(), null, null), Map.class);
 
         assertRequired(payload, resolve(schemas, "PaymentNotice"), "PaymentNotice");
         assertRequired((Map<String, Object>) payload.get("full"), resolve(schemas, "Amount"), "Amount");
@@ -63,7 +68,7 @@ class StampePayloadContractTest {
     @SuppressWarnings("unchecked")
     void avvisoPostaleInviaLIbanRichiestoDaStampe() throws Exception {
         Map<String, Object> schemas = loadSchemas();
-        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(samplePostale(), null), Map.class);
+        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(sample(), dominio(), postale(), null), Map.class);
 
         assertThat(payload.get("postal")).as("il sample e' un avviso postale").isEqualTo(Boolean.TRUE);
         Map<String, Object> full = (Map<String, Object>) payload.get("full");
@@ -73,20 +78,122 @@ class StampePayloadContractTest {
         assertRequired((Map<String, Object>) full.get("iban"), resolve(schemas, "Iban"), "Iban");
     }
 
-    private static Versamento samplePostale() {
-        Versamento v = sample();
+    /**
+     * Con una soglia temporale l'avviso usa {@code reduced_payments}: ogni elemento deve
+     * soddisfare i required di {@code ThresholdPayment}.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void pagamentoConSogliaSatisfiesStampeRequiredFields() throws Exception {
+        Map<String, Object> schemas = loadSchemas();
+        Pendenza p = sample();
+        p.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO);
+        p.getOpzionePagamento().setGiorni(5);
+
+        Map<String, Object> payload = json.convertValue(mapper.toPaymentNotice(p, dominio(), null, null), Map.class);
+
+        List<Map<String, Object>> ridotti = (List<Map<String, Object>>) payload.get("reduced_payments");
+        assertThat(ridotti).hasSize(1);
+        assertRequired(ridotti.get(0), resolve(schemas, "ThresholdPayment"), "ThresholdPayment");
+    }
+
+    private static final AvvisoPdfPayloadMapper.Risolutore RISOLUTORE = new AvvisoPdfPayloadMapper.Risolutore() {
+        @Override
+        public Dominio dominio(Pendenza pendenza) {
+            return StampePayloadContractTest.dominio();
+        }
+
+        @Override
+        public IbanAccredito iban(Pendenza pendenza) {
+            return null;
+        }
+    };
+
+    /** Aggiunge alla posizione di {@code base} un'opzione del tipo dato con una pendenza, e la restituisce. */
+    private static Pendenza altraOpzione(Pendenza base, TipologiaOpzionePagamento tipologia, int rata, String nav) {
+        OpzionePagamento opzione = new OpzionePagamento();
+        opzione.setTipologia(tipologia);
+        base.getOpzionePagamento().getPdDebitore().addOpzionePagamento(opzione);
+        Pendenza p = new Pendenza();
+        p.setIdPendenza("PEND-" + nav);
+        p.setIuv(nav.substring(1));
+        p.setNumeroAvviso(nav);
+        p.setImporto(50.0);
+        p.setNumeroRata(rata);
+        opzione.addPendenza(p);
+        return p;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void avvisoARateSatisfiesStampeRequiredFields() throws Exception {
+        Map<String, Object> schemas = loadSchemas();
+        Pendenza prima = sample();
+        Pendenza seconda = new Pendenza();
+        seconda.setIdPendenza("PEND-2");
+        seconda.setIuv("123456789012346");
+        seconda.setNumeroAvviso("001123456789012346");
+        seconda.setImporto(50.0);
+        seconda.setNumeroRata(2);
+        prima.getOpzionePagamento().addPendenza(seconda);
+
+        Map<String, Object> payload = json.convertValue(
+                mapper.toPaymentNoticeRate(List.of(prima, seconda), RISOLUTORE), Map.class);
+
+        assertRequired(payload, resolve(schemas, "PaymentNotice"), "PaymentNotice");
+        List<Map<String, Object>> rate = (List<Map<String, Object>>) payload.get("instalments");
+        assertThat(rate).hasSize(2);
+        for (Map<String, Object> rata : rate) {
+            assertRequired(rata, resolve(schemas, "Instalment"), "Instalment");
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void avvisoConOpzioniSatisfiesStampeRequiredFields() throws Exception {
+        Map<String, Object> schemas = loadSchemas();
+        Pendenza prima = sample();
+        Pendenza seconda = altraOpzione(prima, TipologiaOpzionePagamento.PIANO_RATEALE, 1, "001123456789012347");
+        Pendenza terza = altraOpzione(prima, TipologiaOpzionePagamento.PIANO_RATEALE, 2, "001123456789012348");
+        seconda.getOpzionePagamento().addPendenza(terza);
+
+        Map<String, Object> payload = json.convertValue(mapper.toPaymentNoticeOpzioni(
+                List.of(List.of(prima), List.of(seconda, terza)), RISOLUTORE), Map.class);
+
+        assertRequired(payload, resolve(schemas, "PaymentNotice"), "PaymentNotice");
+        List<Map<String, Object>> opzioni = (List<Map<String, Object>>) payload.get("options");
+        assertThat(opzioni).hasSize(2);
+        assertRequired((Map<String, Object>) opzioni.get(0).get("full"), resolve(schemas, "Amount"), "Amount");
+        assertRequired(((List<Map<String, Object>>) opzioni.get(1).get("instalments")).get(0),
+                resolve(schemas, "Instalment"), "Instalment");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void violazioneCdsSatisfiesStampeRequiredFields() throws Exception {
+        Map<String, Object> schemas = loadSchemas();
+        Pendenza ridotto = sample();
+        ridotto.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA_RIDOTTO);
+        Pendenza scontato = altraOpzione(ridotto, TipologiaOpzionePagamento.SOLUZIONE_UNICA_SCONTATO, 1,
+                "001123456789012349");
+
+        Map<String, Object> payload = json.convertValue(
+                mapper.toCdsViolation(List.of(List.of(ridotto), List.of(scontato)), RISOLUTORE), Map.class);
+
+        assertRequired(payload, resolve(schemas, "CdsViolation"), "CdsViolation");
+        assertRequired((Map<String, Object>) payload.get("reduced_amount"), resolve(schemas, "Amount"), "Amount");
+        assertRequired((Map<String, Object>) payload.get("discounted_amount"), resolve(schemas, "Amount"), "Amount");
+    }
+
+    private static IbanAccredito postale() {
         IbanAccredito postale = new IbanAccredito();
         postale.setCodIban("IT60X0542811101000000123456");
         postale.setPostale(true);
         postale.setIntestatario("Comune di Test");
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setVersamento(v);
-        sv.setIbanAccredito(postale);
-        v.getSingoliVersamenti().add(sv);
-        return v;
+        return postale;
     }
 
-    private static Versamento sample() {
+    private static Dominio dominio() {
         Stazione stazione = new Stazione();
         stazione.setApplicationCode(1);
         Dominio dominio = new Dominio();
@@ -95,17 +202,32 @@ class StampePayloadContractTest {
         dominio.setAuxDigit(0);
         dominio.setStazione(stazione);
         dominio.setLogo(Base64.getEncoder().encode("png".getBytes(StandardCharsets.UTF_8)));
-        Versamento v = new Versamento();
-        v.setDominio(dominio);
-        v.setIuvVersamento("123456789012345");
-        v.setNumeroAvviso("001123456789012345");
-        v.setImportoTotale(100.0);
-        v.setDataScadenza(OffsetDateTime.now().plusDays(30));
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setCausaleVersamento("01 "
+        return dominio;
+    }
+
+    private static Pendenza sample() {
+        PosizioneDebitoria posizione = new PosizioneDebitoria();
+        posizione.setDescrizione("Posizione di test");
+        Debitore debitore = new Debitore();
+        debitore.setTipo(TipoSoggetto.F);
+        debitore.setIdentificativo("RSSMRA80A01H501U");
+        debitore.setAnagrafica("Mario Rossi");
+        PdDebitore pdDebitore = new PdDebitore();
+        pdDebitore.setDebitore(debitore);
+        posizione.addPdDebitore(pdDebitore);
+        OpzionePagamento opzione = new OpzionePagamento();
+        opzione.setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA);
+        pdDebitore.addOpzionePagamento(opzione);
+        Pendenza p = new Pendenza();
+        p.setIdPendenza("PEND-1");
+        p.setIuv("123456789012345");
+        p.setNumeroAvviso("001123456789012345");
+        p.setImporto(100.0);
+        p.setDataScadenzaAvviso(OffsetDateTime.now().plusDays(30));
+        p.setCausaleVersamento("01 "
                 + Base64.getEncoder().encodeToString("Pagamento di test".getBytes(StandardCharsets.UTF_8)));
-        return v;
+        opzione.addPendenza(p);
+        return p;
     }
 
     private void assertRequired(Map<String, Object> node, Schema schema, String context) {

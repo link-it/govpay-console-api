@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Stazione;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.Avviso;
 import it.govpay.console.model.StatoAvviso;
 import it.govpay.console.pendenza.IuvUtils;
+import it.govpay.pendenze.entity.Pendenza;
 
 /**
- * Mapper Versamento → {@link Avviso} per la variante {@code application/json}.
+ * Mapper pendenza v3 → {@link Avviso} per la variante {@code application/json}.
  * qrcode/barcode generati da {@link IuvUtils}.
  */
 @Component
@@ -27,56 +27,60 @@ public class AvvisoMapper {
         this.clock = clock;
     }
 
-    public Avviso toAvviso(Versamento v) {
-        if (v == null) {
+    /**
+     * @param p       pendenza con opzione di pagamento e posizione debitoria caricate
+     * @param dominio dominio della pendenza
+     */
+    public Avviso toAvviso(Pendenza p, Dominio dominio) {
+        if (p == null) {
             return null;
         }
         Avviso a = new Avviso(
-                v.getDominio() != null ? v.getDominio().getCodDominio() : null,
-                v.getNumeroAvviso(),
-                v.getImportoTotale(),
-                mapStato(v.getStatoVersamento(), v.getDataScadenza()));
-        a.setDescrizione(CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()));
-        a.setDataValidita(v.getDataValidita());
-        a.setDataScadenza(v.getDataScadenza());
-        a.setTassonomiaAvviso(v.getTassonomiaAvviso());
-        a.setQrcode(buildQrcode(v));
-        a.setBarcode(buildBarcode(v));
+                dominio != null ? dominio.getCodDominio() : null,
+                p.getNumeroAvviso(),
+                p.getImporto(),
+                mapStato(p.getStato(), p.getDataScadenzaAvviso()));
+        a.setDescrizione(oggettoDelPagamento(p));
+        a.setDataValidita(p.getDataValidita());
+        a.setDataScadenza(p.getDataScadenzaAvviso());
+        a.setTassonomiaAvviso(p.getTassonomiaAvviso());
+        a.setQrcode(buildQrcode(p, dominio));
+        a.setBarcode(buildBarcode(p, dominio));
         return a;
     }
 
-    StatoAvviso mapStato(String statoV1, OffsetDateTime dataScadenza) {
-        if (statoV1 == null) {
+    /**
+     * Oggetto del pagamento: la causale della pendenza se presente, altrimenti la descrizione
+     * della sua posizione debitoria.
+     */
+    static String oggettoDelPagamento(Pendenza p) {
+        String causale = CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento());
+        return causale != null ? causale : p.getOpzionePagamento().getPosizioneDebitoria().getDescrizione();
+    }
+
+    StatoAvviso mapStato(it.govpay.pendenze.model.StatoPendenza stato, OffsetDateTime dataScadenza) {
+        if (stato == null) {
             return null;
         }
-        String normalized = statoV1.trim().toUpperCase();
-        return switch (normalized) {
-            case "ANNULLATO", "ANNULLATA" -> StatoAvviso.ANNULLATO;
-            case "ESEGUITO", "ESEGUITA", "PAGATO", "PAGATA" -> StatoAvviso.PAGATO;
-            case "ESEGUITO_ALTRO_CANALE" -> StatoAvviso.PAGATO;
-            case "ESEGUITO_PARZIALE", "ESEGUITA_PARZIALE",
-                 "PARZIALMENTE_ESEGUITO", "PAGATA_PARZIALE", "PAGATO_PARZIALE" -> StatoAvviso.PAGATO;
-            case "INCASSATO", "INCASSATA", "RICONCILIATO", "RICONCILIATA" -> StatoAvviso.PAGATO;
-            case "NON_ESEGUITO", "NON_ESEGUITA", "NON_PAGATO", "NON_PAGATA" ->
-                    (dataScadenza != null && dataScadenza.isBefore(OffsetDateTime.now(clock)))
-                            ? StatoAvviso.SCADUTO
-                            : StatoAvviso.NON_PAGATO;
-            case "SCADUTO", "SCADUTA" -> StatoAvviso.SCADUTO;
-            default -> null;
+        return switch (stato) {
+            case ANNULLATO -> StatoAvviso.ANNULLATO;
+            case ESEGUITO, ESEGUITO_ALTRO_CANALE, ESEGUITO_SENZA_RPT, PARZIALMENTE_ESEGUITO, INCASSATO ->
+                    StatoAvviso.PAGATO;
+            case NON_ESEGUITO -> dataScadenza != null && dataScadenza.isBefore(OffsetDateTime.now(clock))
+                    ? StatoAvviso.SCADUTO
+                    : StatoAvviso.NON_PAGATO;
+            case ANOMALO -> null;
         };
     }
 
     /**
-     * Stringa QR {@code PAGOPA|002|...}; con numeroAvviso assente il codice
-     * viene derivato da auxDigit/applicationCode/IUV. {@code null} se mancano
-     * i dati di base (dominio, auxDigit, IUV, importo). Condivisa con il
-     * payload PDF ({@link AvvisoPdfPayloadMapper}).
+     * Stringa QR {@code PAGOPA|002|...}. {@code null} se mancano i dati di base (dominio,
+     * auxDigit, IUV). Condivisa con il payload PDF ({@link AvvisoPdfPayloadMapper}).
      */
-    static String buildQrcode(Versamento v) {
-        if (!hasRequiredFields(v)) {
+    static String buildQrcode(Pendenza p, Dominio dominio) {
+        if (!hasRequiredFields(p, dominio)) {
             return null;
         }
-        Dominio dominio = v.getDominio();
         Stazione stazione = dominio.getStazione();
         return new String(IuvUtils.buildQrCode002(
                 dominio.getCodDominio(),
@@ -84,16 +88,15 @@ public class AvvisoMapper {
                 stazione != null && stazione.getApplicationCode() != null
                         ? stazione.getApplicationCode()
                         : 0,
-                v.getIuvVersamento(),
-                BigDecimal.valueOf(v.getImportoTotale()),
-                v.getNumeroAvviso()));
+                p.getIuv(),
+                BigDecimal.valueOf(p.getImporto()),
+                p.getNumeroAvviso()));
     }
 
-    private static String buildBarcode(Versamento v) {
-        if (!hasRequiredFields(v)) {
+    private static String buildBarcode(Pendenza p, Dominio dominio) {
+        if (!hasRequiredFields(p, dominio)) {
             return null;
         }
-        Dominio dominio = v.getDominio();
         Stazione stazione = dominio.getStazione();
         return IuvUtils.buildBarCode(
                 dominio.getGln() != null ? dominio.getGln() : "",
@@ -101,16 +104,15 @@ public class AvvisoMapper {
                 stazione != null && stazione.getApplicationCode() != null
                         ? stazione.getApplicationCode()
                         : 0,
-                v.getIuvVersamento(),
-                BigDecimal.valueOf(v.getImportoTotale()),
-                v.getNumeroAvviso());
+                p.getIuv(),
+                BigDecimal.valueOf(p.getImporto()),
+                p.getNumeroAvviso());
     }
 
-    private static boolean hasRequiredFields(Versamento v) {
-        return v.getDominio() != null
-                && v.getDominio().getCodDominio() != null
-                && v.getDominio().getAuxDigit() != null
-                && v.getIuvVersamento() != null
-                && v.getImportoTotale() != null;
+    private static boolean hasRequiredFields(Pendenza p, Dominio dominio) {
+        return dominio != null
+                && dominio.getCodDominio() != null
+                && dominio.getAuxDigit() != null
+                && p.getIuv() != null;
     }
 }

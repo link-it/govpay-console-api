@@ -1686,8 +1686,8 @@ paths:
         - `application/pdf` → stampa binaria generata dal microservizio
           `govpay-stampe`. Endpoint allineato a V1 `/avvisi/{idDominio}/{numeroAvviso}`:
           genera il PDF dell'avviso della singola pendenza anche quando
-          appartiene a un documento multi-rata. Il PDF aggregato dell'intero
-          documento e' una feature distinta, oggetto di issue dedicata.
+          appartiene a un'opzione a piu' rate: un bollettino per pendenza. L'avviso
+          complessivo della posizione e' `/posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}/avviso`.
 
         ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
         viene restituito 404 (no leak di esistenza). Se la pendenza non ha
@@ -1748,7 +1748,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Avviso PDF non applicabile a questa pendenza (Marca da Bollo Telematica).
+            Avviso PDF non applicabile a questa pendenza (Marca da Bollo Telematica,
+            anagrafica del debitore assente).
           content:
             application/problem+json:
               schema:
@@ -1875,6 +1876,106 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Posizione non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}/avviso:
+    get:
+      tags:
+        - Posizioni debitorie
+      operationId: getAvvisoPosizioneDebitoria
+      summary: Avviso di pagamento PDF complessivo di una posizione debitoria.
+      description: |
+        Genera il PDF dell'avviso di un debitore della posizione, con le sue opzioni di
+        pagamento. Si stampano le pendenze ancora `NON_ESEGUITO` di ogni opzione, in ordine
+        di rata. Il layout dipende dalle opzioni stampabili:
+        - una sola opzione con una pendenza: avviso a rata unica;
+        - una sola opzione con piu' pendenze: avviso a rate;
+        - le due opzioni `SOLUZIONE_UNICA_RIDOTTO` e `SOLUZIONE_UNICA_SCONTATO`: avviso di
+          violazione del Codice della Strada con i due importi;
+        - le due opzioni `SOLUZIONE_UNICA_ENTRO` e `SOLUZIONE_UNICA_OLTRE`: un avviso con i
+          due pagamenti a soglia sulla stessa pagina;
+        - altrimenti un avviso con una pagina per opzione.
+
+        Solo in italiano. `idDebitore` e' obbligatorio se la posizione ha piu' di un debitore
+        attivo: ogni debitore ha i propri numeri avviso e un PDF non mescola persone diverse.
+
+        ACL: la posizione deve essere visibile e l'operatore deve vedere **tutte** le pendenze
+        da stampare, altrimenti 404 (no leak di esistenza): un avviso con rate mancanti non
+        e' ammesso.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPosizioneDebitoria
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 81
+            pattern: '^[a-zA-Z0-9\-_]{1,81}$'
+        - name: idDebitore
+          in: query
+          required: false
+          description: Identificativo del debitore da stampare. Obbligatorio con piu' debitori attivi.
+          schema:
+            type: string
+            maxLength: 35
+      responses:
+        '200':
+          description: PDF dell'avviso. Il file si chiama `{idPosizioneDebitoria}.pdf`.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: '`idDebitore` mancante con piu'' debitori attivi.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: |
+            Posizione o debitore non trovati, oppure posizione o pendenze da stampare
+            non visibili per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Header `Accept` non compatibile con `application/pdf`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Nessuna pendenza stampabile, oppure presenza di una Marca da Bollo Telematica
+            o di un debitore senza anagrafica.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: Errore di comunicazione con il microservizio `govpay-stampe`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
           content:
             application/problem+json:
               schema:
@@ -7745,6 +7846,7 @@ components:
         - dataCreazione
         - dataUltimoAggiornamento
         - debitori
+        - _links
       properties:
         idA2A:
           type: string
@@ -7772,6 +7874,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DebitorePosizione'
+        _links:
+          $ref: '#/components/schemas/PosizioneDebitoriaLinks'
+
+    PosizioneDebitoriaLinks:
+      type: object
+      description: |
+        Hyperlink della posizione. `avviso` e' il PDF complessivo, sempre presente: con piu'
+        debitori attivi il client aggiunge il parametro `idDebitore`.
+      required:
+        - avviso
+      properties:
+        avviso:
+          $ref: '#/components/schemas/Link'
+      additionalProperties:
+        $ref: '#/components/schemas/Link'
 
     DebitorePosizione:
       type: object
