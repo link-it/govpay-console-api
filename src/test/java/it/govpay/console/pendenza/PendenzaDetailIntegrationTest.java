@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +30,6 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.TipoVersamento;
@@ -36,18 +37,21 @@ import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.SingoloVersamentoRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.common.entity.TipoContabilita;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.DettaglioContabile;
+import it.govpay.pendenze.model.StatoPendenza;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -60,6 +64,7 @@ class PendenzaDetailIntegrationTest {
     private static final String PRINCIPAL = "operatore1";
     private static final String PASSWORD = "secret";
     private static final String APP_COD = "APP-A";
+    private static final String COD_DOMINIO_VISIBILE = "11111111111";
 
     @Autowired
     private MockMvc mvc;
@@ -72,17 +77,13 @@ class PendenzaDetailIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
     private UnitaOperativaRepository unitaOperativaRepository;
-    @Autowired
-    private VersamentoRepository versamentoRepository;
-    @Autowired
-    private SingoloVersamentoRepository singoloVersamentoRepository;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
 
@@ -106,7 +107,7 @@ class PendenzaDetailIntegrationTest {
         op.setIdUtenza(utenza.getId());
         operatoreRepository.save(op);
 
-        Dominio domVisibile = saveDominio("11111111111", "Dominio Visibile");
+        Dominio domVisibile = saveDominio(COD_DOMINIO_VISIBILE, "Dominio Visibile");
         Dominio domNonVisibile = saveDominio("22222222222", "Dominio NON Visibile");
 
         UtenzaDominio link = new UtenzaDominio();
@@ -126,40 +127,39 @@ class PendenzaDetailIntegrationTest {
         TipoVersamentoDominio tvdVis = saveTvd(domVisibile, tv);
         TipoVersamentoDominio tvdNon = saveTvd(domNonVisibile, tv);
 
-        UnitaOperativa uo = new UnitaOperativa();
-        uo.setCodUo("UO1");
-        uo.setUoDenominazione("Ufficio Tributi");
-        uo.setDominio(domVisibile);
-        unitaOperativaRepository.save(uo);
+        UnitaOperativa uo = saveUo("UO1", "Ufficio Tributi", domVisibile);
+        UnitaOperativa uoEc = saveUo("EC", "Ente creditore", domVisibile);
 
         // 1) Pendenza completa con voci, avviso e dati allegati / proprieta
-        Versamento pendenzaCompleta = newPendenza(
-                "PEND-FULL", domVisibile, app, tv, tvdVis, uo,
-                "RSSMRA80A01H501U", "001234567890123456",
-                100.0, "NON_ESEGUITO", 1,
-                "{\"key\":\"valore-allegato\"}",
-                "{\"prop\":\"valore-prop\"}");
-        addVoce(pendenzaCompleta, "VOCE-1", 1, 40.0, "Quota A", "NON_ESEGUITO");
-        addVoce(pendenzaCompleta, "VOCE-2", 2, 60.0, "Quota B", "NON_ESEGUITO");
+        Dati datiCompleta = pendenza(app, domVisibile, tv, tvdVis, uo, "PEND-FULL",
+                "001234567890123456", "RSSMRA80A01H501U", 100.0, StatoPendenza.NON_ESEGUITO, 1)
+                .conDatiAllegati("{\"key\":\"valore-allegato\"}", "{\"prop\":\"valore-prop\"}")
+                .conScadenza(OffsetDateTime.now().plusDays(30));
+        Pendenza full = PendenzaV3Fixtures.pendenza(em, datiCompleta);
+        PendenzaV3Fixtures.voce(em, full, "VOCE-1", 1, 40.0, "Quota A", voce -> {
+            voce.setDatiAllegati("{\"voce\":\"allegato\"}");
+            voce.setMetadata("{\"voce\":\"metadata\"}");
+            voce.setDescrizioneCausaleRpt("Causale RPT");
+            voce.setDettaglioContabile(java.util.List.of(new DettaglioContabile.Civilistico(
+                    "2026", "UFF1", "14.01.03", null, null, new BigDecimal("40.00"))));
+        });
+        PendenzaV3Fixtures.voce(em, full, "VOCE-2", 2, 60.0, "Quota B", null);
 
         // 2) Pendenza senza avviso (per testare assenza di _links.avviso)
-        newPendenza("PEND-NO-AVV", domVisibile, app, tv, tvdVis, null,
-                "VRDLGI90B02H501T", null,
-                50.0, "NON_ESEGUITO", 2, null, null);
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-NO-AVV",
+                null, "VRDLGI90B02H501T", 50.0, StatoPendenza.NON_ESEGUITO, 2));
 
         // 3) Pendenza pagata (per testare presenza di _links.ricevuta)
-        newPendenza("PEND-PAGATA", domVisibile, app, tv, tvdVis, null,
-                "BNCMRA70C03H501S", "001999999999999999",
-                75.0, "ESEGUITA", 3, null, null);
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-PAGATA",
+                "001999999999999999", "BNCMRA70C03H501S", 75.0, StatoPendenza.ESEGUITO, 3));
 
         // 4) Pendenza nel dominio NON visibile (per testare 404 anti-leak)
-        newPendenza("PEND-HIDDEN", domNonVisibile, app, tv, tvdNon, null,
-                "GLGFNC85D04H501R", null,
-                200.0, "NON_ESEGUITO", 4, null, null);
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domNonVisibile, tv, tvdNon, null, "PEND-HIDDEN",
+                null, "GLGFNC85D04H501R", 200.0, StatoPendenza.NON_ESEGUITO, 4));
 
         // 5) Pendenza con voci di tipo diverso (dettaglio oneOf) + multibeneficiario.
-        Versamento pendenzaVoci = newPendenza("PEND-VOCI", domVisibile, app, tv, tvdVis, null,
-                "RSSMRA80A01H501U", null, 60.0, "NON_ESEGUITO", 5, null, null);
+        Pendenza voci = PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-VOCI",
+                null, "RSSMRA80A01H501U", 60.0, StatoPendenza.NON_ESEGUITO, 5));
         // ENTRATA_ANAGRAFICA: voce con riferimento a tributo (cod entrata via tipi_tributo).
         TipoTributo tipoTributo = new TipoTributo();
         tipoTributo.setCodTributo("TARI-2026");
@@ -168,45 +168,71 @@ class PendenzaDetailIntegrationTest {
         tributo.setTipoTributo(tipoTributo);
         tributo.setDominio(domVisibile);
         em.persist(tributo);
-        SingoloVersamento vEntrata = newVoce(pendenzaVoci, "VOCE-ENTRATA", 1, 20.0);
-        vEntrata.setTributo(tributo);
-        singoloVersamentoRepository.save(vEntrata);
+        PendenzaV3Fixtures.voce(em, voci, "VOCE-ENTRATA", 1, 20.0, "VOCE-ENTRATA",
+                voce -> voce.setIdTributo(tributo.getId()));
         // INCASSO_DIRETTO: voce con iban + contabilita, su dominio diverso (multibeneficiario).
-        IbanAccredito iban = new IbanAccredito();
-        iban.setPostale(false);
-        iban.setCodIban("IT60X0542811101000000123456");
-        iban.setDominio(domNonVisibile);
-        em.persist(iban);
-        SingoloVersamento vIncasso = newVoce(pendenzaVoci, "VOCE-INCASSO", 2, 20.0);
-        vIncasso.setIbanAccredito(iban);
-        vIncasso.setTipoContabilita("0");
-        vIncasso.setCodiceContabilita("3321");
-        vIncasso.setDominio(domNonVisibile);
-        singoloVersamentoRepository.save(vIncasso);
+        IbanAccredito iban = saveIban("IT60X0542811101000000123456", domNonVisibile);
+        PendenzaV3Fixtures.voce(em, voci, "VOCE-INCASSO", 2, 20.0, "VOCE-INCASSO", voce -> {
+            voce.setIdIbanAccredito(iban.getId());
+            voce.setTipoContabilita(TipoContabilita.CAPITOLO);
+            voce.setCodiceContabilita("3321");
+            voce.setIdDominio(domNonVisibile.getId());
+        });
         // BOLLO_TELEMATICO: voce con i tre campi del bollo.
-        SingoloVersamento vBollo = newVoce(pendenzaVoci, "VOCE-BOLLO", 3, 20.0);
-        vBollo.setTipoBollo("01");
-        vBollo.setHashDocumento("aGFzaC1iYXNlNjQ=");
-        vBollo.setProvinciaResidenza("RM");
-        singoloVersamentoRepository.save(vBollo);
-        // Voce legacy ambigua (bollo + iban): la priorita' deve scegliere BOLLO_TELEMATICO.
-        IbanAccredito ibanAmbiguo = new IbanAccredito();
-        ibanAmbiguo.setPostale(false);
-        ibanAmbiguo.setCodIban("IT60X0542811101000000999999");
-        ibanAmbiguo.setDominio(domNonVisibile);
-        em.persist(ibanAmbiguo);
-        SingoloVersamento vAmbigua = newVoce(pendenzaVoci, "VOCE-AMBIGUA", 4, 0.0);
-        vAmbigua.setTipoBollo("01");
-        vAmbigua.setHashDocumento("aGFzaA==");
-        vAmbigua.setProvinciaResidenza("MI");
-        vAmbigua.setIbanAccredito(ibanAmbiguo);
-        singoloVersamentoRepository.save(vAmbigua);
+        PendenzaV3Fixtures.voce(em, voci, "VOCE-BOLLO", 3, 20.0, "VOCE-BOLLO", voce -> {
+            voce.setTipoBollo("01");
+            voce.setHashDocumento("aGFzaC1iYXNlNjQ=");
+            voce.setProvinciaResidenza("RM");
+        });
+        // Voce ambigua (bollo + iban): il bollo prevale.
+        IbanAccredito ibanAmbiguo = saveIban("IT60X0542811101000000999999", domNonVisibile);
+        PendenzaV3Fixtures.voce(em, voci, "VOCE-AMBIGUA", 4, 0.0, "VOCE-AMBIGUA", voce -> {
+            voce.setTipoBollo("01");
+            voce.setHashDocumento("aGFzaA==");
+            voce.setProvinciaResidenza("MI");
+            voce.setIdIbanAccredito(ibanAmbiguo.getId());
+        });
 
-        // Forza l'INSERT delle voci e libera il primo livello: senza questo, la
-        // collection LAZY del Versamento resta vuota in cache anche se le voci sono
-        // state salvate via repository.
+        // 6) Pendenza non eseguita con scadenza passata
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-SCADUTA",
+                "001000000000000001", "RSSMRA80A01H501U", 10.0, StatoPendenza.NON_ESEGUITO, 6)
+                .conScadenza(OffsetDateTime.now().minusDays(1)));
+
+        // 7) Pendenza la cui posizione sara' pubblicata domani, con scadenza gia' passata
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-NON-PUBBL",
+                "001000000000000002", "RSSMRA80A01H501U", 10.0, StatoPendenza.NON_ESEGUITO, 7)
+                .conPubblicazione(LocalDate.now().plusDays(1))
+                .conScadenza(OffsetDateTime.now().minusDays(1)));
+
+        // 8) Pendenza assegnata all'unita' operativa dell'ente creditore
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, uoEc, "PEND-EC",
+                "001000000000000003", "RSSMRA80A01H501U", 10.0, StatoPendenza.NON_ESEGUITO, 8));
+
+        // 9) Rata di un piano rateale
+        PendenzaV3Fixtures.pendenza(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-RATA",
+                "001000000000000004", "RSSMRA80A01H501U", 10.0, StatoPendenza.NON_ESEGUITO, 9)
+                .conTipologia(TipologiaOpzionePagamento.PIANO_RATEALE));
+
+        // 9b) Pendenza del secondo debitore della posizione, e di un debitore rimosso
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-SECONDO-DEB",
+                "001000000000000006", "01234567890", 10.0, StatoPendenza.NON_ESEGUITO, 10), "RSSMRA80A01H501U", false);
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-DEB-RIMOSSO",
+                "001000000000000007", "01234567890", 10.0, StatoPendenza.NON_ESEGUITO, 10), "RSSMRA80A01H501U", true);
+
+        // 10) Pendenza senza opzione di pagamento: il modello non la ammette
+        PendenzaV3Fixtures.pendenzaSenzaOpzione(em, pendenza(app, domVisibile, tv, tvdVis, null, "PEND-SENZA-OPZIONE",
+                "001000000000000005", "RSSMRA80A01H501U", 10.0, StatoPendenza.NON_ESEGUITO, 10));
+
+        // Forza l'INSERT e libera il primo livello, cosi' le letture ricaricano dal database.
         em.flush();
         em.clear();
+    }
+
+    private Dati pendenza(Applicazione app, Dominio dominio, TipoVersamento tv, TipoVersamentoDominio tvd,
+                          UnitaOperativa uo, String idPendenza, String numeroAvviso, String debitore,
+                          double importo, StatoPendenza stato, int oreDaOra) {
+        return new Dati(app.getId(), dominio.getId(), tv.getId(), tvd.getId(),
+                uo != null ? uo.getId() : null, idPendenza, numeroAvviso, debitore, importo, stato, oreDaOra);
     }
 
     private Dominio saveDominio(String cod, String rs) {
@@ -224,60 +250,21 @@ class PendenzaDetailIntegrationTest {
         return tipoVersamentoDominioRepository.save(tvd);
     }
 
-    private Versamento newPendenza(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
-                                   TipoVersamentoDominio tvd, UnitaOperativa uo, String debitore,
-                                   String numAvviso, double importo, String statoV1,
-                                   int orderOffsetHours, String datiAllegati, String proprieta) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(importo);
-        v.setStatoVersamento(statoV1);
-        v.setDataCreazione(OffsetDateTime.now().minusHours(orderOffsetHours));
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now().minusHours(orderOffsetHours));
-        v.setCausaleVersamento("Causale per " + idPendenza);
-        v.setDebitoreIdentificativo(debitore);
-        v.setDebitoreAnagrafica("Anagrafica " + debitore);
-        v.setSrcDebitoreIdentificativo(debitore);
-        v.setImportoPagato(0.0);
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setNumeroAvviso(numAvviso);
-        v.setTassonomia("tax-A");
-        v.setTassonomiaAvviso("tax-avv");
-        v.setDirezione("Dir-X");
-        v.setDivisione("Div-Y");
-        v.setDatiAllegati(datiAllegati);
-        v.setProprieta(proprieta);
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        v.setUnitaOperativa(uo);
-        return versamentoRepository.save(v);
+    private UnitaOperativa saveUo(String cod, String denominazione, Dominio dominio) {
+        UnitaOperativa uo = new UnitaOperativa();
+        uo.setCodUo(cod);
+        uo.setUoDenominazione(denominazione);
+        uo.setDominio(dominio);
+        return unitaOperativaRepository.save(uo);
     }
 
-    private void addVoce(Versamento v, String idVoce, int indice, double importo,
-                         String descrizione, String statoV1) {
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte(idVoce);
-        sv.setIndiceDati(indice);
-        sv.setImportoSingoloVersamento(importo);
-        sv.setDescrizione(descrizione);
-        sv.setStatoSingoloVersamento(statoV1);
-        sv.setVersamento(v);
-        singoloVersamentoRepository.save(sv);
-    }
-
-    private SingoloVersamento newVoce(Versamento v, String idVoce, int indice, double importo) {
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte(idVoce);
-        sv.setIndiceDati(indice);
-        sv.setImportoSingoloVersamento(importo);
-        sv.setDescrizione(idVoce);
-        sv.setStatoSingoloVersamento("NON_ESEGUITO");
-        sv.setVersamento(v);
-        return sv;
+    private IbanAccredito saveIban(String codIban, Dominio dominio) {
+        IbanAccredito iban = new IbanAccredito();
+        iban.setPostale(false);
+        iban.setCodIban(codIban);
+        iban.setDominio(dominio);
+        em.persist(iban);
+        return iban;
     }
 
     @Test
@@ -324,7 +311,11 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idA2A", is(APP_COD)))
                 .andExpect(jsonPath("$.idPendenza", is("PEND-FULL")))
-                .andExpect(jsonPath("$.stato", is("NON_PAGATA")))
+                .andExpect(jsonPath("$.stato", is("NON_ESEGUITO")))
+                .andExpect(jsonPath("$.dominio.idDominio", is(COD_DOMINIO_VISIBILE)))
+                .andExpect(jsonPath("$.dominio.ragioneSociale", is("Dominio Visibile")))
+                .andExpect(jsonPath("$.tipoPendenza.idTipoPendenza", is("TARI")))
+                .andExpect(jsonPath("$.tipoPendenza.descrizione", is("Tassa rifiuti")))
                 .andExpect(jsonPath("$.direzione", is("Dir-X")))
                 .andExpect(jsonPath("$.divisione", is("Div-Y")))
                 .andExpect(jsonPath("$.voci", hasSize(2)))
@@ -336,11 +327,68 @@ class PendenzaDetailIntegrationTest {
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/ricevute")))
                 .andExpect(jsonPath("$._links.avviso.href",
                         endsWith("/pendenze/" + APP_COD + "/PEND-FULL/avviso")))
-                // Campi rimossi dal refactor #9.
+                .andExpect(jsonPath("$._links.posizioneDebitoria.href",
+                        endsWith("/posizioni-debitorie/" + APP_COD + "/" + APP_COD + COD_DOMINIO_VISIBILE + "DOC-PEND-FULL")))
                 .andExpect(jsonPath("$.tipo").doesNotExist())
                 .andExpect(jsonPath("$.tassonomia").doesNotExist())
                 .andExpect(jsonPath("$.tassonomiaAvviso").doesNotExist())
                 .andExpect(jsonPath("$._links.ricevuta").doesNotExist());
+    }
+
+    @Test
+    void opzioneDiPagamentoEPosizioneDebitoria() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-FULL").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.opzionePagamento.idOpzionePagamento", notNullValue()))
+                .andExpect(jsonPath("$.opzionePagamento.tipologia", is("SOLUZIONE_UNICA")))
+                .andExpect(jsonPath("$.opzionePagamento.stato", is("DISPONIBILE")))
+                .andExpect(jsonPath("$.opzionePagamento.numeroRata").doesNotExist())
+                .andExpect(jsonPath("$.posizioneDebitoria.idPosizioneDebitoria",
+                        is(APP_COD + COD_DOMINIO_VISIBILE + "DOC-PEND-FULL")))
+                .andExpect(jsonPath("$.posizioneDebitoria.dataPubblicazione").doesNotExist());
+    }
+
+    @Test
+    void rataDiPianoRateale() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-RATA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.opzionePagamento.tipologia", is("PIANO_RATEALE")))
+                .andExpect(jsonPath("$.opzionePagamento.numeroRata", is(1)));
+    }
+
+    @Test
+    void statoScadutoPerNonEseguitaConScadenzaPassata() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SCADUTA").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stato", is("SCADUTO")));
+    }
+
+    @Test
+    void statoNonPubblicataPrevaleSuScaduto() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NON-PUBBL").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stato", is("NON_PUBBLICATA")))
+                .andExpect(jsonPath("$.posizioneDebitoria.dataPubblicazione",
+                        is(LocalDate.now().plusDays(1).toString())));
+    }
+
+    @Test
+    void unitaOperativaDelEnteCreditoreNonSiEspone() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-EC").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unitaOperativa", nullValue()));
+    }
+
+    @Test
+    void voceEspoteContabilitaDatiAllegatiEMetadata() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-FULL").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.voci[0].datiAllegati", containsString("allegato")))
+                .andExpect(jsonPath("$.voci[0].metadata", containsString("metadata")))
+                .andExpect(jsonPath("$.voci[0].descrizioneCausaleRPT", is("Causale RPT")))
+                .andExpect(jsonPath("$.voci[0].contabilita", containsString("14.01.03")))
+                .andExpect(jsonPath("$.voci[1].datiAllegati").doesNotExist())
+                .andExpect(jsonPath("$.voci[1].contabilita").doesNotExist());
     }
 
     @Test
@@ -349,6 +397,7 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._links.informazioniDebitore.href", notNullValue()))
                 .andExpect(jsonPath("$._links.ricevute.href", notNullValue()))
+                .andExpect(jsonPath("$._links.posizioneDebitoria.href", notNullValue()))
                 .andExpect(jsonPath("$._links.avviso").doesNotExist());
     }
 
@@ -356,7 +405,7 @@ class PendenzaDetailIntegrationTest {
     void linksRicevuteAlwaysPresent() throws Exception {
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-PAGATA").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.stato", is("PAGATA")))
+                .andExpect(jsonPath("$.stato", is("ESEGUITO")))
                 .andExpect(jsonPath("$._links.ricevute.href",
                         endsWith("/pendenze/" + APP_COD + "/PEND-PAGATA/ricevute")))
                 .andExpect(jsonPath("$._links.ricevuta").doesNotExist());
@@ -368,6 +417,13 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType("application/problem+json"))
                 .andExpect(jsonPath("$.status", is(404)));
+    }
+
+    @Test
+    void returns404WhenPendenzaHasNoOpzionePagamento() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SENZA-OPZIONE").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType("application/problem+json"));
     }
 
     @Test
@@ -434,15 +490,34 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(jsonPath("$.proprieta").doesNotExist())
                 .andExpect(jsonPath("$.causale", is("Causale per PEND-FULL")))
                 .andExpect(jsonPath("$.unitaOperativa.idUnitaOperativa", is("UO1")))
+                .andExpect(jsonPath("$.unitaOperativa.ragioneSociale", is("Ufficio Tributi")))
                 .andExpect(jsonPath("$.idDebitore").doesNotExist());
     }
 
     @Test
-    void detailResponseHasNoSoggettoField() throws Exception {
+    void debitoreIsTheOneOfTheOptionNotTheFirstOfThePosition() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SECONDO-DEB").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.debitore.tipo", is("G")))
+                .andExpect(jsonPath("$.debitore.identificativo", is("01234567890")));
+    }
+
+    @Test
+    void removedDebitoreKeepsItsRiferimentoAndAnnulledOption() throws Exception {
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-DEB-RIMOSSO").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.debitore.identificativo", is("01234567890")))
+                .andExpect(jsonPath("$.opzionePagamento.stato", is("ANNULLATA")));
+    }
+
+    @Test
+    void detailExposesOnlyTipoAndIdentificativoOfDebitore() throws Exception {
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-FULL").with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                // Lo schema Pendenza non include soggettoPagatore: i dati anagrafici
-                // sono solo su /informazioniDebitore.
+                .andExpect(jsonPath("$.debitore.tipo", is("F")))
+                .andExpect(jsonPath("$.debitore.identificativo", notNullValue()))
+                // Anagrafica e contatti sono solo su /informazioniDebitore.
+                .andExpect(jsonPath("$.debitore.anagrafica").doesNotExist())
                 .andExpect(jsonPath("$.soggettoPagatore").doesNotExist())
                 .andExpect(jsonPath("$.debitoreEmail").doesNotExist())
                 .andExpect(jsonPath("$.debitoreCellulare").doesNotExist());
@@ -463,7 +538,7 @@ class PendenzaDetailIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].indice", is(1)))
                 .andExpect(jsonPath("$.voci[1].indice", is(2)))
-                .andExpect(jsonPath("$.voci[0].stato", is("NON_PAGATA")))
+                .andExpect(jsonPath("$.voci[0].stato", is("NON_ESEGUITO")))
                 .andExpect(jsonPath("$.voci[0].descrizione", is("Quota A")))
                 .andExpect(jsonPath("$.voci[1].descrizione", is("Quota B")));
     }

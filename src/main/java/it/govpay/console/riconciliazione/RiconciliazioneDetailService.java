@@ -11,16 +11,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Incasso;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rpt;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.console.riconciliazione.RiscossioniResolver.RiferimentoPendenza;
 import it.govpay.console.eventi.EventoAcl;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.Riconciliazione;
 import it.govpay.console.model.TipoRiscossione;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IncassoRepository;
-import it.govpay.console.repository.PagamentoRepository;
+import it.govpay.console.repository.ConsolePagamentoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
@@ -39,8 +38,8 @@ public class RiconciliazioneDetailService {
     private static final Set<TipoRiscossione> DEFAULT_TIPI = Set.of(TipoRiscossione.ENTRATA, TipoRiscossione.MBT);
 
     private final IncassoRepository incassoRepository;
-    private final PagamentoRepository pagamentoRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsolePagamentoRepository pagamentoRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final RiscossioniResolver riscossioniResolver;
     private final RiconciliazioneMapper mapper;
     private final CurrentOperatorService currentOperatorService;
@@ -48,8 +47,8 @@ public class RiconciliazioneDetailService {
     private final AclAuthorizer aclAuthorizer;
 
     public RiconciliazioneDetailService(IncassoRepository incassoRepository,
-                                        PagamentoRepository pagamentoRepository,
-                                        DominioRepository dominioRepository,
+                                        ConsolePagamentoRepository pagamentoRepository,
+                                        ConsoleDominioRepository dominioRepository,
                                         RiscossioniResolver riscossioniResolver,
                                         RiconciliazioneMapper mapper,
                                         CurrentOperatorService currentOperatorService,
@@ -78,13 +77,13 @@ public class RiconciliazioneDetailService {
                 : Set.copyOf(tipoRiscossione);
         List<Pagamento> riscossioni = pagamentoRepository.findByIdIncassoOrderByDataPagamentoAsc(incasso.getId())
                 .stream()
-                .filter(p -> p.getTipo() != null && tipiAmmessi.contains(TipoRiscossione.valueOf(p.getTipo())))
+                .filter(p -> p.getTipo() != null && tipiAmmessi.contains(TipoRiscossione.valueOf(p.getTipo().name())))
                 .toList();
 
-        Map<Long, Rpt> rptById = riscossioniResolver.loadRpt(riscossioni);
-        Map<Long, SingoloVersamento> singoliVersamentiById = riscossioniResolver.loadSingoliVersamenti(riscossioni);
+        Map<Long, String> iurRptById = riscossioniResolver.loadIurRpt(riscossioni);
+        Map<Long, RiferimentoPendenza> singoliVersamentiById = riscossioniResolver.loadPendenze(riscossioni);
 
-        Riconciliazione dto = mapper.toDetail(incasso, domini, riscossioni, rptById, singoliVersamentiById);
+        Riconciliazione dto = mapper.toDetail(incasso, domini, riscossioni, iurRptById, singoliVersamentiById);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(dto);

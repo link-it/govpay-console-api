@@ -23,6 +23,10 @@ servers:
 tags:
   - name: Pendenze
     description: Pagamenti in attesa e spontanei.
+  - name: Posizioni debitorie
+    description: |
+      Posizioni debitorie del modello v3: il raggruppamento di debitori, opzioni
+      di pagamento e pendenze.
   - name: Ricevute
     description: Consultazione delle ricevute telematiche (RT) emesse da pagoPA.
   - name: Pendenze - Tracciati
@@ -1608,6 +1612,7 @@ paths:
         `_links`:
         - `informazioniDebitore` sempre presente;
         - `ricevute` sempre presente (la lista e' eventualmente vuota);
+        - `posizioneDebitoria` sempre presente (dettaglio della posizione);
         - `avviso` presente solo se `numeroAvviso != null`.
 
         `?expand=datiAllegati,proprieta` consente di includere sotto-tree
@@ -1681,8 +1686,8 @@ paths:
         - `application/pdf` → stampa binaria generata dal microservizio
           `govpay-stampe`. Endpoint allineato a V1 `/avvisi/{idDominio}/{numeroAvviso}`:
           genera il PDF dell'avviso della singola pendenza anche quando
-          appartiene a un documento multi-rata. Il PDF aggregato dell'intero
-          documento e' una feature distinta, oggetto di issue dedicata.
+          appartiene a un'opzione a piu' rate: un bollettino per pendenza. L'avviso
+          complessivo della posizione e' `/posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}/avviso`.
 
         ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
         viene restituito 404 (no leak di esistenza). Se la pendenza non ha
@@ -1743,7 +1748,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Avviso PDF non applicabile a questa pendenza (Marca da Bollo Telematica).
+            Avviso PDF non applicabile a questa pendenza (Marca da Bollo Telematica,
+            anagrafica del debitore assente).
           content:
             application/problem+json:
               schema:
@@ -1768,12 +1774,14 @@ paths:
       operationId: getInformazioniDebitore
       summary: Dati anagrafici e contatti del debitore associato alla pendenza.
       description: |
-        Ritorna l'oggetto `Soggetto` completo (dati anagrafici e contatti del
-        soggetto pagatore). Endpoint separato dal dettaglio pendenza per
+        Ritorna l'oggetto `Soggetto` completo (dati anagrafici e contatti) del
+        debitore della pendenza, cioe' quello della sua opzione di pagamento:
+        in una posizione con piu' debitori e' il solo debitore di quella
+        pendenza, non il primo della posizione. Endpoint separato dal dettaglio pendenza per
         minimizzare l'esposizione di dati personali (scope F della issue #9).
 
-        ACL: se l'operatore non ha visibilita' sul dominio della pendenza,
-        viene restituito 404 (no leak di esistenza).
+        ACL: se l'operatore non ha visibilita' sulla pendenza (dominio, unita'
+        operativa o tipo pendenza), viene restituito 404 (no leak di esistenza).
 
         **Audit GDPR**: ogni 200 scrive una riga in `gp_audit` con azione
         `PENDENZA_VISUALIZZA_DEBITORE`, dettaglio JSON
@@ -1808,6 +1816,166 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Pendenza non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}:
+    get:
+      tags:
+        - Posizioni debitorie
+      operationId: getPosizioneDebitoria
+      summary: Dettaglio di una posizione debitoria con debitori, opzioni di pagamento e pendenze.
+      description: |
+        Restituisce la posizione identificata da `(idA2A, idPosizioneDebitoria)`, dove
+        `idPosizioneDebitoria` e' l'IUPD (`idA2A` + `idDominio` + codice documento,
+        senza separatore), lo stesso di `PendenzaSummary.posizioneDebitoria`.
+
+        I `debitori` comprendono quelli rimossi (`rimosso: true`), con le opzioni di
+        pagamento e le pendenze che li riguardano. Ogni pendenza ha la stessa forma
+        delle righe della lista.
+
+        Espone l'anagrafica completa di tutti i debitori: come `/informazioniDebitore`
+        scrive un audit.
+
+        ACL: la posizione e' visibile se l'operatore vede il dominio e l'unita'
+        operativa e almeno una delle sue pendenze (per tipo pendenza). Le pendenze di
+        tipi non visibili sono omesse, insieme alle opzioni che restano senza
+        pendenze; i debitori restano tutti. Altrimenti 404 (no leak di esistenza).
+
+        **Audit GDPR**: ogni 200 scrive una riga in `gp_audit` con azione
+        `POSIZIONE_VISUALIZZA_DEBITORI`, dettaglio JSON
+        `{idA2A, idPosizioneDebitoria, identificativiDebitori}` e IP del richiedente.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPosizioneDebitoria
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 81
+            pattern: '^[a-zA-Z0-9\-_]{1,81}$'
+      responses:
+        '200':
+          description: Posizione debitoria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosizioneDebitoria'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Posizione non trovata o non visibile per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /posizioni-debitorie/{idA2A}/{idPosizioneDebitoria}/avviso:
+    get:
+      tags:
+        - Posizioni debitorie
+      operationId: getAvvisoPosizioneDebitoria
+      summary: Avviso di pagamento PDF complessivo di una posizione debitoria.
+      description: |
+        Genera il PDF dell'avviso di un debitore della posizione, con le sue opzioni di
+        pagamento. Si stampano le pendenze ancora `NON_ESEGUITO` di ogni opzione, in ordine
+        di rata. Il layout dipende dalle opzioni stampabili:
+        - una sola opzione con una pendenza: avviso a rata unica;
+        - una sola opzione con piu' pendenze: avviso a rate;
+        - le due opzioni `SOLUZIONE_UNICA_RIDOTTO` e `SOLUZIONE_UNICA_SCONTATO`: avviso di
+          violazione del Codice della Strada con i due importi;
+        - le due opzioni `SOLUZIONE_UNICA_ENTRO` e `SOLUZIONE_UNICA_OLTRE`: un avviso con i
+          due pagamenti a soglia sulla stessa pagina;
+        - altrimenti un avviso con una pagina per opzione.
+
+        Solo in italiano. `idDebitore` e' obbligatorio se la posizione ha piu' di un debitore
+        attivo: ogni debitore ha i propri numeri avviso e un PDF non mescola persone diverse.
+
+        ACL: la posizione deve essere visibile e l'operatore deve vedere **tutte** le pendenze
+        da stampare, altrimenti 404 (no leak di esistenza): un avviso con rate mancanti non
+        e' ammesso.
+      parameters:
+        - name: idA2A
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-_]{1,35}$'
+        - name: idPosizioneDebitoria
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 81
+            pattern: '^[a-zA-Z0-9\-_]{1,81}$'
+        - name: idDebitore
+          in: query
+          required: false
+          description: Identificativo del debitore da stampare. Obbligatorio con piu' debitori attivi.
+          schema:
+            type: string
+            maxLength: 35
+      responses:
+        '200':
+          description: PDF dell'avviso. Il file si chiama `{idPosizioneDebitoria}.pdf`.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: '`idDebitore` mancante con piu'' debitori attivi.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Autenticazione mancante o non valida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: |
+            Posizione o debitore non trovati, oppure posizione o pendenze da stampare
+            non visibili per l'operatore corrente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: Header `Accept` non compatibile con `application/pdf`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Nessuna pendenza stampabile, oppure presenza di una Marca da Bollo Telematica
+            o di un debitore senza anagrafica.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: Errore di comunicazione con il microservizio `govpay-stampe`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Microservizio `govpay-stampe` non configurato (`app.stampe.base-url` mancante).
           content:
             application/problem+json:
               schema:
@@ -7563,28 +7731,242 @@ components:
     StatoPendenza:
       type: string
       description: |
-        Stato della pendenza in V2.
-        Mapping rispetto agli stati V1:
-        - V1 `ESEGUITA` -> V2 `PAGATA`
-        - V1 `NON_ESEGUITA` -> V2 `NON_PAGATA`
-        - V1 `ESEGUITA_PARZIALE` -> V2 `PAGATA_PARZIALE`
-        - V1 `INCASSATA` -> V2 `RICONCILIATA`
-        - V1 `ANNULLATA`/`SCADUTA`/`ANOMALA` -> identici in V2.
+        Stato della pendenza nel modello v3.
+        - `NON_ESEGUITO`: da pagare.
+        - `NON_PUBBLICATA`: da pagare ma non ancora visibile al debitore, perche'
+          la posizione debitoria ha una data di pubblicazione futura (derivato).
+        - `SCADUTO`: da pagare con data di scadenza passata (derivato).
+        - `ESEGUITO`: pagata.
+        - `PARZIALMENTE_ESEGUITO`: pagata parzialmente.
+        - `ESEGUITO_ALTRO_CANALE`: pagata fuori da pagoPA.
+        - `ESEGUITO_SENZA_RPT`: pagata senza richiesta di pagamento telematico.
+        - `INCASSATO`: pagata e riconciliata.
+        - `ANNULLATO`: annullata.
+        - `ANOMALO`: in anomalia.
+        `NON_PUBBLICATA` e `SCADUTO` non sono memorizzati: il server li calcola
+        a partire da `NON_ESEGUITO` e dalla data corrente.
       enum:
-        - NON_PAGATA
-        - PAGATA
-        - PAGATA_PARZIALE
-        - ANNULLATA
-        - SCADUTA
-        - RICONCILIATA
-        - ANOMALA
+        - NON_ESEGUITO
+        - NON_PUBBLICATA
+        - SCADUTO
+        - ESEGUITO
+        - PARZIALMENTE_ESEGUITO
+        - ESEGUITO_ALTRO_CANALE
+        - ESEGUITO_SENZA_RPT
+        - INCASSATO
+        - ANNULLATO
+        - ANOMALO
+
+    RiferimentoDebitore:
+      type: object
+      description: |
+        Debitore dell'opzione di pagamento della pendenza: solo tipo e
+        identificativo. Anagrafica e contatti sono esposti soltanto da
+        `/informazioniDebitore`.
+      required:
+        - tipo
+        - identificativo
+      properties:
+        tipo:
+          type: string
+          description: F = persona fisica, G = persona giuridica.
+          enum:
+            - F
+            - G
+        identificativo:
+          type: string
+          description: CF (16 char) o PIVA (11 cifre).
+
+    OpzionePagamentoRef:
+      type: object
+      description: |
+        Opzione di pagamento a cui appartiene la pendenza, all'interno della
+        posizione debitoria.
+      required:
+        - idOpzionePagamento
+        - tipologia
+        - stato
+      properties:
+        idOpzionePagamento:
+          type: string
+          format: uuid
+        tipologia:
+          type: string
+          description: |
+            `PIANO_RATEALE`: pendenze pagabili a rate. `SOLUZIONE_UNICA`: un solo
+            pagamento. Le varianti `_ENTRO`, `_OLTRE`, `_RIDOTTO`, `_SCONTATO` sono
+            soluzioni uniche legate a una soglia di tempo o a una riduzione.
+          enum:
+            - PIANO_RATEALE
+            - SOLUZIONE_UNICA
+            - SOLUZIONE_UNICA_ENTRO
+            - SOLUZIONE_UNICA_OLTRE
+            - SOLUZIONE_UNICA_RIDOTTO
+            - SOLUZIONE_UNICA_SCONTATO
+        stato:
+          type: string
+          description: |
+            `DISPONIBILE`: scelta possibile. `ATTIVATA`: scelta dal debitore, le
+            alternative non sono piu' pagabili. `ANNULLATA`: non piu' pagabile.
+          enum:
+            - DISPONIBILE
+            - ATTIVATA
+            - ANNULLATA
+        numeroRata:
+          type: integer
+          format: int32
+          nullable: true
+          description: Posizione della pendenza nel piano rateale. Null per le soluzioni uniche.
+
+    PosizioneDebitoriaRef:
+      type: object
+      description: Posizione debitoria che raggruppa la pendenza.
+      required:
+        - idPosizioneDebitoria
+      properties:
+        idPosizioneDebitoria:
+          type: string
+          description: Identificativo unico della posizione debitoria (IUPD).
+        dataPubblicazione:
+          type: string
+          format: date
+          nullable: true
+          description: Data dalla quale la posizione e' visibile al debitore. Null se pubblicata subito.
+
+    PosizioneDebitoria:
+      type: object
+      description: |
+        Posizione debitoria del modello v3: i debitori, ciascuno con le proprie opzioni
+        di pagamento, e le pendenze che le compongono.
+      required:
+        - idA2A
+        - idPosizioneDebitoria
+        - dominio
+        - descrizione
+        - dataCreazione
+        - dataUltimoAggiornamento
+        - debitori
+        - _links
+      properties:
+        idA2A:
+          type: string
+        idPosizioneDebitoria:
+          type: string
+          description: Identificativo unico della posizione debitoria (IUPD).
+        dominio:
+          $ref: '#/components/schemas/DominioRef'
+        unitaOperativa:
+          $ref: '#/components/schemas/UnitaOperativaRef'
+        descrizione:
+          type: string
+        dataPubblicazione:
+          type: string
+          format: date
+          nullable: true
+          description: Data dalla quale la posizione e' visibile al debitore. Null se pubblicata subito.
+        dataCreazione:
+          type: string
+          format: date-time
+        dataUltimoAggiornamento:
+          type: string
+          format: date-time
+        debitori:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebitorePosizione'
+        _links:
+          $ref: '#/components/schemas/PosizioneDebitoriaLinks'
+
+    PosizioneDebitoriaLinks:
+      type: object
+      description: |
+        Hyperlink della posizione. `avviso` e' il PDF complessivo, sempre presente: con piu'
+        debitori attivi il client aggiunge il parametro `idDebitore`.
+      required:
+        - avviso
+      properties:
+        avviso:
+          $ref: '#/components/schemas/Link'
+      additionalProperties:
+        $ref: '#/components/schemas/Link'
+
+    DebitorePosizione:
+      type: object
+      description: Un debitore della posizione, con le opzioni di pagamento che lo riguardano.
+      required:
+        - soggetto
+        - rimosso
+        - opzioniPagamento
+      properties:
+        soggetto:
+          $ref: '#/components/schemas/Soggetto'
+        rimosso:
+          type: boolean
+          description: Il debitore e' stato rimosso dalla posizione; le sue opzioni sono annullate.
+        opzioniPagamento:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpzionePagamentoPosizione'
+
+    OpzionePagamentoPosizione:
+      type: object
+      description: Opzione di pagamento di un debitore, con le pendenze (rate) che la compongono.
+      required:
+        - idOpzionePagamento
+        - tipologia
+        - stato
+        - sendAbilitato
+        - pendenze
+      properties:
+        idOpzionePagamento:
+          type: string
+          format: uuid
+        tipologia:
+          type: string
+          enum:
+            - PIANO_RATEALE
+            - SOLUZIONE_UNICA
+            - SOLUZIONE_UNICA_ENTRO
+            - SOLUZIONE_UNICA_OLTRE
+            - SOLUZIONE_UNICA_RIDOTTO
+            - SOLUZIONE_UNICA_SCONTATO
+        giorni:
+          type: integer
+          format: int32
+          nullable: true
+          description: Termine in giorni delle sole tipologie `_ENTRO` e `_OLTRE`.
+        stato:
+          type: string
+          enum:
+            - DISPONIBILE
+            - ATTIVATA
+            - ANNULLATA
+        dataInizioValidita:
+          type: string
+          format: date
+          nullable: true
+        dataScadenza:
+          type: string
+          format: date
+          nullable: true
+        sendAbilitato:
+          type: boolean
+        sendNav:
+          type: string
+          nullable: true
+        pendenze:
+          type: array
+          description: Pendenze visibili all'operatore, per numero di rata.
+          items:
+            $ref: '#/components/schemas/PendenzaSummary'
 
     StatoVocePendenza:
       type: string
+      description: Stato della voce nel modello v3.
       enum:
-        - NON_PAGATA
-        - PAGATA
-        - ANOMALA
+        - NON_ESEGUITO
+        - ESEGUITO
+        - ANOMALO
 
     StatoAvviso:
       type: string
@@ -7642,19 +8024,22 @@ components:
     PendenzaLinks:
       type: object
       description: |
-        Collezione di hyperlink relativi alla pendenza. Le chiavi `informazioniDebitore`
-        e `ricevute` sono sempre presenti; `avviso` e' condizionale (vedi descrizione di `Pendenza`).
+        Collezione di hyperlink relativi alla pendenza. Le chiavi `informazioniDebitore`,
+        `ricevute` e `posizioneDebitoria` sono sempre presenti; `avviso` e' condizionale (vedi descrizione di `Pendenza`).
         Lo schema accetta `additionalProperties` di tipo `Link` per consentire l'aggiunta
         non-breaking di chiavi future (rpp, pagamenti, allegati, ...).
       required:
         - informazioniDebitore
         - ricevute
+        - posizioneDebitoria
       properties:
         informazioniDebitore:
           $ref: '#/components/schemas/Link'
         avviso:
           $ref: '#/components/schemas/Link'
         ricevute:
+          $ref: '#/components/schemas/Link'
+        posizioneDebitoria:
           $ref: '#/components/schemas/Link'
       additionalProperties:
         $ref: '#/components/schemas/Link'
@@ -7802,8 +8187,9 @@ components:
     PendenzaSummary:
       type: object
       description: |
-        Proiezione leggera della pendenza, usata nelle liste paginate. Non espone
-        dati personali del debitore (per quelli vedi `/informazioniDebitore`).
+        Proiezione leggera della pendenza, usata nelle liste paginate. Del debitore
+        riporta solo tipo e identificativo; anagrafica e contatti sono esposti
+        soltanto da `/informazioniDebitore`.
       required:
         - idA2A
         - idPendenza
@@ -7812,7 +8198,11 @@ components:
         - tipoPendenza
         - importo
         - causale
+        - dataCreazione
         - dataUltimoAggiornamento
+        - debitore
+        - opzionePagamento
+        - posizioneDebitoria
       properties:
         idA2A:
           type: string
@@ -7826,11 +8216,19 @@ components:
           $ref: '#/components/schemas/DominioRef'
         tipoPendenza:
           $ref: '#/components/schemas/TipoPendenzaRef'
+        debitore:
+          $ref: '#/components/schemas/RiferimentoDebitore'
+        opzionePagamento:
+          $ref: '#/components/schemas/OpzionePagamentoRef'
+        posizioneDebitoria:
+          $ref: '#/components/schemas/PosizioneDebitoriaRef'
         unitaOperativa:
           allOf:
             - $ref: '#/components/schemas/UnitaOperativaRef'
           nullable: true
-          description: Null per pendenze non assegnate a una unita' operativa.
+          description: |
+            Null per pendenze non assegnate a una unita' operativa o assegnate
+            all'ente creditore stesso (unita' operativa `EC`).
         importo:
           type: number
           format: double
@@ -7848,6 +8246,10 @@ components:
         dataValidita:
           type: string
           format: date
+        dataCreazione:
+          type: string
+          format: date-time
+          description: Data di creazione della pendenza; e' anche l'ordinamento di default della lista.
         dataUltimoAggiornamento:
           type: string
           format: date-time
@@ -7857,13 +8259,21 @@ components:
         dataUltimaComunicazioneAca:
           type: string
           format: date-time
+        direzione:
+          type: string
+          description: Direzione interna all'ente creditore, se indicata.
+        divisione:
+          type: string
+          description: Divisione interna all'ente creditore, se indicata.
 
     Pendenza:
       description: |
         Dettaglio canonico di una pendenza. Composizione: `PendenzaSummary` + dati
-        propri + `voci` embedded inline (max 5 items, sempre presente) + sub-tree
-        opt-in (`datiAllegati`, `proprieta`) + `_links` (con `informazioniDebitore`
-        sempre presente).
+        propri + `opzionePagamento` e `posizioneDebitoria` (collocazione nel
+        modello v3) + `voci` embedded inline (max 5 items, sempre presente) +
+        sub-tree opt-in (`datiAllegati`, `proprieta`) + `_links` (con
+        `informazioniDebitore` sempre presente).
+        `debitore` riporta solo tipo e identificativo del debitore dell'opzione;
         `soggettoPagatore` NON e' nel body: per i dati anagrafici/contatti del
         debitore il client chiama `/informazioniDebitore`.
       allOf:
@@ -7876,10 +8286,6 @@ components:
             descrizione:
               type: string
             documento:
-              type: string
-            direzione:
-              type: string
-            divisione:
               type: string
             voci:
               type: array

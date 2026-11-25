@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -17,13 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.model.ListRicevute200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RicevutaSummary;
 import it.govpay.console.pagination.CursorCodec;
 import it.govpay.console.pendenza.PendenzaService;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
+import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.web.BadRequestException;
@@ -72,7 +74,8 @@ public class RicevutaSearchService {
     private static final int MIN_ANAGRAFICA_DEBITORE_LENGTH = 3;
     private static final int MAX_LIMIT_ANAGRAFICA_DEBITORE = 50;
 
-    private final RptRepository rptRepository;
+    private final ConsoleRptRepository rptRepository;
+    private final UnitaOperativaRepository unitaOperativaRepository;
     private final RicevutaMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -80,11 +83,13 @@ public class RicevutaSearchService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public RicevutaSearchService(RptRepository rptRepository,
+    public RicevutaSearchService(ConsoleRptRepository rptRepository,
+                                 UnitaOperativaRepository unitaOperativaRepository,
                                  RicevutaMapper mapper,
                                  CurrentOperatorService currentOperatorService,
                                  AuditService auditService) {
         this.rptRepository = rptRepository;
+        this.unitaOperativaRepository = unitaOperativaRepository;
         this.mapper = mapper;
         this.currentOperatorService = currentOperatorService;
         this.auditService = auditService;
@@ -115,6 +120,12 @@ public class RicevutaSearchService {
         List<String> divisione = ListQueryValidator.normalizeCsvList(
                 query.divisione(), "divisione", MAX_DIREZIONE_DIVISIONE);
 
+        // Domini di cui l'operatore ha la UO EC visibile: una query per richiesta, e solo
+        // se l'operatore e' limitato a UO specifiche.
+        Set<Long> dominiConUoEc = !operatore.tuttiIDomini() && !operatore.idUoVisibili().isEmpty()
+                ? unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili())
+                : Set.of();
+
         Specification<Rpt> spec = Specification.allOf(
                 Stream.of(
                         RptSpecifications.conRicevuta(),
@@ -134,7 +145,7 @@ public class RicevutaSearchService {
                         RptSpecifications.divisioneIn(divisione),
                         RptSpecifications.tassonomiaExact(query.tassonomia()),
                         RptSpecifications.anagraficaDebitorePartial(anagraficaDebitore),
-                        RptSpecifications.visibiliPerOperatore(operatore))
+                        RptSpecifications.visibiliPerOperatore(operatore, dominiConUoEc))
                 .filter(Objects::nonNull)
                 .toList());
 

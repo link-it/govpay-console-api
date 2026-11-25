@@ -33,7 +33,7 @@ import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
@@ -63,7 +63,7 @@ class TipoPendenzaControllerIntegrationTest {
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired

@@ -24,18 +24,17 @@ import it.govpay.console.config.OperazioniProperties.OperazioneConfig;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Incasso;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rpt;
-import it.govpay.console.entity.SingoloVersamento;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.console.riconciliazione.RiscossioniResolver.RiferimentoPendenza;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.NuovaRiconciliazione;
 import it.govpay.console.model.Riconciliazione;
 import it.govpay.console.operazioni.OperazioneBatchClient;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.repository.IncassoRepository;
-import it.govpay.console.repository.PagamentoRepository;
+import it.govpay.console.repository.ConsolePagamentoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
@@ -72,8 +71,8 @@ public class RiconciliazioneUpsertService {
     private static final String STATO_FR_ACCETTATA = "ACCETTATA";
 
     private final IncassoRepository incassoRepository;
-    private final PagamentoRepository pagamentoRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsolePagamentoRepository pagamentoRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final IbanAccreditoRepository ibanAccreditoRepository;
     private final FrRepository frRepository;
     private final RiscossioniResolver riscossioniResolver;
@@ -90,8 +89,8 @@ public class RiconciliazioneUpsertService {
     private EntityManager entityManager;
 
     public RiconciliazioneUpsertService(IncassoRepository incassoRepository,
-                                        PagamentoRepository pagamentoRepository,
-                                        DominioRepository dominioRepository,
+                                        ConsolePagamentoRepository pagamentoRepository,
+                                        ConsoleDominioRepository dominioRepository,
                                         IbanAccreditoRepository ibanAccreditoRepository,
                                         FrRepository frRepository,
                                         RiscossioniResolver riscossioniResolver,
@@ -323,8 +322,8 @@ public class RiconciliazioneUpsertService {
     private Riconciliazione costruisciDto(Dominio dominio, Incasso incasso) {
         Map<String, Dominio> domini = Map.of(dominio.getCodDominio(), dominio);
         List<Pagamento> riscossioni = pagamentoRepository.findByIdIncassoOrderByDataPagamentoAsc(incasso.getId());
-        Map<Long, Rpt> rptById = riscossioniResolver.loadRpt(riscossioni);
-        Map<Long, SingoloVersamento> svById = riscossioniResolver.loadSingoliVersamenti(riscossioni);
-        return mapper.toDetail(incasso, domini, riscossioni, rptById, svById);
+        Map<Long, String> iurRptById = riscossioniResolver.loadIurRpt(riscossioni);
+        Map<Long, RiferimentoPendenza> svById = riscossioniResolver.loadPendenze(riscossioni);
+        return mapper.toDetail(incasso, domini, riscossioni, iurRptById, svById);
     }
 }

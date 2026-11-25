@@ -32,7 +32,7 @@ import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.Tributo;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoTributoRepository;
@@ -61,7 +61,7 @@ class EntrataControllerIntegrationTest {
     @Autowired
     private TipoTributoRepository tipoTributoRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private TributoRepository tributoRepository;
     @Autowired

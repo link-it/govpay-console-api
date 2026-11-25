@@ -37,10 +37,15 @@ import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.OperazioneRepository;
@@ -49,7 +54,6 @@ import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.TracciatoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -73,7 +77,7 @@ class TracciatoSubResourceIntegrationTest {
     @Autowired
     private AclRepository aclRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private GpAuditRepository gpAuditRepository;
     @Autowired
@@ -81,9 +85,8 @@ class TracciatoSubResourceIntegrationTest {
     @Autowired
     private OperazioneRepository operazioneRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
-    @Autowired
-    private VersamentoRepository versamentoRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
+    @PersistenceContext private EntityManager em;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
@@ -172,7 +175,7 @@ class TracciatoSubResourceIntegrationTest {
                       "idA2A": "A2A_TEST",
                       "idPendenza": "PEND-001",
                       "voci": [
-                        {"idVocePendenza": "V1", "importo": 10.0, "descrizione": "Voce di test", "stato": "NON_PAGATA", "codEntrata": "TARI"}
+                        {"idVocePendenza": "V1", "importo": 10.0, "descrizione": "Voce di test", "stato": "NON_ESEGUITO", "codEntrata": "TARI"}
                       ]
                     }
                   ]
@@ -256,7 +259,7 @@ class TracciatoSubResourceIntegrationTest {
 
     // ----- /operazioni --------------------------------------------------------------
 
-    private Operazione nuovaOperazione(Long idTracciato, long numero, String tipo, String stato, Versamento v) {
+    private Operazione nuovaOperazione(Long idTracciato, long numero, String tipo, String stato, Pendenza v) {
         Tracciato tracciato = tracciatoRepository.findById(idTracciato).orElseThrow();
         Operazione op = new Operazione();
         op.setTracciato(tracciato);
@@ -265,7 +268,7 @@ class TracciatoSubResourceIntegrationTest {
         op.setStato(stato);
         op.setCodVersamentoEnte("PEND-00" + numero);
         op.setCodDominio("12345678901");
-        op.setVersamento(v);
+        op.setPendenza(v);
         op.setDatiRichiesta(("{\"idA2A\":\"A2A_TEST\",\"idPendenza\":\"PEND-00" + numero
                 + "\",\"idDominio\":\"12345678901\",\"importo\":10.0,\"causale\":\"c\",\"voci\":[],"
                 + "\"idA2A\":\"A2A_TEST\"}").getBytes(StandardCharsets.UTF_8));
@@ -276,7 +279,7 @@ class TracciatoSubResourceIntegrationTest {
         return operazioneRepository.save(op);
     }
 
-    private Versamento nuovoVersamento(String codVersamentoEnte, Applicazione app) {
+    private Pendenza nuovoVersamento(String codVersamentoEnte, Applicazione app) {
         TipoVersamento tipoVersamento = new TipoVersamento();
         tipoVersamento.setCodTipoVersamento("TARI-" + codVersamentoEnte);
         tipoVersamento.setDescrizione("TARI Fixture");
@@ -287,25 +290,14 @@ class TracciatoSubResourceIntegrationTest {
         tvd.setTipoVersamento(tipoVersamento);
         tipoVersamentoDominioRepository.save(tvd);
 
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(codVersamentoEnte);
-        v.setImportoTotale(10.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                tipoVersamento.getId(), tvd.getId(), null, codVersamentoEnte, "011111111111111111", "RSSMRA80A01H501U", 10.0,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(10.0);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tipoVersamento);
-        v.setTipoVersamentoDominio(tvd);
-        v.setNumeroAvviso("011111111111111111");
-        return versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(OffsetDateTime.now());
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+        return v;
     }
 
     @Test
@@ -314,7 +306,7 @@ class TracciatoSubResourceIntegrationTest {
         Applicazione app = new Applicazione();
         app.setCodApplicazione("APP-SUB-1");
         applicazioneRepository.save(app);
-        Versamento v = nuovoVersamento("PEND-001", app);
+        Pendenza v = nuovoVersamento("PEND-001", app);
         nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", v);
         nuovaOperazione(id, 2, "DEL", "ESEGUITO_KO", null);
         long auditPrima = gpAuditRepository.count();
@@ -381,7 +373,7 @@ class TracciatoSubResourceIntegrationTest {
         Applicazione app = new Applicazione();
         app.setCodApplicazione("APP-SUB-2");
         applicazioneRepository.save(app);
-        Versamento v = nuovoVersamento("PEND-001", app);
+        Pendenza v = nuovoVersamento("PEND-001", app);
         nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", v);
         long auditPrima = gpAuditRepository.count();
 
@@ -391,6 +383,46 @@ class TracciatoSubResourceIntegrationTest {
                 .andExpect(jsonPath("$.risposta.esito", is("ADD_OK")));
 
         org.assertj.core.api.Assertions.assertThat(gpAuditRepository.count()).isEqualTo(auditPrima + 1);
+    }
+
+    /** Una pendenza senza opzione di pagamento non ha debitore: l'operazione si legge, senza soggetto. */
+    @Test
+    void dettaglioOperazioneDiPendenzaSenzaOpzioneNonHaIlSoggetto() throws Exception {
+        Long id = uploadTracciato();
+        Applicazione app = new Applicazione();
+        app.setCodApplicazione("APP-SUB-3");
+        applicazioneRepository.save(app);
+        TipoVersamento tipoVersamento = new TipoVersamento();
+        tipoVersamento.setCodTipoVersamento("TARI-SENZA-OPZ");
+        tipoVersamento.setDescrizione("TARI Fixture");
+        tipoVersamentoRepository.save(tipoVersamento);
+        TipoVersamentoDominio tvd = new TipoVersamentoDominio();
+        tvd.setDominio(dominio);
+        tvd.setTipoVersamento(tipoVersamento);
+        tipoVersamentoDominioRepository.save(tvd);
+        Pendenza p = PendenzaV3Fixtures.pendenzaSenzaOpzione(em, new Dati(app.getId(), dominio.getId(),
+                tipoVersamento.getId(), tvd.getId(), null, "PEND-SENZA-OPZ", "011111111111111119",
+                "RSSMRA80A01H501U", 10.0, StatoPendenza.ESEGUITO, 0));
+        nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", p);
+
+        mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni/1").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeroAvviso", is("011111111111111119")))
+                .andExpect(jsonPath("$.soggettoPagatore").doesNotExist());
+    }
+
+    @Test
+    void listaOperazioniRiportaIlNumeroAvvisoDellaPendenza() throws Exception {
+        Long id = uploadTracciato();
+        Applicazione app = new Applicazione();
+        app.setCodApplicazione("APP-SUB-4");
+        applicazioneRepository.save(app);
+        Pendenza v = nuovoVersamento("PEND-LISTA", app);
+        nuovaOperazione(id, 1, "ADD", "ESEGUITO_OK", v);
+
+        mvc.perform(get("/pendenze/tracciati/" + id + "/operazioni").with(httpBasic(principal, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].numeroAvviso", is("011111111111111111")));
     }
 
     @Test

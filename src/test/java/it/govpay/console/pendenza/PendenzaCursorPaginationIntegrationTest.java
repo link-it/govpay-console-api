@@ -29,17 +29,18 @@ import org.springframework.transaction.annotation.Transactional;
 import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Operatore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
 
 @SpringBootTest
@@ -56,11 +57,11 @@ class PendenzaCursorPaginationIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
+    @Autowired private EntityManager em;
 
     @BeforeEach
     void setup() {
@@ -112,30 +113,29 @@ class PendenzaCursorPaginationIntegrationTest {
 
     private void newPendenza(String idPendenza, Dominio dom, Applicazione app,
                              TipoVersamento tv, TipoVersamentoDominio tvd, int hoursAgo) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
         // Troncato ai secondi: il test è @Transactional, quindi l'entity resta in
         // sessione con la precisione di now() (nanos su Linux) mentre il DB tronca,
         // sfasando il keyset del cursor (off-by-one al confine pagina). Senza sub-
         // precisione il valore in-memory coincide con quello persistito.
         OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
-        v.setDataCreazione(now.minusHours(hoursAgo));
-        // Deliberatamente uguale per tutte le righe: vedi il commento nel setup().
-        v.setDataOraUltimoAggiornamento(now);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
+        creaPendenza(idPendenza, dom, app, tv, tvd, now.minusHours(hoursAgo), now);
+    }
+
+    /** Pendenza v3 non eseguita, con data di creazione e di ultimo aggiornamento date. */
+    private Pendenza creaPendenza(String idPendenza, Dominio dom, Applicazione app, TipoVersamento tv,
+                                  TipoVersamentoDominio tvd, OffsetDateTime dataCreazione,
+                                  OffsetDateTime dataUltimoAggiornamento) {
+        Pendenza p = PendenzaV3Fixtures.pendenza(em, new PendenzaV3Fixtures.Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), null, idPendenza, null, "RSSMRA80A01H501U", 100.0,
+                StatoPendenza.NON_ESEGUITO, 0));
+        p.setDataCreazione(dataCreazione);
+        p.setDataUltimoAggiornamento(dataUltimoAggiornamento);
+        return p;
+    }
+
+    private Pendenza pendenza(String idPendenza) {
+        return em.createQuery("select p from Pendenza p where p.idPendenza = :id", Pendenza.class)
+                .setParameter("id", idPendenza).getSingleResult();
     }
 
     @Test
@@ -205,24 +205,7 @@ class PendenzaCursorPaginationIntegrationTest {
 
         OffsetDateTime stessaData = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusDays(1);
         for (int i = 1; i <= 3; i++) {
-            Versamento v = new Versamento();
-            v.setCodVersamentoEnte("PEND-TIE-" + i);
-            v.setImportoTotale(10.0);
-            v.setImportoPagato(0.0);
-            v.setStatoVersamento("NON_ESEGUITO");
-            v.setDataCreazione(stessaData);
-            v.setDataOraUltimoAggiornamento(stessaData);
-            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setDebitoreAnagrafica("Mario Rossi");
-            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setAnomalo(false);
-            v.setAck(false);
-            v.setTipo("DOVUTO");
-            v.setDominio(dom);
-            v.setApplicazione(app);
-            v.setTipoVersamento(tv);
-            v.setTipoVersamentoDominio(tvd);
-            versamentoRepository.save(v);
+            creaPendenza("PEND-TIE-" + i, dom, app, tv, tvd, stessaData, stessaData);
         }
 
         // Pagina 1: a parita' di dataCreazione, id piu' alto (ultimo inserito) per primo.
@@ -250,14 +233,13 @@ class PendenzaCursorPaginationIntegrationTest {
     /** Filtro diretto su colonna (§A), rappresentativo: stato + cursor su piu' pagine. */
     @Test
     void cursorModeConFiltroStato() throws Exception {
-        // PEND-2/4/6 -> PAGATA, PEND-1/3/5/7 restano NON_PAGATA (NON_ESEGUITO, nessuna dataScadenza).
+        // PEND-2/4/6 -> ESEGUITO, PEND-1/3/5/7 restano NON_ESEGUITO (NON_ESEGUITO, nessuna dataScadenza).
         for (String id : new String[] { "PEND-2", "PEND-4", "PEND-6" }) {
-            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
-            v.setStatoVersamento("ESEGUITO");
-            versamentoRepository.save(v);
+            Pendenza v = pendenza(id);
+            v.setStato(StatoPendenza.ESEGUITO);
         }
 
-        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&stato=NON_PAGATA")
+        MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=2&stato=NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
@@ -267,7 +249,7 @@ class PendenzaCursorPaginationIntegrationTest {
                 .andReturn();
         String cursor = extractStringField(r1.getResponse().getContentAsString(), "nextCursor");
 
-        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&stato=NON_PAGATA")
+        mvc.perform(get("/pendenze?cursor=" + cursor + "&limit=2&stato=NON_ESEGUITO")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(2)))
@@ -291,24 +273,7 @@ class PendenzaCursorPaginationIntegrationTest {
         OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
         int[] giorniFa = { 1, 2, 3, 10 };
         for (int i = 0; i < giorniFa.length; i++) {
-            Versamento v = new Versamento();
-            v.setCodVersamentoEnte("PEND-RANGE-" + (i + 1));
-            v.setImportoTotale(10.0);
-            v.setImportoPagato(0.0);
-            v.setStatoVersamento("NON_ESEGUITO");
-            v.setDataCreazione(now.minusDays(giorniFa[i]));
-            v.setDataOraUltimoAggiornamento(now);
-            v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setDebitoreAnagrafica("Mario Rossi");
-            v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-            v.setAnomalo(false);
-            v.setAck(false);
-            v.setTipo("DOVUTO");
-            v.setDominio(dom);
-            v.setApplicazione(app);
-            v.setTipoVersamento(tv);
-            v.setTipoVersamentoDominio(tvd);
-            versamentoRepository.save(v);
+            creaPendenza("PEND-RANGE-" + (i + 1), dom, app, tv, tvd, now.minusDays(giorniFa[i]), now);
         }
 
         java.time.LocalDate oggi = java.time.LocalDate.now();
@@ -340,9 +305,8 @@ class PendenzaCursorPaginationIntegrationTest {
         applicazioneRepository.save(appH);
 
         for (String id : new String[] { "PEND-2", "PEND-5" }) {
-            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
-            v.setApplicazione(appH);
-            versamentoRepository.save(v);
+            Pendenza v = pendenza(id);
+            v.setIdApplicazione(appH.getId());
         }
 
         MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=1&idA2A=APP-H")
@@ -371,9 +335,8 @@ class PendenzaCursorPaginationIntegrationTest {
         tipoVersamentoRepository.save(imu);
 
         for (String id : new String[] { "PEND-3", "PEND-6" }) {
-            Versamento v = versamentoRepository.findDetail(APP_COD, id).orElseThrow();
-            v.setTipoVersamento(imu);
-            versamentoRepository.save(v);
+            Pendenza v = pendenza(id);
+            v.setIdTipoVersamento(imu.getId());
         }
 
         MvcResult r1 = mvc.perform(get("/pendenze?cursor=&limit=1&idTipoPendenza=IMU")

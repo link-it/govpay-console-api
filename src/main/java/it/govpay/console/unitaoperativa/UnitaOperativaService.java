@@ -29,7 +29,7 @@ import it.govpay.console.model.ListUnitaOperative200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.UnitaOperativaCreate;
 import it.govpay.console.model.UnitaOperativaReplace;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -69,7 +69,7 @@ public class UnitaOperativaService {
     private static final String COD_UO_EC = "EC";
 
     private final UnitaOperativaRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final UnitaOperativaMapper mapper;
     private final RepresentationValidator representationValidator;
     private final CurrentOperatorService currentOperatorService;
@@ -81,7 +81,7 @@ public class UnitaOperativaService {
     private EntityManager entityManager;
 
     public UnitaOperativaService(UnitaOperativaRepository repository,
-                                 DominioRepository dominioRepository,
+                                 ConsoleDominioRepository dominioRepository,
                                  UnitaOperativaMapper mapper,
                                  RepresentationValidator representationValidator,
                                  CurrentOperatorService currentOperatorService,

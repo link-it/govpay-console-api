@@ -4,55 +4,94 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.common.LikePatterns;
-import it.govpay.console.common.VersamentoPredicates;
-import it.govpay.console.entity.Versamento;
+import it.govpay.console.common.PendenzaPredicates;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
+import it.govpay.console.security.PendenzaVisibilita;
+import it.govpay.pendenze.entity.Pendenza;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 
+/**
+ * Filtri della lista pendenze sul modello v3. La pendenza ha chiavi piatte verso dominio,
+ * applicazione e tipo, risolte con sottoquery; debitore, data di pubblicazione e unita'
+ * operativa stanno invece sul percorso {@code opzione di pagamento -> debitore della
+ * posizione -> posizione}, che ogni query percorre con un unico join interno.
+ */
 public final class PendenzaSpecifications {
 
-    private static final String FIELD_STATO_VERSAMENTO = "statoVersamento";
-    private static final String FIELD_DATA_SCADENZA = "dataScadenza";
+    private static final String FIELD_STATO = "stato";
+    private static final String FIELD_DATA_SCADENZA = "dataScadenzaAvviso";
+    private static final String FIELD_DATA_PUBBLICAZIONE = "dataPubblicazione";
+    private static final String FIELD_ID = "id";
 
     private PendenzaSpecifications() {
     }
 
-    public static Specification<Versamento> idPendenzaPartial(String value) {
+    /**
+     * Esclude le pendenze senza opzione di pagamento, che il modello non ammette: stessa
+     * condizione del dettaglio, cosi' ogni riga della lista si puo' aprire.
+     */
+    public static Specification<Pendenza> conOpzione() {
+        return (root, q, cb) -> {
+            posizione(root);
+            return cb.conjunction();
+        };
+    }
+
+    public static Specification<Pendenza> idPendenzaPartial(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String pattern = "%" + LikePatterns.escape(value.toLowerCase()) + "%";
-        return (root, q, cb) -> cb.like(cb.lower(root.get("codVersamentoEnte")), pattern, LikePatterns.ESCAPE_CHAR);
+        return (root, q, cb) -> cb.like(cb.lower(root.get("idPendenza")), pattern, LikePatterns.ESCAPE_CHAR);
     }
 
-    public static Specification<Versamento> numeroAvvisoExact(String value) {
+    public static Specification<Pendenza> numeroAvvisoExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return (root, q, cb) -> cb.equal(root.get("numeroAvviso"), value);
     }
 
-    public static Specification<Versamento> idDominioExact(String value) {
+    public static Specification<Pendenza> idDominioExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("dominio").get("codDominio"), value);
+        return (root, q, cb) -> {
+            Subquery<Long> sub = q.subquery(Long.class);
+            Root<Dominio> dominio = sub.from(Dominio.class);
+            sub.select(dominio.get(FIELD_ID)).where(cb.equal(dominio.get("codDominio"), value));
+            return root.<Long>get("idDominio").in(sub);
+        };
     }
 
-    public static Specification<Versamento> identificativoDebitoreExact(String value) {
+    /**
+     * Debitore dell'opzione di pagamento della pendenza, senza distinguere maiuscole: la
+     * ricerca restituisce le pendenze di quel debitore e non di tutta la posizione.
+     */
+    public static Specification<Pendenza> identificativoDebitoreExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.identificativoDebitoreExact(cb, root, value);
+        return (root, q, cb) -> PendenzaPredicates.identificativoDebitoreExact(cb,
+                pdDebitore(root).get("debitore"), value);
     }
 
     /** Limite inferiore incluso sulla data di creazione ({@code data_creazione}). */
-    public static Specification<Versamento> dataCreazioneDa(LocalDate da) {
+    public static Specification<Pendenza> dataCreazioneDa(LocalDate da) {
         if (da == null) {
             return null;
         }
@@ -61,7 +100,7 @@ public final class PendenzaSpecifications {
     }
 
     /** Limite superiore incluso: {@code data_creazione < (dataA + 1 giorno)}. */
-    public static Specification<Versamento> dataCreazioneA(LocalDate a) {
+    public static Specification<Pendenza> dataCreazioneA(LocalDate a) {
         if (a == null) {
             return null;
         }
@@ -69,111 +108,112 @@ public final class PendenzaSpecifications {
         return (root, q, cb) -> cb.lessThan(root.get("dataCreazione"), toExclusive);
     }
 
-    public static Specification<Versamento> iuvExact(String value) {
+    public static Specification<Pendenza> iuvExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> cb.equal(root.get("iuvVersamento"), value);
+        return (root, q, cb) -> cb.equal(root.get("iuv"), value);
     }
 
-    /**
-     * Semantica OR fra i valori: {@code versamenti.direzione IN (...)}. Cardinalita'
-     * allineata a {@code /ricevute}: stessa colonna, stesso predicato
-     * condiviso via {@link VersamentoPredicates}.
-     *
-     * <p>Verifica indici. Proposta se l'uso reale risultera' selettivo:
-     * {@code CREATE INDEX idx_vrs_direzione ON versamenti (direzione);}
-     * {@code CREATE INDEX idx_vrs_divisione ON versamenti (divisione);}
-     */
-    public static Specification<Versamento> direzioneIn(List<String> values) {
+    /** Semantica OR fra i valori: {@code versamenti.direzione IN (...)}. */
+    public static Specification<Pendenza> direzioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.direzioneIn(root, values);
+        return (root, q, cb) -> PendenzaPredicates.direzioneIn(root, values);
     }
 
-    /** Semantica OR fra i valori: {@code versamenti.divisione IN (...)}. Vedi {@link #direzioneIn}. */
-    public static Specification<Versamento> divisioneIn(List<String> values) {
+    /** Semantica OR fra i valori: {@code versamenti.divisione IN (...)}. */
+    public static Specification<Pendenza> divisioneIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.divisioneIn(root, values);
+        return (root, q, cb) -> PendenzaPredicates.divisioneIn(root, values);
     }
 
-    /**
-     * Verifica indici
-     * {@code CREATE INDEX idx_vrs_id_applicazione ON versamenti (id_applicazione);}
-     */
-    public static Specification<Versamento> idA2AExact(String value) {
+    public static Specification<Pendenza> idA2AExact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idA2AExact(cb, root, value);
+        return (root, q, cb) -> PendenzaPredicates.idA2AExact(cb, q, root, value);
     }
 
-    /**
-     * Semantica OR fra i valori: {@code versamenti.id_tipo_versamento IN (...)}.
-     *
-     * <p>Verifica indici
-     * {@code CREATE INDEX idx_vrs_id_tipo_versamento ON versamenti (id_tipo_versamento);}
-     */
-    public static Specification<Versamento> idTipoPendenzaIn(List<String> values) {
+    /** Semantica OR fra i codici: {@code id_tipo_versamento IN (tipi con quel codice)}. */
+    public static Specification<Pendenza> idTipoPendenzaIn(List<String> values) {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return (root, q, cb) -> VersamentoPredicates.idTipoPendenzaIn(root, values);
+        return (root, q, cb) -> PendenzaPredicates.idTipoPendenzaIn(cb, q, root, values);
     }
 
     /**
-     * Traduce lo stato V2 sul/i valore/i grezzo/i di {@code stato_versamento},
-     * condividendo i gruppi con {@link PendenzaMapper} tramite {@link StatoVersamentoMapping}
-     * (fonte unica: le due derivazioni non possono piu' divergere silenziosamente).
-     * V1 non e' consistente sul genere del valore grezzo (visto sia
-     * {@code ESEGUITO} che {@code ESEGUITA} in dati reali): ogni stato include
-     * tutte le varianti riconosciute — un filtro piu' stretto lascerebbe fuori
-     * righe che l'output mostra correttamente mappate.
-     * {@code PAGATA} include anche gli stati interni equivalenti
-     * ({@code ESEGUITO_ALTRO_CANALE}, {@code ESEGUITO_SENZA_RPT}).
-     * {@code SCADUTA} unisce il valore letterale ({@code SCADUTA}/{@code SCADUTO})
-     * con la derivazione da {@code NON_ESEGUITO} + {@code data_scadenza} passata —
-     * stessa semantica di V1 (V1 {@code PendenzeDAO}:
-     * {@code AbilitaFiltroNonScaduto}/{@code AbilitaFiltroScaduto}) per la parte
-     * derivata. {@code ANOMALA} e' il catch-all del mapper (valori letterali
-     * {@code ANOMALA}/{@code ANOMALO} + qualunque valore non riconosciuto): il
-     * filtro lo esprime come {@code NOT IN} sul complemento, non un elenco chiuso,
-     * altrimenti una riga con stato grezzo ignoto sarebbe mostrata ANOMALA in
-     * output ma irraggiungibile da {@code ?stato=ANOMALA}.
+     * Traduce lo stato esposto sul modello v3, con le stesse regole di derivazione del
+     * mapper. {@code NON_ESEGUITO} e' l'unico stato che si deriva, e solo se la posizione e'
+     * pubblicata: {@code NON_PUBBLICATA} prevale su {@code SCADUTO}, e {@code SCADUTO} e'
+     * {@code NON_ESEGUITO} con scadenza passata. Gli altri stati sono quelli della pendenza.
      */
-    public static Specification<Versamento> statoExact(StatoPendenza stato, OffsetDateTime now) {
+    public static Specification<Pendenza> statoExact(StatoPendenza stato, OffsetDateTime now, LocalDate oggi) {
         if (stato == null) {
             return null;
         }
         return switch (stato) {
-            case PAGATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA);
-            case PAGATA_PARZIALE -> (root, q, cb) ->
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.PAGATA_PARZIALE);
-            case RICONCILIATA -> (root, q, cb) ->
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.RICONCILIATA);
-            case ANNULLATA -> (root, q, cb) -> root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ANNULLATA);
-            case ANOMALA -> (root, q, cb) ->
-                    cb.not(root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.ALTRI_STATI_NOTI));
-            case NON_PAGATA -> (root, q, cb) -> cb.and(
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
-                    cb.or(cb.isNull(root.get(FIELD_DATA_SCADENZA)), cb.greaterThanOrEqualTo(root.get(FIELD_DATA_SCADENZA), now)));
-            case SCADUTA -> (root, q, cb) -> cb.or(
-                    root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.SCADUTA_LETTERALE),
-                    cb.and(
-                            root.<String>get(FIELD_STATO_VERSAMENTO).in(StatoVersamentoMapping.NON_ESEGUITO),
-                            cb.isNotNull(root.get(FIELD_DATA_SCADENZA)),
-                            cb.lessThan(root.get(FIELD_DATA_SCADENZA), now)));
+            case NON_PUBBLICATA -> (root, q, cb) -> cb.and(
+                    nonEseguito(root, cb), cb.not(pubblicata(root, cb, oggi)));
+            case NON_ESEGUITO -> (root, q, cb) -> cb.and(
+                    nonEseguito(root, cb), pubblicata(root, cb, oggi),
+                    cb.or(cb.isNull(root.get(FIELD_DATA_SCADENZA)),
+                            cb.greaterThanOrEqualTo(root.get(FIELD_DATA_SCADENZA), now)));
+            case SCADUTO -> (root, q, cb) -> cb.and(
+                    nonEseguito(root, cb), pubblicata(root, cb, oggi),
+                    cb.isNotNull(root.get(FIELD_DATA_SCADENZA)),
+                    cb.lessThan(root.get(FIELD_DATA_SCADENZA), now));
+            default -> {
+                it.govpay.pendenze.model.StatoPendenza diretto =
+                        it.govpay.pendenze.model.StatoPendenza.valueOf(stato.name());
+                yield (root, q, cb) -> cb.equal(root.get(FIELD_STATO), diretto);
+            }
         };
     }
 
     /**
-     * Limita i risultati alle pendenze visibili all'operatore corrente. Delega la
-     * regola ACL alla single-source {@link VersamentoVisibilita}.
+     * Limita i risultati alle pendenze visibili all'operatore corrente. La regola e' quella
+     * di {@link PendenzaVisibilita}, single-source con il dettaglio.
+     *
+     * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
      */
-    public static Specification<Versamento> visibiliPerOperatore(OperatoreCorrente operatore) {
-        return (root, q, cb) -> VersamentoVisibilita.predicate(cb, root, operatore);
+    public static Specification<Pendenza> visibiliPerOperatore(OperatoreCorrente operatore,
+                                                               Set<Long> dominiConUoEcVisibile) {
+        return (root, q, cb) -> PendenzaVisibilita.predicate(cb,
+                root.<Long>get("idDominio"),
+                posizione(root).<Long>get("idUnitaOperativa"),
+                root.<Long>get("idTipoVersamento"),
+                dominiConUoEcVisibile, operatore);
+    }
+
+    private static Predicate nonEseguito(Root<Pendenza> root, CriteriaBuilder cb) {
+        return cb.equal(root.get(FIELD_STATO), it.govpay.pendenze.model.StatoPendenza.NON_ESEGUITO);
+    }
+
+    private static Predicate pubblicata(Root<Pendenza> root, CriteriaBuilder cb, LocalDate oggi) {
+        Path<LocalDate> dataPubblicazione = posizione(root).get(FIELD_DATA_PUBBLICAZIONE);
+        return cb.or(cb.isNull(dataPubblicazione), cb.lessThanOrEqualTo(dataPubblicazione, oggi));
+    }
+
+    private static Join<?, ?> pdDebitore(Root<Pendenza> root) {
+        return join(join(root, "opzionePagamento"), "pdDebitore");
+    }
+
+    private static Join<?, ?> posizione(Root<Pendenza> root) {
+        return join(pdDebitore(root), "posizioneDebitoria");
+    }
+
+    /** Join interno su {@code attributo}, riusato se la query lo ha gia' (un solo join per percorso). */
+    private static Join<?, ?> join(From<?, ?> from, String attributo) {
+        for (Join<?, ?> esistente : from.getJoins()) {
+            if (esistente.getAttribute().getName().equals(attributo) && esistente.getJoinType() == JoinType.INNER) {
+                return esistente;
+            }
+        }
+        return from.join(attributo, JoinType.INNER);
     }
 }

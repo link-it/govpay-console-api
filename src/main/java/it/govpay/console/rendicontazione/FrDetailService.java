@@ -16,7 +16,7 @@ import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.FlussoRendicontazione;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.FrXmlRepository;
-import it.govpay.console.repository.RendicontazioneRepository;
+import it.govpay.console.repository.ConsoleRendicontazioneRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.DominioVisibilita;
@@ -42,14 +42,14 @@ public class FrDetailService {
 
     private final FrRepository frRepository;
     private final FrXmlRepository frXmlRepository;
-    private final RendicontazioneRepository rendicontazioneRepository;
+    private final ConsoleRendicontazioneRepository rendicontazioneRepository;
     private final FrMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AclAuthorizer aclAuthorizer;
 
     public FrDetailService(FrRepository frRepository,
                            FrXmlRepository frXmlRepository,
-                           RendicontazioneRepository rendicontazioneRepository,
+                           ConsoleRendicontazioneRepository rendicontazioneRepository,
                            FrMapper mapper,
                            CurrentOperatorService currentOperatorService,
                            AclAuthorizer aclAuthorizer) {

@@ -10,10 +10,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Incasso;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rendicontazione;
+import it.govpay.pendenze.entity.FlussoRendicontazione;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.pendenze.entity.Rendicontazione;
+import it.govpay.pendenze.model.StatoRendicontazione;
 import it.govpay.console.model.Link;
 import it.govpay.console.model.RigaRendicontazione;
 import it.govpay.console.model.RigaRendicontazioneLinks;
@@ -37,12 +38,6 @@ import it.govpay.console.rendicontazione.EsitoRendicontazioneMapper;
 public class VoceRicevutaMapper {
 
     private static final Logger log = LoggerFactory.getLogger(VoceRicevutaMapper.class);
-
-    /**
-     * Solo {@code ANOMALA} e' un'anomalia: {@code ALTRO_INTERMEDIARIO} e'
-     * l'importo di uno IUV gestito da un altro intermediario, situazione normale.
-     */
-    private static final String STATO_RIGA_ANOMALA = "ANOMALA";
 
     /**
      * {@code Ricevuta.voci[]}: una voce per pagamento, nell'ordine dato da
@@ -86,8 +81,12 @@ public class VoceRicevutaMapper {
         return StatoRendicontazioneVoce.DA_RENDICONTARE;
     }
 
+    /**
+     * Solo {@code ANOMALA} e' un'anomalia: {@code ALTRO_INTERMEDIARIO} e'
+     * l'importo di uno IUV gestito da un altro intermediario, situazione normale.
+     */
     private static boolean anomala(Rendicontazione r) {
-        return STATO_RIGA_ANOMALA.equals(r.getStato());
+        return r.getStato() == StatoRendicontazione.ANOMALA;
     }
 
     private RigaRendicontazione toRiga(Rendicontazione r) {
@@ -98,7 +97,7 @@ public class VoceRicevutaMapper {
         riga.setImporto(r.getImportoPagato());
         riga.setStato(statoRiga(r.getStato()));
         riga.setAnomalie(AnomalieRendicontazioneParser.parse(r.getAnomalie()));
-        Fr fr = r.getFr();
+        FlussoRendicontazione fr = r.getFlusso();
         if (fr != null) {
             riga.setIdFlusso(fr.getCodFlusso());
             riga.setIdPsp(fr.getCodPsp());
@@ -120,12 +119,12 @@ public class VoceRicevutaMapper {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
-    private static StatoRigaRendicontazione statoRiga(String stato) {
+    private static StatoRigaRendicontazione statoRiga(StatoRendicontazione stato) {
         if (stato == null) {
             return null;
         }
         try {
-            return StatoRigaRendicontazione.valueOf(stato);
+            return StatoRigaRendicontazione.valueOf(stato.name());
         } catch (IllegalArgumentException e) {
             log.warn("Stato rendicontazione non riconosciuto: {}", stato);
             return null;

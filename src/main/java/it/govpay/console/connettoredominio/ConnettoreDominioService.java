@@ -13,7 +13,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.JppaConfig;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.model.ConnettoreCredenziali;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.JppaConfigRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -40,7 +40,7 @@ public class ConnettoreDominioService {
     public static final String AZIONE_AUDIT_MODIFICA = "CONNETTORE_DOMINIO_MODIFICA";
     public static final String AZIONE_AUDIT_CREDENZIALI = "CONNETTORE_DOMINIO_CREDENZIALI";
 
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final JppaConfigRepository jppaConfigRepository;
     private final ConnettoreStore store;
     private final ConnettoreDominioMapper mapper;
@@ -49,7 +49,7 @@ public class ConnettoreDominioService {
     private final AuditService auditService;
     private final AclAuthorizer aclAuthorizer;
 
-    public ConnettoreDominioService(DominioRepository dominioRepository,
+    public ConnettoreDominioService(ConsoleDominioRepository dominioRepository,
                                     JppaConfigRepository jppaConfigRepository,
                                     ConnettoreStore store,
                                     ConnettoreDominioMapper mapper,

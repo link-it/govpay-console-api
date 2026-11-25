@@ -1,5 +1,6 @@
 package it.govpay.console.ricevuta;
 
+import it.govpay.pendenze.entity.FlussoRendicontazione;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
@@ -27,29 +28,34 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Incasso;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Pagamento;
-import it.govpay.console.entity.Rendicontazione;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Pagamento;
+import it.govpay.pendenze.model.StatoRendicontazione;
+import it.govpay.pendenze.model.StatoPagamentoRicevuta;
+import it.govpay.pendenze.model.TipoPagamento;
+import it.govpay.pendenze.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.PagamentoRepository;
-import it.govpay.console.repository.RendicontazioneRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsolePagamentoRepository;
+import it.govpay.console.repository.ConsoleRendicontazioneRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 /**
  * Integration test di {@code GET /ricevute/.../} per {@code voci[]}: ACL non
@@ -74,14 +80,14 @@ class RicevutaVociIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
     @Autowired private AclRepository aclRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
-    @Autowired private PagamentoRepository pagamentoRepository;
-    @Autowired private RendicontazioneRepository rendicontazioneRepository;
+    @PersistenceContext private EntityManager em;
+    @Autowired private ConsoleRptRepository rptRepository;
+    @Autowired private ConsolePagamentoRepository pagamentoRepository;
+    @Autowired private ConsoleRendicontazioneRepository rendicontazioneRepository;
     @Autowired private FrRepository frRepository;
     @Autowired private IncassoRepository incassoRepository;
     @PersistenceContext private EntityManager entityManager;
@@ -120,7 +126,7 @@ class RicevutaVociIntegrationTest {
         Rpt rpt = newRpt("1000000000001", "CCP-ND");
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci").doesNotExist());
@@ -132,7 +138,7 @@ class RicevutaVociIntegrationTest {
         Rpt rpt = newRpt("1000000000002", "CCP-EMPTY");
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci", hasSize(0)));
@@ -145,7 +151,7 @@ class RicevutaVociIntegrationTest {
         newPagamento(rpt, 1, null, null);
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci", hasSize(1)))
@@ -166,7 +172,7 @@ class RicevutaVociIntegrationTest {
         String linkFlusso = "/flussi-rendicontazione/" + DOM + "/FLUSSO-1/PSP-TEST/1";
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("RENDICONTATA")))
@@ -196,7 +202,7 @@ class RicevutaVociIntegrationTest {
         newPagamento(rpt, 1, null, incasso.getId());
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("RICONCILIATA")))
@@ -216,7 +222,7 @@ class RicevutaVociIntegrationTest {
         newPagamento(rpt, 1, null, incasso.getId());
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].riconciliazione.id", is("INC 002/A")))
@@ -233,7 +239,7 @@ class RicevutaVociIntegrationTest {
         newRendicontazione(fr, p, null, 0, "ALTRO_INTERMEDIARIO", null);
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("RENDICONTATA")))
@@ -250,7 +256,7 @@ class RicevutaVociIntegrationTest {
         newRendicontazione(frObsoleto, p, null, 0, "OK", null);
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("DA_RENDICONTARE")))
@@ -267,7 +273,7 @@ class RicevutaVociIntegrationTest {
         newRendicontazione(fr, p, "007115#Rendicontazione duplicata", 0, "ANOMALA", null);
 
         flushAndClear();
-        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getCcp())
+        mvc.perform(get("/ricevute/" + DOM + "/" + rpt.getIuv() + "/" + rpt.getIur())
                         .with(httpBasic(principal, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.voci[0].statoRendicontazione", is("RENDICONTATA")))
@@ -285,33 +291,26 @@ class RicevutaVociIntegrationTest {
 
     // ----- fixture helpers -----------------------------------------------------------
 
-    private Versamento newVersamento(String codVersamentoEnte) {
+    private Pendenza newVersamento(String codVersamentoEnte) {
         OffsetDateTime data = date(2026, 6, 20);
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(codVersamentoEnte);
-        v.setImportoTotale(100.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), null, codVersamentoEnte, null, "RSSMRA80A01H501U", 100.0,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(100.0);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(data);
-        v.setDataOraUltimoAggiornamento(data);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(data);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+        return v;
     }
 
     private Rpt newRpt(String iuv, String ccp) {
-        Versamento v = newVersamento("PEND-" + ccp);
+        Pendenza v = newVersamento("PEND-" + ccp);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(DOM);
         r.setXmlRt(XML_RT);
         r.setImportoTotalePagato(100.0);
@@ -319,7 +318,7 @@ class RicevutaVociIntegrationTest {
         r.setDataMsgRicevuta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         return rptRepository.save(r);
     }
 
@@ -327,13 +326,14 @@ class RicevutaVociIntegrationTest {
         Pagamento p = new Pagamento();
         p.setCodDominio(DOM);
         p.setIuv(rpt.getIuv());
-        p.setIur("IUR-" + rpt.getCcp());
+        p.setIur("IUR-" + rpt.getIur());
         p.setIndiceDati(indice);
         p.setImportoPagato(100.0);
         p.setDataPagamento(rpt.getDataMsgRicevuta());
-        p.setTipo("ENTRATA");
-        p.setStato("PAGATO");
-        p.setIdRpt(rpt.getId());
+        p.setTipo(TipoPagamento.ENTRATA);
+        p.setStato(StatoPagamentoRicevuta.PAGATO);
+        p.setRpt(rpt);
+        p.setDataAcquisizione(rpt.getDataMsgRicevuta());
         p.setIdSingoloVersamento(idSingoloVersamento);
         p.setIdIncasso(idIncasso);
         return pagamentoRepository.save(p);
@@ -358,14 +358,14 @@ class RicevutaVociIntegrationTest {
     private Rendicontazione newRendicontazione(Fr fr, Pagamento pagamento, String anomalie, int esito,
                                                String stato, Long idSingoloVersamento) {
         Rendicontazione r = new Rendicontazione();
-        r.setIdFr(fr.getId());
+        r.setFlusso(entityManager.getReference(FlussoRendicontazione.class, fr.getId()));
         r.setIuv(pagamento.getIuv());
         r.setIur(pagamento.getIur());
         r.setIndiceDati(pagamento.getIndiceDati());
         r.setImportoPagato(pagamento.getImportoPagato());
         r.setEsito(esito);
         r.setData(pagamento.getDataPagamento());
-        r.setStato(stato);
+        r.setStato(StatoRendicontazione.valueOf(stato));
         r.setAnomalie(anomalie);
         r.setIdPagamento(pagamento.getId());
         r.setIdSingoloVersamento(idSingoloVersamento);

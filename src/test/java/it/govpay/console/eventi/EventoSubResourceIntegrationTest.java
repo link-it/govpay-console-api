@@ -25,7 +25,7 @@ import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.GpAudit;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaRepository;
@@ -54,7 +54,7 @@ class EventoSubResourceIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
 
     @MockitoBean

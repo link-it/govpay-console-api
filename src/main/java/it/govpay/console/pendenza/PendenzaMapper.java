@@ -1,26 +1,25 @@
 package it.govpay.console.pendenza;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
 import it.govpay.console.common.CausaleVersamentoDecoder;
-import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.UnitaOperativa;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.DominioRef;
+import it.govpay.console.model.OpzionePagamentoRef;
 import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
 import it.govpay.console.model.PendenzaSummary;
+import it.govpay.console.model.PosizioneDebitoriaRef;
+import it.govpay.console.model.RiferimentoDebitore;
 import it.govpay.console.model.StatoPendenza;
 import it.govpay.console.model.StatoVocePendenza;
 import it.govpay.console.model.TipoContabilita;
@@ -31,11 +30,18 @@ import it.govpay.console.model.VocePendenzaBolloTelematico;
 import it.govpay.console.model.VocePendenzaDettaglio;
 import it.govpay.console.model.VocePendenzaEntrataAnagrafica;
 import it.govpay.console.model.VocePendenzaIncassoDiretto;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.OpzionePagamento;
+import it.govpay.pendenze.entity.PosizioneDebitoria;
+import it.govpay.pendenze.identificativo.IdentificatorePosizioneDebitoria;
+import it.govpay.pendenze.model.DettaglioContabileConverter;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 
 @Component
 public class PendenzaMapper {
 
-    private static final Logger log = LoggerFactory.getLogger(PendenzaMapper.class);
+    /** Codice della unita' operativa che rappresenta l'ente creditore stesso. */
+    static final String COD_UNITA_OPERATIVA_EC = "EC";
 
     private final Clock clock;
 
@@ -43,58 +49,73 @@ public class PendenzaMapper {
         this.clock = clock;
     }
 
-    public PendenzaSummary toSummary(Versamento v) {
-        if (v == null) {
+    /**
+     * Riga della lista per una pendenza del modello v3, con opzione di pagamento e posizione
+     * gia' caricate.
+     *
+     * @param idA2A    codice dell'applicazione della pendenza
+     * @param contesto anagrafiche di dominio, tipo pendenza e unita' operativa
+     */
+    public PendenzaSummary toSummary(it.govpay.pendenze.entity.Pendenza p, String idA2A,
+                                     PendenzaAnagrafiche.Contesto contesto) {
+        if (p == null) {
             return null;
         }
-        Applicazione applicazione = v.getApplicazione();
-        Dominio dominio = v.getDominio();
+        OpzionePagamento opzione = p.getOpzionePagamento();
+        PosizioneDebitoria posizione = opzione.getPosizioneDebitoria();
         return new PendenzaSummary(
-                applicazione != null ? applicazione.getCodApplicazione() : null,
-                v.getCodVersamentoEnte(),
-                mapStato(v.getStatoVersamento(), v.getDataScadenza()),
-                mapDominio(dominio),
-                mapTipoPendenza(resolveTipoPendenza(v)),
-                v.getImportoTotale(),
-                CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()),
-                v.getDataOraUltimoAggiornamento())
-                .unitaOperativa(mapUnitaOperativa(v.getUnitaOperativa()))
-                .numeroAvviso(v.getNumeroAvviso())
-                .iuvAvviso(v.getIuvVersamento())
-                .dataScadenza(v.getDataScadenza())
-                .dataValidita(toLocalDate(v.getDataValidita()))
-                .dataUltimaModificaAca(v.getDataUltimaModificaAca())
-                .dataUltimaComunicazioneAca(v.getDataUltimaComunicazioneAca());
+                idA2A,
+                p.getIdPendenza(),
+                mapStato(p.getStato(), p.getDataScadenzaAvviso(), posizione),
+                mapDominio(contesto.dominio()),
+                mapTipoPendenza(contesto.tipoVersamento()),
+                mapDebitore(opzione),
+                mapOpzione(opzione, p.getNumeroRata()),
+                mapPosizione(idA2A, contesto.dominio(), posizione),
+                p.getImporto(),
+                CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()),
+                p.getDataCreazione(),
+                p.getDataUltimoAggiornamento())
+                .direzione(p.getDirezione())
+                .divisione(p.getDivisione())
+                .unitaOperativa(mapUnitaOperativa(contesto.unitaOperativa()))
+                .numeroAvviso(p.getNumeroAvviso())
+                .iuvAvviso(p.getIuv())
+                .dataScadenza(p.getDataScadenzaAvviso())
+                .dataValidita(toLocalDate(p.getDataValidita()))
+                .dataUltimaModificaAca(p.getDataUltimaModificaAca())
+                .dataUltimaComunicazioneAca(p.getDataUltimaComunicazioneAca());
     }
 
     /**
-     * Mappa lo stato nel corrispondente {@link StatoPendenza}, applicando
-     * la derivazione SCADUTA:
-     * <ul>
-     *   <li>{@code NON_ESEGUITO} + {@code dataScadenza < now} → {@link StatoPendenza#SCADUTA};</li>
-     *   <li>{@code NON_ESEGUITO} + {@code dataScadenza >= now} (o null) → {@link StatoPendenza#NON_PAGATA};</li>
-     *   <li>altri stati: mapping diretto.</li>
-     * </ul>
+     * Stato di una pendenza del modello v3. {@code NON_ESEGUITO} e' l'unico stato che si
+     * deriva: diventa {@link StatoPendenza#NON_PUBBLICATA} se la posizione ha una data di
+     * pubblicazione futura (prevale), altrimenti {@link StatoPendenza#SCADUTO} se la
+     * scadenza e' passata.
      */
-    StatoPendenza mapStato(String statoV1, OffsetDateTime dataScadenza) {
-        if (statoV1 == null) {
+    StatoPendenza mapStato(it.govpay.pendenze.model.StatoPendenza stato, OffsetDateTime dataScadenza,
+                           PosizioneDebitoria posizione) {
+        if (stato == null) {
             return null;
         }
-        StatoPendenza base = baseMapStato(statoV1);
-        if (base == StatoPendenza.NON_PAGATA
-                && dataScadenza != null
-                && dataScadenza.isBefore(OffsetDateTime.now(clock))) {
-            return StatoPendenza.SCADUTA;
-        }
-        return base;
-    }
-
-    private static StatoPendenza baseMapStato(String statoV1) {
-        StatoPendenza mapped = StatoVersamentoMapping.baseMap(statoV1);
-        if (mapped == StatoPendenza.ANOMALA && !StatoVersamentoMapping.isRiconosciuto(statoV1)) {
-            log.warn("Stato versamento V1 sconosciuto, mappato a ANOMALA: {}", statoV1);
-        }
-        return mapped;
+        return switch (stato) {
+            case NON_ESEGUITO -> {
+                if (posizione != null && !posizione.isPubblicata(LocalDate.now(clock))) {
+                    yield StatoPendenza.NON_PUBBLICATA;
+                }
+                if (dataScadenza != null && dataScadenza.isBefore(OffsetDateTime.now(clock))) {
+                    yield StatoPendenza.SCADUTO;
+                }
+                yield StatoPendenza.NON_ESEGUITO;
+            }
+            case ESEGUITO -> StatoPendenza.ESEGUITO;
+            case PARZIALMENTE_ESEGUITO -> StatoPendenza.PARZIALMENTE_ESEGUITO;
+            case ANNULLATO -> StatoPendenza.ANNULLATO;
+            case ESEGUITO_ALTRO_CANALE -> StatoPendenza.ESEGUITO_ALTRO_CANALE;
+            case ANOMALO -> StatoPendenza.ANOMALO;
+            case ESEGUITO_SENZA_RPT -> StatoPendenza.ESEGUITO_SENZA_RPT;
+            case INCASSATO -> StatoPendenza.INCASSATO;
+        };
     }
 
     static DominioRef mapDominio(Dominio dominio) {
@@ -116,20 +137,11 @@ public class PendenzaMapper {
     }
 
     /**
-     * V1 ricava il TipoPendenzaRef passando per {@code TipoVersamentoDominio}
-     * (configurazione per-dominio): ricalchiamo la stessa catena con fallback
-     * sul {@link TipoVersamento} globale se la TVD non e' caricata.
+     * Riferimento alla unita' operativa. La unita' {@code EC} rappresenta l'ente creditore
+     * stesso e non una sotto-struttura scelta dal chiamante: non si espone.
      */
-    private static TipoVersamento resolveTipoPendenza(Versamento v) {
-        if (v.getTipoVersamentoDominio() != null
-                && v.getTipoVersamentoDominio().getTipoVersamento() != null) {
-            return v.getTipoVersamentoDominio().getTipoVersamento();
-        }
-        return v.getTipoVersamento();
-    }
-
     static UnitaOperativaRef mapUnitaOperativa(UnitaOperativa uo) {
-        if (uo == null) {
+        if (uo == null || COD_UNITA_OPERATIVA_EC.equals(uo.getCodUo())) {
             return null;
         }
         return new UnitaOperativaRef(uo.getCodUo(), uo.getUoDenominazione());
@@ -140,71 +152,107 @@ public class PendenzaMapper {
         return value == null ? null : value.toLocalDate();
     }
 
-    public Pendenza toDetail(Versamento v, Set<PendenzaExpand> expand) {
-        if (v == null) {
+    /**
+     * Dettaglio di una pendenza del modello v3. La pendenza deve avere un'opzione di
+     * pagamento con la sua posizione debitoria caricate.
+     *
+     * @param idA2A           identificativo del gestionale, come richiesto dal chiamante
+     * @param contesto        anagrafiche di dominio, tipo pendenza e unita' operativa
+     * @param anagraficheVoci anagrafiche delle voci
+     */
+    public Pendenza toDetail(String idA2A, it.govpay.pendenze.entity.Pendenza p,
+                             PendenzaAnagrafiche.Contesto contesto,
+                             PendenzaAnagrafiche.Voci anagraficheVoci,
+                             Set<PendenzaExpand> expand) {
+        if (p == null) {
             return null;
         }
-        Applicazione applicazione = v.getApplicazione();
-        Pendenza p = new Pendenza()
-                .idA2A(applicazione != null ? applicazione.getCodApplicazione() : null)
-                .idPendenza(v.getCodVersamentoEnte())
-                .stato(mapStato(v.getStatoVersamento(), v.getDataScadenza()))
-                .dominio(mapDominio(v.getDominio()))
-                .tipoPendenza(mapTipoPendenza(resolveTipoPendenza(v)))
-                .unitaOperativa(mapUnitaOperativa(v.getUnitaOperativa()))
-                .importo(v.getImportoTotale())
-                .causale(CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento()))
-                .numeroAvviso(v.getNumeroAvviso())
-                .iuvAvviso(v.getIuvVersamento())
-                .dataScadenza(v.getDataScadenza())
-                .dataValidita(toLocalDate(v.getDataValidita()))
-                .dataUltimoAggiornamento(v.getDataOraUltimoAggiornamento())
-                .dataUltimaModificaAca(v.getDataUltimaModificaAca())
-                .dataUltimaComunicazioneAca(v.getDataUltimaComunicazioneAca())
-                .direzione(v.getDirezione())
-                .divisione(v.getDivisione())
-                .voci(mapVoci(v.getSingoliVersamenti(), v.getDominio()));
+        OpzionePagamento opzione = p.getOpzionePagamento();
+        PosizioneDebitoria posizione = opzione.getPosizioneDebitoria();
+        Dominio dominio = contesto.dominio();
+
+        Pendenza dettaglio = new Pendenza()
+                .idA2A(idA2A)
+                .idPendenza(p.getIdPendenza())
+                .stato(mapStato(p.getStato(), p.getDataScadenzaAvviso(), posizione))
+                .dominio(mapDominio(dominio))
+                .tipoPendenza(mapTipoPendenza(contesto.tipoVersamento()))
+                .unitaOperativa(mapUnitaOperativa(contesto.unitaOperativa()))
+                .importo(p.getImporto())
+                .causale(CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()))
+                .numeroAvviso(p.getNumeroAvviso())
+                .iuvAvviso(p.getIuv())
+                .dataScadenza(p.getDataScadenzaAvviso())
+                .dataValidita(toLocalDate(p.getDataValidita()))
+                .dataCreazione(p.getDataCreazione())
+                .dataUltimoAggiornamento(p.getDataUltimoAggiornamento())
+                .dataUltimaModificaAca(p.getDataUltimaModificaAca())
+                .dataUltimaComunicazioneAca(p.getDataUltimaComunicazioneAca())
+                .direzione(p.getDirezione())
+                .divisione(p.getDivisione())
+                .debitore(mapDebitore(opzione))
+                .opzionePagamento(mapOpzione(opzione, p.getNumeroRata()))
+                .posizioneDebitoria(mapPosizione(idA2A, dominio, posizione))
+                .voci(mapVoci(p, anagraficheVoci));
 
         Set<PendenzaExpand> requested = expand != null ? expand : Set.of();
         if (requested.contains(PendenzaExpand.DATI_ALLEGATI)) {
-            p.datiAllegati(v.getDatiAllegati());
+            dettaglio.datiAllegati(p.getDatiAllegati());
         }
         if (requested.contains(PendenzaExpand.PROPRIETA)) {
-            p.proprieta(v.getProprieta());
+            dettaglio.proprieta(p.getProprieta());
         }
-        return p;
+        return dettaglio;
     }
 
-    static List<VocePendenza> mapVoci(List<SingoloVersamento> singoliVersamenti, Dominio dominioPendenza) {
-        if (singoliVersamenti == null) {
-            return List.of();
-        }
-        return singoliVersamenti.stream()
-                .sorted((a, b) -> Integer.compare(
-                        a.getIndiceDati() != null ? a.getIndiceDati() : 0,
-                        b.getIndiceDati() != null ? b.getIndiceDati() : 0))
-                .map(sv -> toVocePendenza(sv, dominioPendenza))
+    private static RiferimentoDebitore mapDebitore(OpzionePagamento opzione) {
+        Debitore debitore = opzione.getPdDebitore().getDebitore();
+        return new RiferimentoDebitore(
+                RiferimentoDebitore.TipoEnum.valueOf(debitore.getTipo().name()),
+                debitore.getIdentificativo());
+    }
+
+    private static OpzionePagamentoRef mapOpzione(OpzionePagamento opzione, int numeroRata) {
+        boolean pianoRateale = opzione.getTipologia() == TipologiaOpzionePagamento.PIANO_RATEALE;
+        return new OpzionePagamentoRef(
+                opzione.getIdOpzionePagamento(),
+                OpzionePagamentoRef.TipologiaEnum.valueOf(opzione.getTipologia().name()),
+                OpzionePagamentoRef.StatoEnum.valueOf(opzione.getStato().name()))
+                .numeroRata(pianoRateale ? numeroRata : null);
+    }
+
+    private static PosizioneDebitoriaRef mapPosizione(String idA2A, Dominio dominio, PosizioneDebitoria posizione) {
+        return new PosizioneDebitoriaRef(IdentificatorePosizioneDebitoria.comporre(
+                idA2A, dominio.getCodDominio(), posizione.getCodDocumento()))
+                .dataPubblicazione(posizione.getDataPubblicazione());
+    }
+
+    static List<VocePendenza> mapVoci(it.govpay.pendenze.entity.Pendenza p, PendenzaAnagrafiche.Voci anagrafiche) {
+        return p.getVoci().stream()
+                .sorted(Comparator.comparingInt(it.govpay.pendenze.entity.VocePendenza::getIndice))
+                .map(voce -> toVocePendenza(voce, p.getIdDominio(), anagrafiche))
                 .toList();
     }
 
-    static VocePendenza toVocePendenza(SingoloVersamento sv, Dominio dominioPendenza) {
-        VocePendenza voce = new VocePendenza()
-                .idVocePendenza(sv.getCodSingoloVersamentoEnte())
-                .indice(sv.getIndiceDati())
-                .importo(sv.getImportoSingoloVersamento())
-                .descrizione(sv.getDescrizione())
-                .stato(mapStatoVoce(sv.getStatoSingoloVersamento()))
-                .descrizioneCausaleRPT(sv.getDescrizioneCausaleRpt())
-                .contabilita(sv.getContabilita())
-                .datiAllegati(sv.getDatiAllegati())
-                .metadata(sv.getMetadata())
-                .dettaglio(mapDettaglioVoce(sv));
+    static VocePendenza toVocePendenza(it.govpay.pendenze.entity.VocePendenza voce, Long idDominioPendenza,
+                                       PendenzaAnagrafiche.Voci anagrafiche) {
+        VocePendenza dto = new VocePendenza()
+                .idVocePendenza(voce.getIdVocePendenza())
+                .indice(voce.getIndice())
+                .importo(voce.getImporto())
+                .descrizione(voce.getDescrizione())
+                .stato(mapStatoVoce(voce.getStato()))
+                .descrizioneCausaleRPT(voce.getDescrizioneCausaleRpt())
+                .contabilita(new DettaglioContabileConverter().convertToDatabaseColumn(voce.getDettaglioContabile()))
+                .datiAllegati(voce.getDatiAllegati())
+                .metadata(voce.getMetadata())
+                .dettaglio(mapDettaglioVoce(voce, anagrafiche));
 
-        DominioRef dominioVoce = mapDominioVoce(sv.getDominio(), dominioPendenza);
+        DominioRef dominioVoce = mapDominioVoce(voce.getIdDominio(), idDominioPendenza, anagrafiche);
         if (dominioVoce != null) {
-            voce.dominio(dominioVoce);
+            dto.dominio(dominioVoce);
         }
-        return voce;
+        return dto;
     }
 
     /**
@@ -212,15 +260,12 @@ public class PendenzaMapper {
      * la voce ha un dominio diverso da quello della pendenza. Single-beneficiario
      * (dominio voce assente o uguale al padre) → null.
      */
-    static DominioRef mapDominioVoce(Dominio dominioVoce, Dominio dominioPendenza) {
-        if (dominioVoce == null) {
+    static DominioRef mapDominioVoce(Long idDominioVoce, Long idDominioPendenza,
+                                     PendenzaAnagrafiche.Voci anagrafiche) {
+        if (idDominioVoce == null || idDominioVoce.equals(idDominioPendenza)) {
             return null;
         }
-        if (dominioPendenza != null && dominioVoce.getId() != null
-                && dominioVoce.getId().equals(dominioPendenza.getId())) {
-            return null;
-        }
-        return mapDominio(dominioVoce);
+        return mapDominio(anagrafiche.domini().get(idDominioVoce));
     }
 
     static final String TIPO_VOCE_ENTRATA_ANAGRAFICA = "ENTRATA_ANAGRAFICA";
@@ -228,95 +273,46 @@ public class PendenzaMapper {
     static final String TIPO_VOCE_BOLLO_TELEMATICO = "BOLLO_TELEMATICO";
 
     /**
-     * Discrimina il tipo effettivo della voce. Priorita' (per voci legacy con dati
-     * ambigui): {@code BOLLO_TELEMATICO} → {@code ENTRATA_ANAGRAFICA} →
-     * {@code INCASSO_DIRETTO}. Se piu' tipi sono compresenti, logga un WARN e
-     * applica la priorita'. Se nessuna variante e' riconoscibile, ritorna null.
+     * Tipo effettivo della voce, dal tipo di riferimento che la libreria
+     * memorizza: entrata in anagrafica, incasso diretto con IBAN, bollo telematico.
      */
-    static VocePendenzaDettaglio mapDettaglioVoce(SingoloVersamento sv) {
-        boolean isBollo = sv.getTipoBollo() != null && sv.getHashDocumento() != null
-                && sv.getProvinciaResidenza() != null;
-        boolean isEntrata = sv.getTributo() != null && sv.getTributo().getTipoTributo() != null;
-        boolean isIncasso = sv.getIbanAccredito() != null;
-
-        int segnali = (isBollo ? 1 : 0) + (isEntrata ? 1 : 0) + (isIncasso ? 1 : 0);
-        if (segnali > 1) {
-            log.warn("Voce {} ambigua: piu' tipi compresenti (bollo={}, entrata={}, incasso={}); "
-                            + "applico la priorita' BOLLO_TELEMATICO > ENTRATA_ANAGRAFICA > INCASSO_DIRETTO",
-                    sv.getCodSingoloVersamentoEnte(), isBollo, isEntrata, isIncasso);
-        }
-
-        if (isBollo) {
-            return new VocePendenzaBolloTelematico(
-                    TIPO_VOCE_BOLLO_TELEMATICO,
-                    mapTipoBollo(),
-                    sv.getHashDocumento(),
-                    sv.getProvinciaResidenza());
-        }
-        if (isEntrata) {
-            return new VocePendenzaEntrataAnagrafica(
-                    TIPO_VOCE_ENTRATA_ANAGRAFICA,
-                    sv.getTributo().getTipoTributo().getCodTributo());
-        }
-        if (isIncasso) {
-            VocePendenzaIncassoDiretto incasso = new VocePendenzaIncassoDiretto(
-                    TIPO_VOCE_INCASSO_DIRETTO,
-                    sv.getIbanAccredito().getCodIban(),
-                    mapTipoContabilita(sv.getTipoContabilita()),
-                    sv.getCodiceContabilita());
-            if (sv.getIbanAppoggio() != null) {
-                incasso.ibanAppoggio(sv.getIbanAppoggio().getCodIban());
-            }
-            return incasso;
-        }
-        return null;
-    }
-
-    /**
-     * Il modello espone l'unica tipologia supportata, "Imposta di bollo", quindi
-     * la codifica V1 di partenza ({@code singoli_versamenti.tipo_bollo}) non
-     * discrimina: il metodo non ha un parametro perche' non ne userebbe il valore.
-     */
-    private static VocePendenzaBolloTelematico.TipoBolloEnum mapTipoBollo() {
-        return VocePendenzaBolloTelematico.TipoBolloEnum.IMPOSTA_DI_BOLLO;
-    }
-
-    /**
-     * Mappa la codifica DB a 1 char ({@code tipo_contabilita}) sull'enum.
-     * Codifica: 0=CAPITOLO, 1=SPECIALE, 2=SIOPE, 6/7/8=SRTP*, 9=ALTRO.
-     */
-    static TipoContabilita mapTipoContabilita(String codice) {
-        if (codice == null) {
+    static VocePendenzaDettaglio mapDettaglioVoce(it.govpay.pendenze.entity.VocePendenza voce,
+                                                  PendenzaAnagrafiche.Voci anagrafiche) {
+        if (voce.getTipoRiferimento() == null) {
             return null;
         }
-        return switch (codice.trim()) {
-            case "0" -> TipoContabilita.CAPITOLO;
-            case "1" -> TipoContabilita.SPECIALE;
-            case "2" -> TipoContabilita.SIOPE;
-            case "6" -> TipoContabilita.SRTP_ESCLUSA_RAVV_OPEROSO;
-            case "7" -> TipoContabilita.SRTP_ESCLUSA_ALTRO_OPERATORE;
-            case "8" -> TipoContabilita.SRTP_ESCLUSA;
-            case "9" -> TipoContabilita.ALTRO;
-            default -> {
-                log.warn("Codifica tipo_contabilita V1 sconosciuta, mappata a ALTRO: {}", codice);
-                yield TipoContabilita.ALTRO;
+        return switch (voce.getTipoRiferimento()) {
+            case BOLLO -> new VocePendenzaBolloTelematico(
+                    TIPO_VOCE_BOLLO_TELEMATICO,
+                    VocePendenzaBolloTelematico.TipoBolloEnum.IMPOSTA_DI_BOLLO,
+                    voce.getHashDocumento(),
+                    voce.getProvinciaResidenza());
+            case RIFERIMENTO_ENTRATA -> new VocePendenzaEntrataAnagrafica(
+                    TIPO_VOCE_ENTRATA_ANAGRAFICA,
+                    anagrafiche.codiciEntrata().get(voce.getIdTributo()));
+            case ENTRATA -> {
+                VocePendenzaIncassoDiretto incasso = new VocePendenzaIncassoDiretto(
+                        TIPO_VOCE_INCASSO_DIRETTO,
+                        anagrafiche.codiciIban().get(voce.getIdIbanAccredito()),
+                        voce.getTipoContabilita() == null ? null
+                                : TipoContabilita.valueOf(voce.getTipoContabilita().name()),
+                        voce.getCodiceContabilita());
+                if (voce.getIdIbanAppoggio() != null) {
+                    incasso.ibanAppoggio(anagrafiche.codiciIban().get(voce.getIdIbanAppoggio()));
+                }
+                yield incasso;
             }
         };
     }
 
-    static StatoVocePendenza mapStatoVoce(String statoV1) {
-        if (statoV1 == null) {
+    static StatoVocePendenza mapStatoVoce(it.govpay.pendenze.model.StatoVocePendenza stato) {
+        if (stato == null) {
             return null;
         }
-        String normalized = statoV1.trim().toUpperCase();
-        return switch (normalized) {
-            case "ESEGUITO", "ESEGUITA", "PAGATO", "PAGATA" -> StatoVocePendenza.PAGATA;
-            case "NON_ESEGUITO", "NON_ESEGUITA", "NON_PAGATO", "NON_PAGATA" -> StatoVocePendenza.NON_PAGATA;
-            case "ANOMALA", "ANOMALO" -> StatoVocePendenza.ANOMALA;
-            default -> {
-                log.warn("Stato voce V1 sconosciuto, mappato a ANOMALA: {}", statoV1);
-                yield StatoVocePendenza.ANOMALA;
-            }
+        return switch (stato) {
+            case NON_ESEGUITO -> StatoVocePendenza.NON_ESEGUITO;
+            case ESEGUITO -> StatoVocePendenza.ESEGUITO;
+            case ANOMALO -> StatoVocePendenza.ANOMALO;
         };
     }
 }

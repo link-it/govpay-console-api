@@ -30,7 +30,7 @@ import it.govpay.console.model.DominioReplace;
 import it.govpay.console.model.JsonPatchOperation;
 import it.govpay.console.model.ListDomini200Response;
 import it.govpay.console.model.Pagination;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.security.AclAuthorizer;
@@ -71,7 +71,7 @@ public class DominioService {
     /** Codice della unita' operativa speciale che porta l'anagrafica del dominio. */
     private static final String COD_UO_EC = "EC";
 
-    private final DominioRepository repository;
+    private final ConsoleDominioRepository repository;
     private final UnitaOperativaRepository uoRepository;
     private final StazioneRepository stazioneRepository;
     private final DominioMapper mapper;
@@ -85,7 +85,7 @@ public class DominioService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public DominioService(DominioRepository repository,
+    public DominioService(ConsoleDominioRepository repository,
                           UnitaOperativaRepository uoRepository,
                           StazioneRepository stazioneRepository,
                           DominioMapper mapper,

@@ -5,7 +5,7 @@ import java.time.OffsetDateTime;
 import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.entity.Fr;
-import it.govpay.console.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rendicontazione;
 import it.govpay.console.model.StatoFlussoRendicontazione;
 import it.govpay.console.security.DominioVisibilita;
 import it.govpay.console.security.OperatoreCorrente;
@@ -100,8 +100,8 @@ public final class FrSpecifications {
         return (root, q, cb) -> {
             Subquery<Long> sub = q.subquery(Long.class);
             var rnd = sub.from(Rendicontazione.class);
-            sub.select(rnd.get("idFr"));
-            sub.where(cb.equal(rnd.get("idFr"), root.get("id")), cb.equal(rnd.get("iuv"), value));
+            sub.select(rnd.get("flusso").get("id"));
+            sub.where(cb.equal(rnd.get("flusso").get("id"), root.get("id")), cb.equal(rnd.get("iuv"), value));
             return cb.exists(sub);
         };
     }

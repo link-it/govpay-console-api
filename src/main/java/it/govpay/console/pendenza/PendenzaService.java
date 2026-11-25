@@ -1,6 +1,7 @@
 package it.govpay.console.pendenza;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,23 +19,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import it.govpay.console.audit.AuditService;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.pagination.CursorCodec;
 import it.govpay.console.model.ListPendenze200Response;
 import it.govpay.console.model.Pagination;
-import it.govpay.console.model.Pendenza;
 import it.govpay.console.model.PendenzaExpand;
 import it.govpay.console.model.PendenzaLinks;
 import it.govpay.console.model.PendenzaSummary;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.repository.UnitaOperativaRepository;
+import it.govpay.pendenze.entity.PdDebitore;
+import it.govpay.pendenze.entity.Pendenza;
 import it.govpay.console.security.CurrentOperatorService;
 import it.govpay.console.security.OperatoreCorrente;
-import it.govpay.console.security.VersamentoVisibilita;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.ListQueryValidator;
-import it.govpay.console.web.NotFoundException;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Subgraph;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -55,7 +55,9 @@ public class PendenzaService {
     private static final int MAX_ID_TIPO_PENDENZA = 50;
     private static final int MAX_DIREZIONE_DIVISIONE = 50;
 
-    private final VersamentoRepository repository;
+    private final PendenzaLettura lettura;
+    private final UnitaOperativaRepository unitaOperativaRepository;
+    private final PendenzaAnagrafiche anagrafiche;
     private final PendenzaMapper mapper;
     private final PendenzaLinksBuilder linksBuilder;
     private final CurrentOperatorService currentOperatorService;
@@ -65,13 +67,17 @@ public class PendenzaService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public PendenzaService(VersamentoRepository repository,
+    public PendenzaService(PendenzaLettura lettura,
+                           UnitaOperativaRepository unitaOperativaRepository,
+                           PendenzaAnagrafiche anagrafiche,
                            PendenzaMapper mapper,
                            PendenzaLinksBuilder linksBuilder,
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,
                            Clock clock) {
-        this.repository = repository;
+        this.lettura = lettura;
+        this.unitaOperativaRepository = unitaOperativaRepository;
+        this.anagrafiche = anagrafiche;
         this.mapper = mapper;
         this.linksBuilder = linksBuilder;
         this.currentOperatorService = currentOperatorService;
@@ -80,24 +86,18 @@ public class PendenzaService {
     }
 
     @Transactional(readOnly = true)
-    public Pendenza get(String idA2A, String idPendenza, Set<PendenzaExpand> expand) {
+    public it.govpay.console.model.Pendenza get(String idA2A, String idPendenza, Set<PendenzaExpand> expand) {
         OperatoreCorrente operatore = currentOperatorService.get();
         log.debug("getPendenza idA2A={} idPendenza={} expand={} operatore={}",
                 idA2A, idPendenza, expand, operatore.principal());
 
-        Versamento versamento = repository.findDetail(idA2A, idPendenza)
-                .orElseThrow(() -> new NotFoundException(
-                        "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza));
+        PendenzaLettura.Letta letta = lettura.leggiVisibile(idA2A, idPendenza, operatore);
+        Pendenza p = letta.pendenza();
+        PendenzaAnagrafiche.Contesto contesto = letta.contesto();
 
-        if (!VersamentoVisibilita.isVisibile(versamento, operatore)) {
-            log.debug("getPendenza ACL nega l'accesso (404 anti-leak) idA2A={} idPendenza={} principal={}",
-                    idA2A, idPendenza, operatore.principal());
-            throw new NotFoundException(
-                    "Pendenza non trovata: idA2A=" + idA2A + ", idPendenza=" + idPendenza);
-        }
-
-        Pendenza pendenza = mapper.toDetail(versamento, expand);
-        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza, versamento.getNumeroAvviso());
+        it.govpay.console.model.Pendenza pendenza = mapper.toDetail(idA2A, p, contesto, anagrafiche.risolviVoci(p.getVoci()), expand);
+        PendenzaLinks links = linksBuilder.build(idA2A, idPendenza,
+                pendenza.getPosizioneDebitoria().getIdPosizioneDebitoria(), p.getNumeroAvviso());
         pendenza.setLinks(links);
         log.debug("getPendenza dettaglio costruito idPendenza={} voci={} avviso={}",
                 idPendenza, pendenza.getVoci().size(), links.getAvviso() != null);
@@ -126,14 +126,23 @@ public class PendenzaService {
         List<String> divisione = ListQueryValidator.normalizeCsvList(
                 query.divisione(), "divisione", MAX_DIREZIONE_DIVISIONE);
 
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        LocalDate oggi = LocalDate.now(clock);
+        // Domini di cui l'operatore ha la UO EC visibile: una query per richiesta, e solo
+        // se l'operatore e' limitato a UO specifiche.
+        Set<Long> dominiConUoEc = !operatore.tuttiIDomini() && !operatore.idUoVisibili().isEmpty()
+                ? unitaOperativaRepository.findDominioIdsConUoEcTra(operatore.idUoVisibili())
+                : Set.of();
+
         // Spring Data JPA 4.x: Specification.allOf rifiuta null. Filtriamo i predicati assenti.
-        Specification<Versamento> spec = Specification.allOf(
+        Specification<Pendenza> spec = Specification.allOf(
                 java.util.stream.Stream.of(
+                        PendenzaSpecifications.conOpzione(),
                         PendenzaSpecifications.idPendenzaPartial(query.idPendenza()),
                         PendenzaSpecifications.numeroAvvisoExact(query.numeroAvviso()),
                         PendenzaSpecifications.idDominioExact(query.idDominio()),
                         PendenzaSpecifications.identificativoDebitoreExact(query.identificativoDebitore()),
-                        PendenzaSpecifications.statoExact(query.stato(), OffsetDateTime.now(clock)),
+                        PendenzaSpecifications.statoExact(query.stato(), now, oggi),
                         PendenzaSpecifications.dataCreazioneDa(query.dataDa()),
                         PendenzaSpecifications.dataCreazioneA(query.dataA()),
                         PendenzaSpecifications.iuvExact(query.iuv()),
@@ -141,12 +150,12 @@ public class PendenzaService {
                         PendenzaSpecifications.divisioneIn(divisione),
                         PendenzaSpecifications.idA2AExact(query.idA2A()),
                         PendenzaSpecifications.idTipoPendenzaIn(idTipoPendenza),
-                        PendenzaSpecifications.visibiliPerOperatore(operatore))
+                        PendenzaSpecifications.visibiliPerOperatore(operatore, dominiConUoEc))
                 .filter(java.util.Objects::nonNull)
                 .toList());
 
         ListPendenze200Response response = new ListPendenze200Response();
-        List<Versamento> rows;
+        List<Pendenza> rows;
 
         // cursor != null ⇔ "?cursor=..." presente in URL (anche vuoto = prima pagina cursor mode)
         if (query.cursor() != null) {
@@ -155,7 +164,11 @@ public class PendenzaService {
             rows = listOffsetMode(spec, query, response);
         }
 
-        List<PendenzaSummary> summaries = rows.stream().map(mapper::toSummary).toList();
+        // Anagrafiche della pagina in blocco: una query per anagrafica, non una per riga.
+        PendenzaAnagrafiche.Pagina pagina = anagrafiche.risolviPagina(rows);
+        List<PendenzaSummary> summaries = rows.stream()
+                .map(p -> mapper.toSummary(p, pagina.idA2A(p), pagina.contesto(p)))
+                .toList();
         response.setResults(summaries);
         log.debug("listPendenze risultati={} nextCursor={} pagination={}",
                 summaries.size(), response.getNextCursor() != null, response.getPagination() != null);
@@ -175,7 +188,7 @@ public class PendenzaService {
         return response;
     }
 
-    private List<Versamento> listOffsetMode(Specification<Versamento> spec,
+    private List<Pendenza> listOffsetMode(Specification<Pendenza> spec,
                                             PendenzaListQuery query,
                                             ListPendenze200Response response) {
         Sort sort;
@@ -190,15 +203,15 @@ public class PendenzaService {
         boolean wantTotal = Boolean.TRUE.equals(query.total());
 
         Pagination pagination = new Pagination(page, limit, false);
-        List<Versamento> rows;
+        List<Pendenza> rows;
         if (wantTotal) {
-            Page<Versamento> p = repository.findAll(spec, PageRequest.of(page - 1, limit, sort));
-            rows = p.getContent();
-            pagination.setHasNextPage(p.hasNext());
-            pagination.setTotalResults(p.getTotalElements());
-            pagination.setTotalPages(p.getTotalPages());
+            long total = count(spec);
+            rows = findSlice(spec, sort, (page - 1) * limit, limit);
+            pagination.setHasNextPage((long) page * limit < total);
+            pagination.setTotalResults(total);
+            pagination.setTotalPages((int) ((total + limit - 1) / limit));
         } else {
-            List<Versamento> sliced = findSlice(spec, sort, (page - 1) * limit, limit + 1);
+            List<Pendenza> sliced = findSlice(spec, sort, (page - 1) * limit, limit + 1);
             boolean hasNext = sliced.size() > limit;
             rows = hasNext ? sliced.subList(0, limit) : sliced;
             pagination.setHasNextPage(hasNext);
@@ -224,29 +237,41 @@ public class PendenzaService {
      * {@code CREATE INDEX idx_vrs_data_creaz_id ON versamenti (data_creazione DESC, id DESC);}
      * (sostituirebbe {@code idx_vrs_data_creaz}, che ne e' un prefisso).
      */
-    private List<Versamento> listCursorMode(Specification<Versamento> spec,
+    private List<Pendenza> listCursorMode(Specification<Pendenza> spec,
                                             PendenzaListQuery query,
                                             ListPendenze200Response response) {
         CursorCodec.Cursor cursor = query.cursor().isBlank() ? null : CursorCodec.decode(query.cursor());
         int limit = query.limit();
 
-        List<Versamento> sliced = findByCursor(spec, cursor, limit + 1);
+        List<Pendenza> sliced = findByCursor(spec, cursor, limit + 1);
         boolean hasNext = sliced.size() > limit;
-        List<Versamento> rows = hasNext ? sliced.subList(0, limit) : sliced;
+        List<Pendenza> rows = hasNext ? sliced.subList(0, limit) : sliced;
 
         if (hasNext && !rows.isEmpty()) {
-            Versamento last = rows.get(rows.size() - 1);
+            Pendenza last = rows.get(rows.size() - 1);
             response.setNextCursor(CursorCodec.encode(last.getDataCreazione(), last.getId()));
         }
         return rows;
     }
 
-    private List<Versamento> findByCursor(Specification<Versamento> spec,
+    private long count(Specification<Pendenza> spec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> q = cb.createQuery(Long.class);
+        Root<Pendenza> root = q.from(Pendenza.class);
+        q.select(cb.count(root));
+        Predicate predicate = spec.toPredicate(root, q, cb);
+        if (predicate != null) {
+            q.where(predicate);
+        }
+        return entityManager.createQuery(q).getSingleResult();
+    }
+
+    private List<Pendenza> findByCursor(Specification<Pendenza> spec,
                                           CursorCodec.Cursor cursor,
                                           int maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Versamento> q = cb.createQuery(Versamento.class);
-        Root<Versamento> root = q.from(Versamento.class);
+        CriteriaQuery<Pendenza> q = cb.createQuery(Pendenza.class);
+        Root<Pendenza> root = q.from(Pendenza.class);
 
         Predicate specPredicate = spec.toPredicate(root, q, cb);
         Path<OffsetDateTime> dataPath = root.get("dataCreazione");
@@ -268,15 +293,15 @@ public class PendenzaService {
         }
         q.orderBy(cb.desc(dataPath), cb.desc(idPath));
 
-        TypedQuery<Versamento> typed = entityManager.createQuery(q).setMaxResults(maxResults);
+        TypedQuery<Pendenza> typed = entityManager.createQuery(q).setMaxResults(maxResults);
         typed.setHint("jakarta.persistence.fetchgraph", summaryEntityGraph());
         return typed.getResultList();
     }
 
-    private List<Versamento> findSlice(Specification<Versamento> spec, Sort sort, int offset, int maxResults) {
+    private List<Pendenza> findSlice(Specification<Pendenza> spec, Sort sort, int offset, int maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Versamento> q = cb.createQuery(Versamento.class);
-        Root<Versamento> root = q.from(Versamento.class);
+        CriteriaQuery<Pendenza> q = cb.createQuery(Pendenza.class);
+        Root<Pendenza> root = q.from(Pendenza.class);
         Predicate predicate = spec.toPredicate(root, q, cb);
         if (predicate != null) {
             q.where(predicate);
@@ -289,20 +314,19 @@ public class PendenzaService {
             }
             q.orderBy(orders);
         }
-        TypedQuery<Versamento> typed = entityManager.createQuery(q)
+        TypedQuery<Pendenza> typed = entityManager.createQuery(q)
                 .setFirstResult(offset)
                 .setMaxResults(maxResults);
         typed.setHint("jakarta.persistence.fetchgraph", summaryEntityGraph());
         return typed.getResultList();
     }
 
-    private EntityGraph<Versamento> summaryEntityGraph() {
-        EntityGraph<Versamento> graph = entityManager.createEntityGraph(Versamento.class);
-        graph.addSubgraph("dominio");
-        graph.addSubgraph("applicazione");
-        graph.addSubgraph("tipoVersamento");
-        graph.addSubgraph("unitaOperativa");
-        graph.addSubgraph("tipoVersamentoDominio").addSubgraph("tipoVersamento");
+    /** Opzione, debitore dell'opzione e posizione: servono a stato, UO, debitore e riferimenti di ogni riga. */
+    private EntityGraph<Pendenza> summaryEntityGraph() {
+        EntityGraph<Pendenza> graph = entityManager.createEntityGraph(Pendenza.class);
+        Subgraph<PdDebitore> pdDebitore = graph.addSubgraph("opzionePagamento").addSubgraph("pdDebitore");
+        pdDebitore.addSubgraph("posizioneDebitoria");
+        pdDebitore.addSubgraph("debitore");
         return graph;
     }
 }

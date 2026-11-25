@@ -35,7 +35,7 @@ import it.govpay.console.model.ListApplicazioni200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RichiestaCambioPassword;
 import it.govpay.console.model.TipoPendenzaRef;
-import it.govpay.console.repository.ApplicazioneRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -80,7 +80,7 @@ public class ApplicazioneService {
     private static final int MAX_PRINCIPAL = 4000;
     private static final Pattern CODIFICA_IUV_PATTERN = Pattern.compile("\\d{1,3}");
 
-    private final ApplicazioneRepository applicazioneRepository;
+    private final ConsoleApplicazioneRepository applicazioneRepository;
     private final UtenzaRepository utenzaRepository;
     private final UtenzaAssociazioniWriter writer;
     private final ApplicazioneMapper mapper;
@@ -94,7 +94,7 @@ public class ApplicazioneService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public ApplicazioneService(ApplicazioneRepository applicazioneRepository,
+    public ApplicazioneService(ConsoleApplicazioneRepository applicazioneRepository,
                                UtenzaRepository utenzaRepository,
                                UtenzaAssociazioniWriter writer,
                                ApplicazioneMapper mapper,

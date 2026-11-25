@@ -16,7 +16,7 @@ import it.gov.pagopa.pagopa_api.pa.pafornode.PaSendRTV2Request;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Stazione;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.console.web.UnprocessableEntityException;
 
@@ -77,13 +77,13 @@ class RicevutaJsonConverterTest {
         return dominio;
     }
 
-    private RicevutaJsonConverter converter(DominioRepository dominioRepository) {
+    private RicevutaJsonConverter converter(ConsoleDominioRepository dominioRepository) {
         return new RicevutaJsonConverter(new ObjectMapper(), new RicevutaJsonValidator(), dominioRepository);
     }
 
     @Test
     void ricevutaValidaVieneConvertitaERisoltaViaDominioStazioneIntermediario() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.of(dominioConStazione()));
 
         RicevutaJsonConversione conversione = converter(dominioRepository).convert(bytes(jsonRicevuta("IT60X0542811101000000123456", null)));
@@ -97,7 +97,7 @@ class RicevutaJsonConverterTest {
 
     @Test
     void dominioNonCensitoRitornaBadRequest() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> converter(dominioRepository).convert(bytes(jsonRicevuta("IT60X0542811101000000123456", null))))
@@ -107,7 +107,7 @@ class RicevutaJsonConverterTest {
 
     @Test
     void dominioSenzaStazioneRitornaBadRequestDistinto() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         Dominio dominio = new Dominio();
         dominio.setCodDominio(COD_DOMINIO);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.of(dominio));
@@ -119,7 +119,7 @@ class RicevutaJsonConverterTest {
 
     @Test
     void jsonNonConformeAlModelRitornaUnprocessableEntity() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         assertThatThrownBy(() -> converter(dominioRepository).convert(bytes("{\"paymentAmount\": \"non-e-un-numero\"}")))
                 .isInstanceOf(UnprocessableEntityException.class);
     }
@@ -133,14 +133,14 @@ class RicevutaJsonConverterTest {
      */
     @Test
     void jsonNullRitornaUnprocessableEntityNonNullPointer() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         assertThatThrownBy(() -> converter(dominioRepository).convert(bytes("null")))
                 .isInstanceOf(UnprocessableEntityException.class);
     }
 
     @Test
     void voceMbtSenzaIbanESenzaAllegatoRitornaUnprocessableEntity() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.of(dominioConStazione()));
 
         assertThatThrownBy(() -> converter(dominioRepository).convert(bytes(jsonRicevuta(null, null))))
@@ -150,7 +150,7 @@ class RicevutaJsonConverterTest {
 
     @Test
     void voceMbtConIbanVuotoContaComeAssenteERitornaUnprocessableEntity() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.of(dominioConStazione()));
 
         assertThatThrownBy(() -> converter(dominioRepository).convert(bytes(jsonRicevuta("", ""))))
@@ -160,7 +160,7 @@ class RicevutaJsonConverterTest {
 
     @Test
     void voceMbtConAllegatoValorizzatoPassa() {
-        DominioRepository dominioRepository = mock(DominioRepository.class);
+        ConsoleDominioRepository dominioRepository = mock(ConsoleDominioRepository.class);
         when(dominioRepository.findByCodDominio(COD_DOMINIO)).thenReturn(Optional.of(dominioConStazione()));
 
         RicevutaJsonConversione conversione = converter(dominioRepository).convert(bytes(jsonRicevuta(null, "YWxsZWdhdG8=")));

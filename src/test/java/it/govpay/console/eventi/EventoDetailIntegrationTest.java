@@ -27,7 +27,7 @@ import it.govpay.console.entity.Fr;
 import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
@@ -61,7 +61,7 @@ class EventoDetailIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
 
     @MockitoBean

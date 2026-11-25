@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import it.govpay.console.entity.Applicazione;
 
-public interface ApplicazioneRepository
+public interface ConsoleApplicazioneRepository
         extends JpaRepository<Applicazione, Long>, JpaSpecificationExecutor<Applicazione> {
 
     Optional<Applicazione> findByCodApplicazione(String codApplicazione);

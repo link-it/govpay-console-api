@@ -25,7 +25,7 @@ import it.govpay.console.model.ListRiconciliazioni200Response;
 import it.govpay.console.model.Pagination;
 import it.govpay.console.model.RiconciliazioneSummary;
 import it.govpay.console.pagination.CursorCodec;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -55,7 +55,7 @@ public class RiconciliazioneSearchService {
     private static final Logger log = LoggerFactory.getLogger(RiconciliazioneSearchService.class);
 
     private final IncassoRepository incassoRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final RiconciliazioneMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final EventoAcl eventoAcl;
@@ -65,7 +65,7 @@ public class RiconciliazioneSearchService {
     private EntityManager entityManager;
 
     public RiconciliazioneSearchService(IncassoRepository incassoRepository,
-                                        DominioRepository dominioRepository,
+                                        ConsoleDominioRepository dominioRepository,
                                         RiconciliazioneMapper mapper,
                                         CurrentOperatorService currentOperatorService,
                                         EventoAcl eventoAcl,

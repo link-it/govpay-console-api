@@ -3,8 +3,7 @@ package it.govpay.console.avviso;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
- * Lettura parziale di {@code Versamento.proprieta} (colonna JSON, stesso formato del legacy
- * {@code it.govpay.core.beans.tracciati.ProprietaPendenza}): modella solo i campi usati per
+ * Lettura parziale di {@code Pendenza.proprieta} (colonna JSON): modella solo i campi usati per
  * l'avviso PDF, {@code ignoreUnknown} perche' il blob reale ne contiene molti altri
  * (descrizioneImporto, lineaTestoRicevuta1/2, dataScandenzaAvviso, ecc.) non ancora rilevanti
  * qui.

@@ -4,7 +4,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import jakarta.xml.bind.JAXBException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;

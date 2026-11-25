@@ -31,7 +31,7 @@ import it.govpay.console.entity.Operatore;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.IncassoRepository;
 import it.govpay.console.repository.OperatoreRepository;
@@ -63,7 +63,7 @@ class RiconciliazionePutConcurrencyIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
     @Autowired private IncassoRepository incassoRepository;
     @Autowired private AclRepository aclRepository;

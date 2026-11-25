@@ -1,6 +1,9 @@
 package it.govpay.console.avviso;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.time.ZoneId;
 
 import org.slf4j.Logger;
@@ -14,26 +17,31 @@ import it.govpay.console.common.CausaleVersamentoDecoder;
 import it.govpay.console.dominio.DominioLogoCodec;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
-import it.govpay.console.entity.SingoloVersamento;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.web.BadRequestException;
 import it.govpay.stampe.client.model.Amount;
+import it.govpay.stampe.client.model.CdsViolation;
 import it.govpay.stampe.client.model.Creditor;
 import it.govpay.stampe.client.model.Debtor;
 import it.govpay.stampe.client.model.Iban;
+import it.govpay.stampe.client.model.Instalment;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.NoticeMetadataSecondLanguage;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.entity.VocePendenza;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 import it.govpay.stampe.client.model.PaymentNotice;
+import it.govpay.stampe.client.model.PaymentNoticeOption;
+import it.govpay.stampe.client.model.ThresholdPayment;
+import it.govpay.stampe.client.model.ThresholdType;
 
 /**
- * Mapping Versamento → {@link PaymentNotice} per la generazione PDF via
+ * Mapping pendenza v3 → {@link PaymentNotice} per la generazione PDF via
  * microservizio {@code govpay-stampe}.
  *
- * <p>Genera il PDF dell'avviso della singola pendenza anche quando la pendenza appartiene
- * a un documento multi-rata. I campi {@code numero_rata}, {@code tipo_soglia},
- * {@code giorni_soglia} non sono colonne fisiche su {@code versamenti}
- * — vivono solo nei DTO di input e non emergono mai in lettura da DB.
+ * <p>Genera il PDF dell'avviso della singola pendenza, anche quando appartiene a un'opzione
+ * a piu' rate: un bollettino per pendenza. Il debitore e' quello dell'opzione della pendenza.
  *
  * <p><b>Limitazioni</b>:
  * <ul>
@@ -76,21 +84,30 @@ public class AvvisoPdfPayloadMapper {
         this.objectMapper = objectMapper;
     }
 
-    public PaymentNotice toPaymentNotice(Versamento v, LinguaSecondaria linguaSecondaria) {
-        IbanAccredito postale = ibanPostale(v);
-        ProprietaPendenza proprieta = proprietaDi(v);
+    /**
+     * @param p        pendenza con opzione di pagamento, debitore e posizione caricati
+     * @param dominio  dominio della pendenza
+     * @param postale  IBAN postale della pendenza, o {@code null} se non ha bollettino postale
+     */
+    public PaymentNotice toPaymentNotice(Pendenza p, Dominio dominio, IbanAccredito postale,
+                                         LinguaSecondaria linguaSecondaria) {
+        ProprietaPendenza proprieta = proprietaDi(p);
 
         PaymentNotice notice = new PaymentNotice();
         notice.setLanguage(Languages.IT);
-        notice.setCreditor(mapCreditor(v.getDominio()));
-        notice.setDebtor(mapDebtor(v));
+        notice.setCreditor(mapCreditor(dominio, pagamentoSito(dominio)));
+        notice.setDebtor(mapDebtor(debitoreDi(p)));
         // 'title' e' l'oggetto del pagamento (oggetto_del_pagamento/XSD), non un'intestazione
         // fissa: stesso campo del legacy v1 (AvvisoPagamentoUtils.fromVersamento), che ci
         // scrive la causale vera.
-        notice.setTitle(causaleDi(v));
+        notice.setTitle(AvvisoMapper.oggettoDelPagamento(p));
         notice.setPostal(postale != null);
-        notice.setFirstLogo(firstLogoOf(v.getDominio()));
-        notice.setFull(mapFullAmount(v, postale));
+        notice.setFirstLogo(firstLogoOf(dominio));
+        if (isSogliaTemporale(p)) {
+            notice.setReducedPayments(List.of(mapReducedPayment(p, dominio, postale)));
+        } else {
+            notice.setFull(mapFullAmount(p, dominio, postale));
+        }
         notice.setInformativaImporto(proprieta != null ? proprieta.getInformativaImportoAvviso() : null);
         Languages secondaria = toClientLanguage(linguaSecondaria);
         if (secondaria != null) {
@@ -107,10 +124,6 @@ public class AvvisoPdfPayloadMapper {
         return notice;
     }
 
-    private static String causaleDi(Versamento v) {
-        return CausaleVersamentoDecoder.decodeSimple(v.getCausaleVersamento());
-    }
-
     /**
      * {@code null} se {@code proprieta} e' assente/vuoto o non interpretabile come JSON — un
      * blob malformato non deve far fallire la generazione dell'avviso per campi puramente
@@ -118,68 +131,61 @@ public class AvvisoPdfPayloadMapper {
      * {@code linguaSecondariaInformativaImportoAvviso}): si logga e si procede come se non
      * fossero presenti.
      */
-    private ProprietaPendenza proprietaDi(Versamento v) {
-        String proprieta = v.getProprieta();
+    private ProprietaPendenza proprietaDi(Pendenza p) {
+        String proprieta = p.getProprieta();
         if (!StringUtils.hasText(proprieta)) {
             return null;
         }
         try {
             return objectMapper.readValue(proprieta, ProprietaPendenza.class);
         } catch (RuntimeException e) {
-            log.warn("Versamento [{}]: proprieta non interpretabile come JSON, ignorata.",
-                    v.getCodVersamentoEnte(), e);
+            log.warn("Pendenza [{}]: proprieta non interpretabile come JSON, ignorata.",
+                    p.getIdPendenza(), e);
             return null;
         }
     }
 
     /**
-     * Replica {@code AvvisoPagamentoV2Utils.java:441-446}: il bollettino postale
-     * e' attivo se il primo singolo versamento ha un IBAN postale, di accredito
-     * o (in subordine) di appoggio. Restituisce l'IBAN scelto e non un semplice
-     * flag, perche' {@code govpay-stampe} lo esige: con {@code postal=true} e
-     * {@code full.iban} assente rifiuta l'avviso con 422 ("Iban obbligatorio in
-     * caso di avviso postale", {@code SemanticValidator}).
+     * La pendenza e' una Marca da Bollo Telematica se almeno una voce ha {@code hashDocumento},
+     * {@code provinciaResidenza} e {@code tipoBollo} tutti valorizzati.
      */
-    private static IbanAccredito ibanPostale(Versamento v) {
-        if (v.getSingoliVersamenti() == null || v.getSingoliVersamenti().isEmpty()) {
-            return null;
+    public static boolean isPendenzaMbt(Pendenza p) {
+        return isPendenzaMbt(p.getVoci());
+    }
+
+    /** Come {@link #isPendenzaMbt(Pendenza)}, sulle voci gia' caricate. */
+    public static boolean isPendenzaMbt(java.util.Collection<VocePendenza> voci) {
+        if (voci == null) {
+            return false;
         }
-        SingoloVersamento primo = v.getSingoliVersamenti().get(0);
-        IbanAccredito accredito = ibanAccreditoDi(primo);
-        if (isPostale(accredito)) {
-            return accredito;
+        for (VocePendenza voce : voci) {
+            if (voce.getHashDocumento() != null
+                    && voce.getProvinciaResidenza() != null
+                    && voce.getTipoBollo() != null) {
+                return true;
+            }
         }
-        IbanAccredito appoggio = ibanAppoggioDi(primo);
-        return isPostale(appoggio) ? appoggio : null;
+        return false;
     }
 
     /**
-     * Porto di {@code SingoloVersamento.getIbanAccredito(BDConfigWrapper)} (V1,
-     * {@code it.govpay.bd.model.SingoloVersamento}): l'IBAN di accredito sta
-     * <b>sul singolo versamento</b> quando la pendenza e' definita
-     * ({@code singoli_versamenti.id_iban_accredito} valorizzata), e <b>sul tipo
-     * entrata del dominio</b> ({@code tributi}, raggiunto via
-     * {@code id_tributo}) quando la pendenza e' a riferimento e la FK sul
-     * singolo versamento e' nulla. Senza questo fallback l'avviso postale di
-     * ogni pendenza a riferimento parte privo di IBAN.
+     * Nel modello v3 l'anagrafica del debitore e' facoltativa, mentre govpay-stampe richiede
+     * il nome del debitore: l'avviso non si puo' stampare.
      */
-    private static IbanAccredito ibanAccreditoDi(SingoloVersamento sv) {
-        if (sv.getIbanAccredito() != null) {
-            return sv.getIbanAccredito();
-        }
-        return sv.getTributo() != null ? sv.getTributo().getIbanAccredito() : null;
+    public static boolean isAnagraficaDebitoreAssente(Pendenza p) {
+        return !StringUtils.hasText(debitoreDi(p).getAnagrafica());
     }
 
-    /** Stessa eredita' definita/riferimento di {@link #ibanAccreditoDi}, sull'IBAN di appoggio. */
-    private static IbanAccredito ibanAppoggioDi(SingoloVersamento sv) {
-        if (sv.getIbanAppoggio() != null) {
-            return sv.getIbanAppoggio();
-        }
-        return sv.getTributo() != null ? sv.getTributo().getIbanAppoggio() : null;
+    /** Il debitore della pendenza e' quello della sua opzione di pagamento. */
+    private static Debitore debitoreDi(Pendenza p) {
+        return p.getOpzionePagamento().getPdDebitore().getDebitore();
     }
 
-    private static boolean isPostale(IbanAccredito iban) {
-        return iban != null && Boolean.TRUE.equals(iban.getPostale());
+    /** {@code true} se la pendenza appartiene a un'opzione {@code SOLUZIONE_UNICA_ENTRO}/{@code _OLTRE}. */
+    private static boolean isSogliaTemporale(Pendenza p) {
+        TipologiaOpzionePagamento tipologia = p.getOpzionePagamento().getTipologia();
+        return tipologia == TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO
+                || tipologia == TipologiaOpzionePagamento.SOLUZIONE_UNICA_OLTRE;
     }
 
     /**
@@ -268,7 +274,12 @@ public class AvvisoPdfPayloadMapper {
         return sl;
     }
 
-    private static Creditor mapCreditor(Dominio dominio) {
+    /** L'ente consente il pagamento anche dal proprio sito ({@code domini.pagamento_sito}). */
+    private static boolean pagamentoSito(Dominio dominio) {
+        return dominio != null && Boolean.TRUE.equals(dominio.getPagamentoSito());
+    }
+
+    private static Creditor mapCreditor(Dominio dominio, boolean payOnWebsite) {
         Creditor c = new Creditor();
         if (dominio != null) {
             c.setFiscalCode(dominio.getCodDominio());
@@ -277,6 +288,9 @@ public class AvvisoPdfPayloadMapper {
             // Autorizzazione poste dell'ente: govpay-stampe la usa come fallback
             // quando l'IBAN postale non ne porta una propria.
             c.setPostalAuthMessage(tronca(dominio.getAutStampaPoste(), MAX_POSTAL_AUTH_MESSAGE));
+        }
+        if (payOnWebsite) {
+            c.setPayOnWebsite(Boolean.TRUE);
         }
         return c;
     }
@@ -288,26 +302,26 @@ public class AvvisoPdfPayloadMapper {
      * + {@code debitore_civico varchar(16)} possono insieme superare 70) — troncare le colonne
      * singolarmente prima di concatenarle non basterebbe a garantire il rispetto del limite.
      */
-    private static Debtor mapDebtor(Versamento v) {
+    private static Debtor mapDebtor(Debitore v) {
         Debtor d = new Debtor();
-        d.setFiscalCode(v.getDebitoreIdentificativo());
-        d.setFullName(troncaObbligatorio(v.getDebitoreAnagrafica(), MAX_FULL_NAME));
-        if (StringUtils.hasText(v.getDebitoreIndirizzo())) {
-            StringBuilder line1 = new StringBuilder(v.getDebitoreIndirizzo());
-            if (StringUtils.hasText(v.getDebitoreCivico())) {
-                line1.append(", ").append(v.getDebitoreCivico());
+        d.setFiscalCode(v.getIdentificativo());
+        d.setFullName(troncaObbligatorio(v.getAnagrafica(), MAX_FULL_NAME));
+        if (StringUtils.hasText(v.getIndirizzo())) {
+            StringBuilder line1 = new StringBuilder(v.getIndirizzo());
+            if (StringUtils.hasText(v.getCivico())) {
+                line1.append(", ").append(v.getCivico());
             }
             d.setAddressLine1(tronca(line1.toString(), MAX_ADDRESS_LINE));
         }
         StringBuilder line2 = new StringBuilder();
-        if (StringUtils.hasText(v.getDebitoreCap())) {
-            line2.append(v.getDebitoreCap()).append(' ');
+        if (StringUtils.hasText(v.getCap())) {
+            line2.append(v.getCap()).append(' ');
         }
-        if (StringUtils.hasText(v.getDebitoreLocalita())) {
-            line2.append(v.getDebitoreLocalita());
+        if (StringUtils.hasText(v.getLocalita())) {
+            line2.append(v.getLocalita());
         }
-        if (StringUtils.hasText(v.getDebitoreProvincia())) {
-            line2.append(" (").append(v.getDebitoreProvincia()).append(')');
+        if (StringUtils.hasText(v.getProvincia())) {
+            line2.append(" (").append(v.getProvincia()).append(')');
         }
         if (!line2.isEmpty()) {
             d.setAddressLine2(tronca(line2.toString().trim(), MAX_ADDRESS_LINE));
@@ -315,24 +329,48 @@ public class AvvisoPdfPayloadMapper {
         return d;
     }
 
-    private static Amount mapFullAmount(Versamento v, IbanAccredito postale) {
+    private static Amount mapFullAmount(Pendenza p, Dominio dominio, IbanAccredito postale) {
         Amount amount = new Amount();
-        amount.setAmount(v.getImportoTotale());
-        amount.setNoticeNumber(v.getNumeroAvviso());
-        String qrcode = AvvisoMapper.buildQrcode(v);
-        if (qrcode == null) {
-            throw new AvvisoNonDisponibileException(
-                    "L'avviso PDF non e' disponibile: la pendenza non dispone dei dati "
-                            + "necessari a comporre il codice QR (IUV, dominio o importo assenti).");
-        }
-        amount.setQrcode(qrcode);
+        amount.setAmount(p.getImporto());
+        amount.setNoticeNumber(p.getNumeroAvviso());
+        amount.setQrcode(qrcodeObbligatorio(p, dominio));
         if (postale != null) {
             amount.setIban(mapIban(postale));
         }
-        if (v.getDataScadenza() != null) {
-            amount.setDueDate(v.getDataScadenza().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate());
+        LocalDate scadenza = dueDateOf(p);
+        if (scadenza != null) {
+            amount.setDueDate(scadenza);
         }
         return amount;
+    }
+
+    /** Stessi campi di {@link #mapFullAmount}, piu' tipo e giorni della soglia dall'opzione. */
+    private static ThresholdPayment mapReducedPayment(Pendenza p, Dominio dominio, IbanAccredito postale) {
+        ThresholdPayment reduced = new ThresholdPayment();
+        reduced.setAmount(p.getImporto());
+        reduced.setNoticeNumber(p.getNumeroAvviso());
+        reduced.setQrcode(qrcodeObbligatorio(p, dominio));
+        LocalDate scadenza = dueDateOf(p);
+        if (scadenza != null) {
+            reduced.setDueDate(scadenza);
+        }
+        reduced.setThresholdType(p.getOpzionePagamento().getTipologia()
+                == TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO ? ThresholdType.ENTRO : ThresholdType.OLTRE);
+        reduced.setThresholdDays(p.getOpzionePagamento().getGiorni());
+        if (postale != null) {
+            reduced.setIban(mapIban(postale));
+        }
+        return reduced;
+    }
+
+    private static String qrcodeObbligatorio(Pendenza p, Dominio dominio) {
+        String qrcode = AvvisoMapper.buildQrcode(p, dominio);
+        if (qrcode == null) {
+            throw new AvvisoNonDisponibileException(
+                    "L'avviso PDF non e' disponibile: la pendenza non dispone dei dati "
+                            + "necessari a comporre il codice QR (IUV o dominio assenti).");
+        }
+        return qrcode;
     }
 
     /**
@@ -350,9 +388,205 @@ public class AvvisoPdfPayloadMapper {
         return new byte[0];
     }
 
-    static LocalDate dueDateOf(Versamento v) {
-        return v.getDataScadenza() == null
-                ? null
-                : v.getDataScadenza().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate();
+    // --- avviso complessivo della posizione ---
+
+    /** Dominio e IBAN postale di una pendenza, risolti dal chiamante in blocco. */
+    public interface Risolutore {
+        Dominio dominio(Pendenza pendenza);
+
+        IbanAccredito iban(Pendenza pendenza);
+    }
+
+    /**
+     * Avviso di una sola pendenza stampata come posizione: titolo sempre la descrizione della
+     * posizione, mai la causale della pendenza. Solo italiano, nessuna informativa personalizzata.
+     */
+    public PaymentNotice toPaymentNoticeDocumento(Pendenza p, Risolutore r) {
+        Dominio dominio = r.dominio(p);
+        IbanAccredito postale = r.iban(p);
+        PaymentNotice notice = intestazione(p, dominio, descrizioneDi(p));
+        notice.setPostal(postale != null);
+        if (isSogliaTemporale(p)) {
+            notice.setReducedPayments(List.of(mapReducedPayment(p, dominio, postale)));
+        } else {
+            notice.setFull(mapFullAmount(p, dominio, postale));
+        }
+        return notice;
+    }
+
+    /**
+     * Avviso a rate di una sola opzione: una {@link Instalment} per pendenza, nell'ordine
+     * ricevuto. Le notizie del documento vengono dalla prima rata. Il bollettino postale e'
+     * attivo solo se tutte le rate hanno un IBAN postale.
+     *
+     * @param rate pendenze gia' filtrate e ordinate, non vuota
+     */
+    public PaymentNotice toPaymentNoticeRate(List<Pendenza> rate, Risolutore r) {
+        Pendenza prima = rate.get(0);
+        PaymentNotice notice = intestazione(prima, r.dominio(prima), descrizioneDi(prima));
+        notice.setPostal(rate.stream().allMatch(p -> r.iban(p) != null));
+        List<Instalment> instalments = new ArrayList<>(rate.size());
+        for (Pendenza rata : rate) {
+            instalments.add(mapInstalment(rata, r.dominio(rata), r.iban(rata)));
+        }
+        notice.setInstalments(instalments);
+        return notice;
+    }
+
+    /**
+     * Avviso con piu' opzioni alternative della stessa posizione, una per elemento di
+     * {@code options}. Postale solo se tutte le pendenze di tutte le opzioni hanno un IBAN
+     * postale.
+     *
+     * @param opzioni le pendenze pagabili di ciascuna opzione, almeno due opzioni
+     */
+    public PaymentNotice toPaymentNoticeOpzioni(List<List<Pendenza>> opzioni, Risolutore r) {
+        Pendenza prima = opzioni.get(0).get(0);
+        PaymentNotice notice = intestazione(prima, r.dominio(prima), descrizioneDi(prima));
+        notice.setPostal(opzioni.stream().flatMap(List::stream).allMatch(p -> r.iban(p) != null));
+        List<PaymentNoticeOption> options = new ArrayList<>(opzioni.size());
+        for (List<Pendenza> pendenzeOpzione : opzioni) {
+            options.add(toOption(pendenzeOpzione, r));
+        }
+        notice.setOptions(options);
+        return notice;
+    }
+
+    /**
+     * Avviso con la coppia {@code SOLUZIONE_UNICA_ENTRO}/{@code _OLTRE} sulla stessa pagina:
+     * un pagamento a soglia per pendenza, per giorni crescenti e, a parita', ENTRO prima di OLTRE.
+     */
+    public PaymentNotice toPaymentNoticeSoglie(List<Pendenza> soglie, Risolutore r) {
+        List<Pendenza> ordinate = soglie.stream()
+                .sorted(Comparator.comparingInt((Pendenza p) -> p.getOpzionePagamento().getGiorni())
+                        .thenComparing(p -> p.getOpzionePagamento().getTipologia()
+                                == TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO ? 0 : 1))
+                .toList();
+        Pendenza prima = ordinate.get(0);
+        PaymentNotice notice = intestazione(prima, r.dominio(prima), descrizioneDi(prima));
+        notice.setPostal(ordinate.stream().allMatch(p -> r.iban(p) != null));
+        List<ThresholdPayment> ridotti = new ArrayList<>(ordinate.size());
+        for (Pendenza p : ordinate) {
+            ridotti.add(mapReducedPayment(p, r.dominio(p), r.iban(p)));
+        }
+        notice.setReducedPayments(ridotti);
+        return notice;
+    }
+
+    /**
+     * Violazione del Codice della Strada con importo ridotto e scontato.
+     *
+     * @param opzioni le due opzioni (una pendenza ciascuna), come verificato da {@link #sonoRidottoEScontato}
+     */
+    public CdsViolation toCdsViolation(List<List<Pendenza>> opzioni, Risolutore r) {
+        Pendenza ridotto = null;
+        Pendenza scontato = null;
+        for (List<Pendenza> opzione : opzioni) {
+            Pendenza p = opzione.get(0);
+            if (p.getOpzionePagamento().getTipologia() == TipologiaOpzionePagamento.SOLUZIONE_UNICA_RIDOTTO) {
+                ridotto = p;
+            } else {
+                scontato = p;
+            }
+        }
+        Dominio dominio = r.dominio(ridotto);
+        boolean postale = r.iban(ridotto) != null && r.iban(scontato) != null;
+        CdsViolation violazione = new CdsViolation();
+        violazione.setLanguage(Languages.IT);
+        violazione.setCreditor(mapCreditor(dominio, pagamentoSito(dominio)));
+        violazione.setDebtor(mapDebtor(debitoreDi(ridotto)));
+        violazione.setTitle(descrizioneDi(ridotto));
+        violazione.setFirstLogo(firstLogoOf(dominio));
+        violazione.setPostal(postale);
+        violazione.setReducedAmount(mapFullAmount(ridotto, dominio, postale ? r.iban(ridotto) : null));
+        violazione.setDiscountedAmount(
+                mapFullAmount(scontato, r.dominio(scontato), postale ? r.iban(scontato) : null));
+        return violazione;
+    }
+
+    /** Esattamente due opzioni, una pendenza ciascuna: ENTRO e OLTRE. */
+    public static boolean sonoTutteSoglie(List<List<Pendenza>> opzioni) {
+        return sonoCoppia(opzioni, TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO,
+                TipologiaOpzionePagamento.SOLUZIONE_UNICA_OLTRE);
+    }
+
+    /** Esattamente due opzioni, una pendenza ciascuna: RIDOTTO e SCONTATO. */
+    public static boolean sonoRidottoEScontato(List<List<Pendenza>> opzioni) {
+        return sonoCoppia(opzioni, TipologiaOpzionePagamento.SOLUZIONE_UNICA_RIDOTTO,
+                TipologiaOpzionePagamento.SOLUZIONE_UNICA_SCONTATO);
+    }
+
+    private static boolean sonoCoppia(List<List<Pendenza>> opzioni, TipologiaOpzionePagamento a,
+                                      TipologiaOpzionePagamento b) {
+        if (opzioni.size() != 2 || opzioni.stream().anyMatch(o -> o.size() != 1)) {
+            return false;
+        }
+        List<TipologiaOpzionePagamento> tipologie = opzioni.stream()
+                .map(o -> o.get(0).getOpzionePagamento().getTipologia()).toList();
+        return tipologie.contains(a) && tipologie.contains(b);
+    }
+
+    /** Stessa scelta full/instalments/reduced_payments dell'avviso a rata unica, per un'opzione. */
+    private PaymentNoticeOption toOption(List<Pendenza> pendenzeOpzione, Risolutore r) {
+        PaymentNoticeOption option = new PaymentNoticeOption();
+        if (pendenzeOpzione.size() == 1) {
+            Pendenza unica = pendenzeOpzione.get(0);
+            Dominio dominio = r.dominio(unica);
+            if (isSogliaTemporale(unica)) {
+                option.setReducedPayments(List.of(mapReducedPayment(unica, dominio, r.iban(unica))));
+            } else {
+                option.setFull(mapFullAmount(unica, dominio, r.iban(unica)));
+            }
+            return option;
+        }
+        List<Instalment> instalments = new ArrayList<>(pendenzeOpzione.size());
+        for (Pendenza rata : pendenzeOpzione) {
+            instalments.add(mapInstalment(rata, r.dominio(rata), r.iban(rata)));
+        }
+        option.setInstalments(instalments);
+        return option;
+    }
+
+    /** Parte comune degli avvisi della posizione: lingua, creditore, debitore, titolo, logo. */
+    private static PaymentNotice intestazione(Pendenza p, Dominio dominio, String titolo) {
+        PaymentNotice notice = new PaymentNotice();
+        notice.setLanguage(Languages.IT);
+        notice.setCreditor(mapCreditor(dominio, pagamentoSito(dominio)));
+        notice.setDebtor(mapDebtor(debitoreDi(p)));
+        notice.setTitle(titolo);
+        notice.setFirstLogo(firstLogoOf(dominio));
+        return notice;
+    }
+
+    private static String descrizioneDi(Pendenza p) {
+        return p.getOpzionePagamento().getPosizioneDebitoria().getDescrizione();
+    }
+
+    /** Stessi campi di {@link #mapFullAmount}, piu' il numero di rata. */
+    private static Instalment mapInstalment(Pendenza p, Dominio dominio, IbanAccredito postale) {
+        Instalment instalment = new Instalment();
+        instalment.setAmount(p.getImporto());
+        instalment.setNoticeNumber(p.getNumeroAvviso());
+        instalment.setQrcode(qrcodeObbligatorio(p, dominio));
+        LocalDate scadenza = dueDateOf(p);
+        if (scadenza != null) {
+            instalment.setDueDate(scadenza);
+        }
+        instalment.setInstalmentNumber(p.getNumeroRata());
+        if (postale != null) {
+            instalment.setIban(mapIban(postale));
+        }
+        return instalment;
+    }
+
+    /**
+     * Scadenza dell'avviso: quella della pendenza e, se assente, quella della sua opzione di
+     * pagamento.
+     */
+    static LocalDate dueDateOf(Pendenza p) {
+        if (p.getDataScadenzaAvviso() != null) {
+            return p.getDataScadenzaAvviso().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate();
+        }
+        return p.getOpzionePagamento().getDataScadenza();
     }
 }

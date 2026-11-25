@@ -1,10 +1,12 @@
 -- Fixture E2E per la suite di test integration dello scope I (issue #9).
 -- Caricata via @Sql sui test che ne hanno bisogno. Lavora su H2 in modalita'
--- PostgreSQL con schema generato da ddl-auto=create-drop sulle entity slim,
--- quindi qui usiamo SOLO le colonne effettivamente mappate dalle entity V2.
+-- PostgreSQL con schema generato da ddl-auto=create-drop sulle entity mappate
+-- (della console e di govpay-common-pendenze): le colonne NOT NULL di quelle
+-- entity vanno valorizzate anche qui.
 --
 -- Dati: 1 dominio, 1 applicazione, 1 tipo versamento, 2 pendenze (entrambe
--- pagate), 1 SV ciascuna, 2 RT entrambe con xml_rt valorizzato.
+-- pagate, ciascuna con la propria posizione debitoria, debitore e opzione di
+-- pagamento), 1 SV ciascuna, 2 RT entrambe con xml_rt valorizzato.
 -- L'autenticazione (utenza + operatore con visibilita' totale) viene allestita
 -- dal @BeforeEach del test via JPA con GovpayPasswordEncoder.
 
@@ -15,6 +17,10 @@ DELETE FROM gp_audit;
 DELETE FROM rpt WHERE id IN (9001, 9002);
 DELETE FROM singoli_versamenti WHERE id IN (8001, 8002);
 DELETE FROM versamenti WHERE id IN (7001, 7002);
+DELETE FROM opzioni_pagamento WHERE id IN (9801, 9802);
+DELETE FROM pd_debitori WHERE id IN (9701, 9702);
+DELETE FROM debitori WHERE id IN (9601, 9602);
+DELETE FROM documenti WHERE id IN (9501, 9502);
 DELETE FROM tipi_vers_domini WHERE id = 6001;
 DELETE FROM tipi_versamento WHERE id = 5001;
 DELETE FROM applicazioni WHERE id = 4001;
@@ -44,26 +50,59 @@ INSERT INTO versamenti (id, cod_versamento_ente, importo_totale, importo_pagato,
                         debitore_identificativo, debitore_anagrafica, src_debitore_identificativo,
                         anomalo, ack, tipo, causale_versamento,
                         iuv_versamento, numero_avviso,
-                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio)
+                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio,
+                        aggiornabile, importo_incassato, numero_rata, send_abilitato, stato_pagamento)
 VALUES (7001, 'PEND-FIX-1', 100.0, 100.0,
         'ESEGUITO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'RSSMRA80A01H501U', 'Mario Rossi Fixture', 'RSSMRA80A01H501U',
         FALSE, TRUE, 'DOVUTO', 'TARI fixture causale',
         '1111111111111', '011111111111111111',
-        3001, 4001, 5001, 6001);
+        3001, 4001, 5001, 6001,
+        FALSE, 0, 1, FALSE, 'PAGATO');
 
 INSERT INTO versamenti (id, cod_versamento_ente, importo_totale, importo_pagato,
                         stato_versamento, data_creazione, data_ora_ultimo_aggiornamento,
                         debitore_identificativo, debitore_anagrafica, src_debitore_identificativo,
                         anomalo, ack, tipo, causale_versamento,
                         iuv_versamento, numero_avviso,
-                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio)
+                        id_dominio, id_applicazione, id_tipo_versamento, id_tipo_versamento_dominio,
+                        aggiornabile, importo_incassato, numero_rata, send_abilitato, stato_pagamento)
 VALUES (7002, 'PEND-FIX-2', 50.0, 50.0,
         'ESEGUITO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'VRDLGI90B02H501T', 'Luigi Verdi Fixture', 'VRDLGI90B02H501T',
         FALSE, TRUE, 'DOVUTO', 'TARI fixture causale 2',
         '2222222222222', '022222222222222222',
-        3001, 4001, 5001, 6001);
+        3001, 4001, 5001, 6001,
+        FALSE, 0, 1, FALSE, 'PAGATO');
+
+-- Posizione debitoria, debitore e opzione di pagamento di ciascuna pendenza.
+INSERT INTO documenti (id, cod_documento, descrizione, id_applicazione, id_dominio,
+                       anomalo, data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9501, 'DOC-FIX-1', 'Posizione fixture 1', 4001, 3001, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+INSERT INTO documenti (id, cod_documento, descrizione, id_applicazione, id_dominio,
+                       anomalo, data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9502, 'DOC-FIX-2', 'Posizione fixture 2', 4001, 3001, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+
+INSERT INTO debitori (id, tipo, identificativo, anagrafica)
+VALUES (9601, 'F', 'RSSMRA80A01H501U', 'Mario Rossi Fixture');
+INSERT INTO debitori (id, tipo, identificativo, anagrafica)
+VALUES (9602, 'F', 'VRDLGI90B02H501T', 'Luigi Verdi Fixture');
+
+INSERT INTO pd_debitori (id, id_documento, id_debitore, posizione) VALUES (9701, 9501, 9601, 0);
+INSERT INTO pd_debitori (id, id_documento, id_debitore, posizione) VALUES (9702, 9502, 9602, 0);
+
+INSERT INTO opzioni_pagamento (id, id_opzione_pagamento, id_pd_debitore, tipologia, stato,
+                               data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9801, '00000000-0000-0000-0000-000000009801', 9701, 'SOLUZIONE_UNICA', 'ATTIVATA',
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+INSERT INTO opzioni_pagamento (id, id_opzione_pagamento, id_pd_debitore, tipologia, stato,
+                               data_creazione, data_ultimo_aggiornamento, versione)
+VALUES (9802, '00000000-0000-0000-0000-000000009802', 9702, 'SOLUZIONE_UNICA', 'ATTIVATA',
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+
+-- Collegamento di ciascuna pendenza alla sua opzione di pagamento.
+UPDATE versamenti SET id_opzione_pagamento = 9801 WHERE id = 7001;
+UPDATE versamenti SET id_opzione_pagamento = 9802 WHERE id = 7002;
 
 INSERT INTO singoli_versamenti (id, cod_singolo_versamento_ente, stato_singolo_versamento,
                                 importo_singolo_versamento, descrizione, indice_dati,
@@ -79,19 +118,19 @@ VALUES (8002, 'SV-FIX-2-A', 'ESEGUITO', 50.0, 'Voce fixture 2', 1, 7002);
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
                  versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
-                 id_versamento)
+                 cod_stazione, cod_msg_richiesta, data_aggiornamento_stato, id_versamento)
 VALUES (9001, '1111111111111', 'CCP-FIX-001', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-1</id></RT>' AS BYTEA), 0,
         100.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-1',
-        7001);
+        'STAZIONE-FIX', 'MSG-FIX-1', CURRENT_TIMESTAMP, 7001);
 
 INSERT INTO rpt (id, iuv, ccp, cod_dominio, xml_rt, cod_esito_pagamento,
                  importo_totale_pagato, data_msg_richiesta, data_msg_ricevuta,
                  versione, stato, cod_psp, denominazione_attestante, cod_transazione_rt,
-                 id_versamento)
+                 cod_stazione, cod_msg_richiesta, data_aggiornamento_stato, id_versamento)
 VALUES (9002, '2222222222222', 'CCP-FIX-002', '12345678901',
         CAST('<RT xmlns="urn:fixture"><id>FIX-2</id></RT>' AS BYTEA), 0,
         50.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         'SANP_240_V2', 'RT_ACCETTATA_PA', 'BNCFIXTURE', 'Banca Fixture S.p.A.', 'TX-FIX-2',
-        7002);
+        'STAZIONE-FIX', 'MSG-FIX-2', CURRENT_TIMESTAMP, 7002);

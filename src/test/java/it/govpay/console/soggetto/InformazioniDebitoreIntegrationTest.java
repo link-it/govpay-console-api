@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,10 +31,9 @@ import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.entity.UtenzaTipoVersamento;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
@@ -44,7 +42,13 @@ import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
 import it.govpay.console.repository.UtenzaTipoVersamentoRepository;
-import it.govpay.console.repository.VersamentoRepository;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import it.govpay.common.auth.GovpayPasswordEncoder;
 
 @SpringBootTest
@@ -65,12 +69,12 @@ class InformazioniDebitoreIntegrationTest {
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private UtenzaTipoVersamentoRepository utenzaTipoVersamentoRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private UnitaOperativaRepository unitaOperativaRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
+    @PersistenceContext private EntityManager em;
     @Autowired private AclRepository aclRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
 
@@ -155,37 +159,30 @@ class InformazioniDebitoreIntegrationTest {
         aclRepository.save(acl);
     }
 
-    private Versamento newPendenza(String idPendenza, Dominio dominio,
-                                   TipoVersamento tv, TipoVersamentoDominio tvd) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreTipo("F");
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setDebitoreIndirizzo("Via Roma");
-        v.setDebitoreCivico("1");
-        v.setDebitoreCap("00100");
-        v.setDebitoreLocalita("Roma");
-        v.setDebitoreProvincia("RM");
-        v.setDebitoreNazione("IT");
-        v.setDebitoreEmail("mario.rossi@example.com");
-        v.setDebitoreCellulare("3331234567");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setIuvVersamento("1234567890123");
-        v.setNumeroAvviso("012345678901234567");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+    /** Pendenza v3 con il debitore completo di anagrafica e contatti. */
+    private Pendenza newPendenza(String idPendenza, Dominio dominio,
+                                 TipoVersamento tv, TipoVersamentoDominio tvd) {
+        Pendenza p = PendenzaV3Fixtures.pendenza(em, dati(idPendenza, dominio, tv, tvd));
+        completaDebitore(p);
+        return p;
+    }
+
+    private Dati dati(String idPendenza, Dominio dominio, TipoVersamento tv, TipoVersamentoDominio tvd) {
+        return new Dati(app.getId(), dominio.getId(), tv.getId(), tvd.getId(), null, idPendenza,
+                "012345678901234567", "RSSMRA80A01H501U", 100.0, StatoPendenza.NON_ESEGUITO, 0);
+    }
+
+    private static void completaDebitore(Pendenza p) {
+        Debitore d = p.getOpzionePagamento().getPdDebitore().getDebitore();
+        d.setAnagrafica("Mario Rossi");
+        d.setIndirizzo("Via Roma");
+        d.setCivico("1");
+        d.setCap("00100");
+        d.setLocalita("Roma");
+        d.setProvincia("RM");
+        d.setNazione("IT");
+        d.setEmail("mario.rossi@example.com");
+        d.setCellulare("3331234567");
     }
 
     @Test
@@ -217,15 +214,15 @@ class InformazioniDebitoreIntegrationTest {
 
     @Test
     void returnsSoggettoConCampiOpzionaliNulli() throws Exception {
-        Versamento v = newPendenza("PEND-MINIMAL", domVisibile, tvVisibile, tvdVisibile);
-        v.setDebitoreIndirizzo(null);
-        v.setDebitoreCivico(null);
-        v.setDebitoreCap(null);
-        v.setDebitoreLocalita(null);
-        v.setDebitoreProvincia(null);
-        v.setDebitoreEmail(null);
-        v.setDebitoreCellulare(null);
-        versamentoRepository.save(v);
+        Pendenza p = newPendenza("PEND-MINIMAL", domVisibile, tvVisibile, tvdVisibile);
+        Debitore d = p.getOpzionePagamento().getPdDebitore().getDebitore();
+        d.setIndirizzo(null);
+        d.setCivico(null);
+        d.setCap(null);
+        d.setLocalita(null);
+        d.setProvincia(null);
+        d.setEmail(null);
+        d.setCellulare(null);
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-MINIMAL/informazioniDebitore")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -247,7 +244,7 @@ class InformazioniDebitoreIntegrationTest {
 
     @Test
     void returns404AntiLeakWhenDominioNotVisible() throws Exception {
-        Versamento hidden = newPendenza("PEND-HIDDEN", domInvisibile, tvVisibile, tvdVisibile);
+        Pendenza hidden = newPendenza("PEND-HIDDEN", domInvisibile, tvVisibile, tvdVisibile);
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-HIDDEN/informazioniDebitore")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
@@ -274,14 +271,14 @@ class InformazioniDebitoreIntegrationTest {
 
     @Test
     void scriveAuditDopo200() throws Exception {
-        Versamento v = newPendenza("PEND-AUDIT", domVisibile, tvVisibile, tvdVisibile);
+        Pendenza v = newPendenza("PEND-AUDIT", domVisibile, tvVisibile, tvdVisibile);
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-AUDIT/informazioniDebitore")
                         .header("X-Forwarded-For", "1.2.3.4")
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk());
 
-        // Scoping su idOggetto = id del versamento di questo test: l'azione è scritta
+        // Scoping su idOggetto = id della pendenza di questo test: l'azione è scritta
         // anche da altri test (es. fixture E2E) e gli audit committano (REQUIRES_NEW),
         // accumulandosi nell'H2 condiviso → un filtro per sola azione sarebbe fragile.
         List<GpAudit> tutti = gpAuditRepository.findAll();
@@ -299,5 +296,38 @@ class InformazioniDebitoreIntegrationTest {
                 .contains("\"identificativoDebitore\":\"RSSMRA80A01H501U\"")
                 .contains("\"idA2A\":\"" + APP_COD + "\"")
                 .contains("\"idPendenza\":\"PEND-AUDIT\"");
+    }
+
+    @Test
+    void debitoreDellaPendenzaNonIlPrimoDellaPosizione() throws Exception {
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em,
+                dati("PEND-SECONDO", domVisibile, tvVisibile, tvdVisibile), "VRDLGI90B02H501T", false);
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SECONDO/informazioniDebitore")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo", is("G")))
+                .andExpect(jsonPath("$.identificativo", is("RSSMRA80A01H501U")))
+                .andExpect(jsonPath("$.anagrafica", is("Anagrafica RSSMRA80A01H501U")));
+    }
+
+    @Test
+    void debitoreRimossoRispondeComeIlDettaglio() throws Exception {
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em,
+                dati("PEND-RIMOSSO", domVisibile, tvVisibile, tvdVisibile), "VRDLGI90B02H501T", true);
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-RIMOSSO/informazioniDebitore")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.identificativo", is("RSSMRA80A01H501U")));
+    }
+
+    @Test
+    void returns404WhenPendenzaSenzaOpzione() throws Exception {
+        PendenzaV3Fixtures.pendenzaSenzaOpzione(em, dati("PEND-SENZA-OPZIONE", domVisibile, tvVisibile, tvdVisibile));
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SENZA-OPZIONE/informazioniDebitore")
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isNotFound());
     }
 }

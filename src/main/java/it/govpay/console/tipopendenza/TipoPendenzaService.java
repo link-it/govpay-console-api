@@ -30,7 +30,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoPendenza;
 import it.govpay.console.model.TipoPendenzaCreate;
 import it.govpay.console.model.TipoPendenzaReplace;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.CurrentOperatorService;
@@ -68,7 +68,7 @@ public class TipoPendenzaService {
 
 
     private final TipoVersamentoRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoPendenzaMapper mapper;
     private final RepresentationValidator representationValidator;
     private final CurrentOperatorService currentOperatorService;
@@ -80,7 +80,7 @@ public class TipoPendenzaService {
     private EntityManager entityManager;
 
     public TipoPendenzaService(TipoVersamentoRepository repository,
-                               DominioRepository dominioRepository,
+                               ConsoleDominioRepository dominioRepository,
                                TipoPendenzaMapper mapper,
                                RepresentationValidator representationValidator,
                                CurrentOperatorService currentOperatorService,

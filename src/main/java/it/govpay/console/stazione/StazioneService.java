@@ -31,7 +31,7 @@ import it.govpay.console.model.StazioneCreate;
 import it.govpay.console.model.StazioneReplace;
 import it.govpay.console.model.VersioneStazione;
 import it.govpay.console.entity.Dominio;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.security.AclAuthorizer;
@@ -69,7 +69,7 @@ public class StazioneService {
 
     private final StazioneRepository repository;
     private final IntermediarioRepository intermediarioRepository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final StazioneMapper mapper;
     private final CurrentOperatorService currentOperatorService;
     private final AuditService auditService;
@@ -81,7 +81,7 @@ public class StazioneService {
 
     public StazioneService(StazioneRepository repository,
                            IntermediarioRepository intermediarioRepository,
-                           DominioRepository dominioRepository,
+                           ConsoleDominioRepository dominioRepository,
                            StazioneMapper mapper,
                            CurrentOperatorService currentOperatorService,
                            AuditService auditService,

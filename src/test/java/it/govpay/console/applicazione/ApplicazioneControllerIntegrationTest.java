@@ -34,8 +34,8 @@ import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaTipoVersamento;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
@@ -61,9 +61,9 @@ class ApplicazioneControllerIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired

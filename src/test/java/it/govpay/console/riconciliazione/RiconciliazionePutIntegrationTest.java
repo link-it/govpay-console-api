@@ -32,7 +32,7 @@ import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.FrRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
@@ -64,7 +64,7 @@ class RiconciliazionePutIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
     @Autowired private FrRepository frRepository;
     @Autowired private IncassoRepository incassoRepository;
     @Autowired private IbanAccreditoRepository ibanAccreditoRepository;

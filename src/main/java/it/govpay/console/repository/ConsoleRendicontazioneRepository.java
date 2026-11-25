@@ -6,10 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import it.govpay.console.entity.Rendicontazione;
+import it.govpay.pendenze.entity.Rendicontazione;
 import it.govpay.console.rendicontazione.FrPeriodo;
 
-public interface RendicontazioneRepository extends JpaRepository<Rendicontazione, Long> {
+public interface ConsoleRendicontazioneRepository extends JpaRepository<Rendicontazione, Long> {
 
     /**
      * Finestra temporale coperta dal flusso, per il dettaglio (mai nella lista:
@@ -19,7 +19,7 @@ public interface RendicontazioneRepository extends JpaRepository<Rendicontazione
     @Query("""
             select new it.govpay.console.rendicontazione.FrPeriodo(min(r.data), max(r.data))
               from Rendicontazione r
-             where r.idFr = :idFr
+             where r.flusso.id = :idFr
             """)
     FrPeriodo findPeriodo(@Param("idFr") Long idFr);
 
@@ -29,7 +29,7 @@ public interface RendicontazioneRepository extends JpaRepository<Rendicontazione
      */
     @Query("""
             select r from Rendicontazione r
-             where r.idPagamento in :idPagamenti and r.fr.obsoleto = false
+             where r.idPagamento in :idPagamenti and r.flusso.obsoleto = false
             """)
     List<Rendicontazione> findCorrentiByIdPagamentoIn(@Param("idPagamenti") List<Long> idPagamenti);
 }

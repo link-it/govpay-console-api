@@ -32,22 +32,26 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.GpAudit;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
@@ -73,12 +77,12 @@ class RicevuteDetailIntegrationTest {
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private UtenzaDominioRepository utenzaDominioRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @PersistenceContext private EntityManager em;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private GpAuditRepository gpAuditRepository;
 
     private Dominio dom;
@@ -142,34 +146,26 @@ class RicevuteDetailIntegrationTest {
     @Test
     void dettaglio404SeSolaRichiestaSenzaRt() throws Exception {
         // riga rpt con sola richiesta: non è una ricevuta → 404, niente audit
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-NORT");
-        v.setImportoTotale(10.0);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), null, "PEND-NORT", null, "RSSMRA80A01H501U", 10.0,
+                StatoPendenza.NON_ESEGUITO, 0));
         v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
         v.setDataCreazione(OffsetDateTime.of(2026, 6, 19, 12, 0, 0, 0, ZoneOffset.UTC));
-        v.setDataOraUltimoAggiornamento(v.getDataCreazione());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
+        v.setDataUltimoAggiornamento(v.getDataCreazione());
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv("NORTIUV0002");
-        r.setCcp("CCP-NORT2");
+        r.setIur("CCP-NORT2");
         r.setCodDominio(DOM);
         r.setXmlRpt("<RPT/>".getBytes());
         r.setXmlRt(null);
         r.setDataMsgRichiesta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RPT_ATTIVATA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
 
         mvc.perform(get("/ricevute/" + DOM + "/NORTIUV0002/CCP-NORT2").with(httpBasic("op-all", PASSWORD)))
@@ -181,28 +177,20 @@ class RicevuteDetailIntegrationTest {
     void dettaglio200RptNullSeStandinSenzaRichiesta() throws Exception {
         // ricevuta valida (xml_rt presente) ma senza RPT (standin, xml_rpt null):
         // rpt è l'unico campo che può mancare → "rpt": null, rt valorizzato.
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-STANDIN");
-        v.setImportoTotale(123.45);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dom.getId(),
+                tv.getId(), tvd.getId(), null, "PEND-STANDIN", null, "RSSMRA80A01H501U", 123.45,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(123.45);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(OffsetDateTime.of(2026, 6, 20, 12, 0, 0, 0, ZoneOffset.UTC));
-        v.setDataOraUltimoAggiornamento(v.getDataCreazione());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
+        v.setDataUltimoAggiornamento(v.getDataCreazione());
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
         v.setCausaleVersamento("TARI 2026");
-        v.setDominio(dom);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv("IUVSTANDIN1");
-        r.setCcp("CCP-ST");
+        r.setIur("CCP-ST");
         r.setCodDominio(DOM);
         r.setXmlRpt(null);
         r.setXmlRt(xmlRt());
@@ -212,7 +200,7 @@ class RicevuteDetailIntegrationTest {
         r.setDataMsgRicevuta(v.getDataCreazione());
         r.setVersione("SANP_240");
         r.setStato("RT_ACCETTATA_PA");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         rptRepository.save(r);
 
         mvc.perform(get("/ricevute/" + DOM + "/IUVSTANDIN1/CCP-ST").with(httpBasic("op-all", PASSWORD)))
@@ -296,29 +284,21 @@ class RicevuteDetailIntegrationTest {
 
     private Rpt newRpt(Dominio dominio, String iuv, String ccp) throws JAXBException {
         OffsetDateTime data = OffsetDateTime.of(2026, 6, 20, 12, 0, 0, 0, ZoneOffset.UTC);
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte("PEND-" + ccp);
-        v.setImportoTotale(123.45);
+        Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                tv.getId(), tvd.getId(), null, "PEND-" + ccp, null, "RSSMRA80A01H501U", 123.45,
+                StatoPendenza.ESEGUITO, 0));
         v.setImportoPagato(123.45);
-        v.setStatoVersamento("ESEGUITO");
         v.setDataCreazione(data);
-        v.setDataOraUltimoAggiornamento(data);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
+        v.setDataUltimoAggiornamento(data);
+        v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
         v.setCausaleVersamento("TARI 2026");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        versamentoRepository.save(v);
 
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(dominio.getCodDominio());
         r.setXmlRpt(xmlRpt());
         r.setXmlRt(xmlRt());
@@ -330,7 +310,7 @@ class RicevuteDetailIntegrationTest {
         r.setStato("RT_ACCETTATA_PA");
         r.setDescrizioneStato("Ricevuta accettata dalla PA");
         r.setCodPsp("PSP-X");
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         return rptRepository.save(r);
     }
 

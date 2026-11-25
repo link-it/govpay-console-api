@@ -4,41 +4,70 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
-import it.govpay.console.entity.Tributo;
-import it.govpay.console.entity.Versamento;
 import it.govpay.console.model.LinguaSecondaria;
 import it.govpay.console.web.BadRequestException;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.OpzionePagamento;
+import it.govpay.pendenze.entity.PdDebitore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.entity.PosizioneDebitoria;
+import it.govpay.pendenze.entity.VocePendenza;
+import it.govpay.pendenze.model.TipoSoggetto;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.PaymentNotice;
+import it.govpay.stampe.client.model.ThresholdType;
 import tools.jackson.databind.json.JsonMapper;
 
 class AvvisoPdfPayloadMapperTest {
 
     private final AvvisoPdfPayloadMapper mapper = new AvvisoPdfPayloadMapper(JsonMapper.shared());
 
-    private static Versamento versamento() {
+    private static Dominio dominio() {
         Stazione stazione = new Stazione();
         stazione.setApplicationCode(1);
         Dominio dominio = new Dominio();
         dominio.setCodDominio("12345678901");
         dominio.setAuxDigit(0);
         dominio.setStazione(stazione);
-        Versamento v = new Versamento();
-        v.setDominio(dominio);
-        v.setIuvVersamento("123456789012345");
-        v.setNumeroAvviso("001123456789012345");
-        v.setImportoTotale(100.0);
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        return v;
+        return dominio;
+    }
+
+    /** Pendenza v3 con posizione, debitore e opzione a soluzione unica. */
+    private static Pendenza pendenza() {
+        PosizioneDebitoria posizione = new PosizioneDebitoria();
+        posizione.setDescrizione("Posizione di test");
+        Debitore debitore = new Debitore();
+        debitore.setTipo(TipoSoggetto.F);
+        debitore.setIdentificativo("RSSMRA80A01H501U");
+        debitore.setAnagrafica("Mario Rossi");
+        PdDebitore pdDebitore = new PdDebitore();
+        pdDebitore.setDebitore(debitore);
+        posizione.addPdDebitore(pdDebitore);
+        OpzionePagamento opzione = new OpzionePagamento();
+        opzione.setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA);
+        pdDebitore.addOpzionePagamento(opzione);
+        Pendenza p = new Pendenza();
+        p.setIdPendenza("PEND-1");
+        p.setIuv("123456789012345");
+        p.setNumeroAvviso("001123456789012345");
+        p.setImporto(100.0);
+        opzione.addPendenza(p);
+        return p;
+    }
+
+    private static Debitore debitore(Pendenza p) {
+        return p.getOpzionePagamento().getPdDebitore().getDebitore();
     }
 
     private static IbanAccredito iban(String codIban, boolean postale) {
@@ -48,28 +77,25 @@ class AvvisoPdfPayloadMapperTest {
         return i;
     }
 
-    /** Aggiunge a {@code v} il primo (e unico) singolo versamento, e lo restituisce. */
-    private static SingoloVersamento primoSingoloVersamento(Versamento v) {
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setVersamento(v);
-        v.getSingoliVersamenti().add(sv);
-        return sv;
+    private PaymentNotice notice(Pendenza p, Dominio dominio, LinguaSecondaria lingua) {
+        return mapper.toPaymentNotice(p, dominio, null, lingua);
     }
 
     @Test
     void fullQrcodeBuiltFromNumeroAvviso() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
         assertThat(notice.getFull().getQrcode())
                 .isEqualTo("PAGOPA|002|001123456789012345|12345678901|10000");
+        assertThat(notice.getReducedPayments()).isEmpty();
     }
 
     @Test
     void fullQrcodeDerivedWhenNumeroAvvisoMissing() {
-        Versamento v = versamento();
-        v.setNumeroAvviso(null);
+        Pendenza p = pendenza();
+        p.setNumeroAvviso(null);
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         // auxDigit 0: "0" + applicationCode a 2 cifre + IUV
         assertThat(notice.getFull().getQrcode())
@@ -78,11 +104,12 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void throwsAvvisoNonDisponibileWhenIuvMissing() {
-        Versamento v = versamento();
-        v.setIuvVersamento(null);
-        v.setNumeroAvviso(null);
+        Pendenza p = pendenza();
+        p.setIuv(null);
+        p.setNumeroAvviso(null);
+        Dominio dominio = dominio();
 
-        assertThatThrownBy(() -> mapper.toPaymentNotice(v, null))
+        assertThatThrownBy(() -> notice(p, dominio, null))
                 .isInstanceOf(AvvisoNonDisponibileException.class)
                 .hasMessageContaining("codice QR");
     }
@@ -92,10 +119,10 @@ class AvvisoPdfPayloadMapperTest {
         // stampe incorpora il logo come testo base64 nell'XML Jasper: si
         // inoltra il contenuto colonna tal quale, senza decodificarlo
         byte[] stored = Base64.getEncoder().encode(png());
-        Versamento v = versamento();
-        v.getDominio().setLogo(stored);
+        Dominio dominio = dominio();
+        dominio.setLogo(stored);
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(pendenza(), dominio, null);
 
         assertThat(notice.getFirstLogo()).isEqualTo(stored);
     }
@@ -105,10 +132,10 @@ class AvvisoPdfPayloadMapperTest {
         // issue #124: valore salvato dalle vecchie PUT dell'API Backoffice
         // (il link della GET): si invia contenuto vuoto, govpay-stampe usa il
         // logo di default
-        Versamento v = versamento();
-        v.getDominio().setLogo("/domini/12345678901/logo".getBytes(StandardCharsets.UTF_8));
+        Dominio dominio = dominio();
+        dominio.setLogo("/domini/12345678901/logo".getBytes(StandardCharsets.UTF_8));
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(pendenza(), dominio, null);
 
         assertThat(notice.getFirstLogo()).isEmpty();
     }
@@ -122,85 +149,25 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void firstLogoEmptyWhenDominioHasNoLogo() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
         assertThat(notice.getFirstLogo()).isEmpty();
     }
 
-    // --- bollettino postale: valorizzazione dell'IBAN (govpay-stampe lo esige con postal=true) ---
+    // --- bollettino postale: l'IBAN scelto (vedi IbanPostaleResolverTest) finisce nel payload ---
 
     @Test
-    void pendenzaDefinitaPrendeLIbanPostaleDalSingoloVersamento() {
-        Versamento v = versamento();
-        primoSingoloVersamento(v).setIbanAccredito(iban("IT60X0542811101000000123456", true));
-
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+    void ibanPostaleAttivaIlBollettinoEValorizzaLIban() {
+        PaymentNotice notice = mapper.toPaymentNotice(pendenza(), dominio(),
+                iban("IT60X0542811101000000123456", true), null);
 
         assertThat(notice.getPostal()).isTrue();
-        assertThat(notice.getFull().getIban()).isNotNull();
         assertThat(notice.getFull().getIban().getIbanCode()).isEqualTo("IT60X0542811101000000123456");
-    }
-
-    /**
-     * Pendenza a riferimento: la FK sul singolo versamento e' nulla e l'IBAN va
-     * ereditato dal tipo entrata del dominio ({@code tributi}), come fa V1 in
-     * {@code SingoloVersamento.getIbanAccredito}.
-     */
-    @Test
-    void pendenzaARiferimentoEreditaLIbanPostaleDalTipoEntrataDominio() {
-        Versamento v = versamento();
-        Tributo tributo = new Tributo();
-        tributo.setIbanAccredito(iban("IT60X0542811101000000999999", true));
-        primoSingoloVersamento(v).setTributo(tributo);
-
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
-
-        assertThat(notice.getPostal()).isTrue();
-        assertThat(notice.getFull().getIban().getIbanCode()).isEqualTo("IT60X0542811101000000999999");
-    }
-
-    @Test
-    void ibanSulSingoloVersamentoPrevaleSuQuelloDelTipoEntrataDominio() {
-        Versamento v = versamento();
-        Tributo tributo = new Tributo();
-        tributo.setIbanAccredito(iban("IT60X0542811101000000999999", true));
-        SingoloVersamento sv = primoSingoloVersamento(v);
-        sv.setIbanAccredito(iban("IT60X0542811101000000123456", true));
-        sv.setTributo(tributo);
-
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
-
-        assertThat(notice.getFull().getIban().getIbanCode()).isEqualTo("IT60X0542811101000000123456");
-    }
-
-    /** V1 (AvvisoPagamentoV2Utils:441-446): l'appoggio si guarda solo se l'accredito non e' postale. */
-    @Test
-    void ibanDiAppoggioUsatoQuandoLAccreditoNonEPostale() {
-        Versamento v = versamento();
-        SingoloVersamento sv = primoSingoloVersamento(v);
-        sv.setIbanAccredito(iban("IT60X0542811101000000123456", false));
-        sv.setIbanAppoggio(iban("IT60X0542811101000000777777", true));
-
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
-
-        assertThat(notice.getPostal()).isTrue();
-        assertThat(notice.getFull().getIban().getIbanCode()).isEqualTo("IT60X0542811101000000777777");
     }
 
     @Test
     void nessunIbanPostaleNessunBollettinoPostale() {
-        Versamento v = versamento();
-        primoSingoloVersamento(v).setIbanAccredito(iban("IT60X0542811101000000123456", false));
-
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
-
-        assertThat(notice.getPostal()).isFalse();
-        assertThat(notice.getFull().getIban()).isNull();
-    }
-
-    @Test
-    void pendenzaSenzaSingoliVersamentiNonEPostale() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
         assertThat(notice.getPostal()).isFalse();
         assertThat(notice.getFull().getIban()).isNull();
@@ -212,14 +179,13 @@ class AvvisoPdfPayloadMapperTest {
      */
     @Test
     void intestatarioEAutorizzazioneInoltratiGrezzi() {
-        Versamento v = versamento();
-        v.getDominio().setAutStampaPoste("Aut. Ente n. 1 del 01/01/2020");
+        Dominio dominio = dominio();
+        dominio.setAutStampaPoste("Aut. Ente n. 1 del 01/01/2020");
         IbanAccredito postale = iban("IT60X0542811101000000123456", true);
         postale.setIntestatario("Comune di Test");
         postale.setAutStampaPoste("Aut. Iban n. 2 del 02/02/2020");
-        primoSingoloVersamento(v).setIbanAccredito(postale);
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = mapper.toPaymentNotice(pendenza(), dominio, postale, null);
 
         assertThat(notice.getFull().getIban().getOwnerBusinessName()).isEqualTo("Comune di Test");
         assertThat(notice.getFull().getIban().getPostalAuthMessage()).isEqualTo("Aut. Iban n. 2 del 02/02/2020");
@@ -228,17 +194,34 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void cbillCodeLettoDalDominio() {
-        Versamento v = versamento();
-        v.getDominio().setCbill("ABCDE");
+        Dominio dominio = dominio();
+        dominio.setCbill("ABCDE");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(pendenza(), dominio, null);
 
         assertThat(notice.getCreditor().getCbillCode()).isEqualTo("ABCDE");
     }
 
     @Test
+    void ilCreditoreRiportaIlPagamentoSulSitoDelDominio() {
+        Dominio dominio = dominio();
+        dominio.setPagamentoSito(Boolean.TRUE);
+
+        PaymentNotice notice = notice(pendenza(), dominio, null);
+
+        assertThat(notice.getCreditor().getPayOnWebsite()).isTrue();
+    }
+
+    @Test
+    void senzaPagamentoSitoIlCreditoreNonLoRiporta() {
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
+
+        assertThat(notice.getCreditor().getPayOnWebsite()).isFalse();
+    }
+
+    @Test
     void cbillCodeAssenteSeDominioNonLoHaConfigurato() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
         assertThat(notice.getCreditor().getCbillCode()).isNull();
     }
@@ -249,13 +232,11 @@ class AvvisoPdfPayloadMapperTest {
      */
     @Test
     void intestatarioEAutorizzazioneTroncatiAiLimitiDelContratto() {
-        Versamento v = versamento();
         IbanAccredito postale = iban("IT60X0542811101000000123456", true);
         postale.setIntestatario("X".repeat(60));
         postale.setAutStampaPoste("Y".repeat(80));
-        primoSingoloVersamento(v).setIbanAccredito(postale);
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = mapper.toPaymentNotice(pendenza(), dominio(), postale, null);
 
         assertThat(notice.getFull().getIban().getOwnerBusinessName()).hasSize(50);
         assertThat(notice.getFull().getIban().getPostalAuthMessage()).hasSize(70);
@@ -263,48 +244,58 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void businessNameTroncatoA50Caratteri() {
-        Versamento v = versamento();
-        v.getDominio().setRagioneSociale("A".repeat(60));
+        Dominio dominio = dominio();
+        dominio.setRagioneSociale("A".repeat(60));
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(pendenza(), dominio, null);
 
         assertThat(notice.getCreditor().getBusinessName()).hasSize(50);
     }
 
     @Test
     void fullNameTroncatoA70Caratteri() {
-        Versamento v = versamento();
-        v.setDebitoreAnagrafica("B".repeat(80));
+        Pendenza p = pendenza();
+        debitore(p).setAnagrafica("B".repeat(80));
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getDebtor().getFullName()).hasSize(70);
     }
 
+    @Test
+    void ildebitoreEQuelloDellOpzioneDellaPendenza() {
+        Pendenza p = pendenza();
+        debitore(p).setIdentificativo("VRDLGI90B02H501T");
+
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getDebtor().getFiscalCode()).isEqualTo("VRDLGI90B02H501T");
+    }
+
     /**
-     * {@code debitoreIndirizzo varchar(70)} + {@code debitoreCivico varchar(16)} possono
-     * insieme superare 70: il limite dello schema (pagoPA) si applica al campo risultante, non
-     * alle singole colonne concatenate.
+     * {@code indirizzo varchar(70)} + {@code civico varchar(16)} possono insieme superare 70:
+     * il limite dello schema (pagoPA) si applica al campo risultante, non alle singole
+     * colonne concatenate.
      */
     @Test
     void addressLine1TroncatoA70CaratteriDopoLaConcatenazione() {
-        Versamento v = versamento();
-        v.setDebitoreIndirizzo("C".repeat(70));
-        v.setDebitoreCivico("1234567890123456");
+        Pendenza p = pendenza();
+        debitore(p).setIndirizzo("C".repeat(70));
+        debitore(p).setCivico("1234567890123456");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getDebtor().getAddressLine1()).hasSize(70);
     }
 
     @Test
     void addressLine2TroncatoA70CaratteriDopoLaConcatenazione() {
-        Versamento v = versamento();
-        v.setDebitoreCap("0000000000000000");
-        v.setDebitoreLocalita("D".repeat(35));
-        v.setDebitoreProvincia("E".repeat(35));
+        Pendenza p = pendenza();
+        debitore(p).setCap("0000000000000000");
+        debitore(p).setLocalita("D".repeat(35));
+        debitore(p).setProvincia("E".repeat(35));
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getDebtor().getAddressLine2()).hasSize(70);
     }
@@ -343,109 +334,208 @@ class AvvisoPdfPayloadMapperTest {
 
     @Test
     void titleEhLaCausaleDecodificata() {
-        Versamento v = versamento();
-        v.setCausaleVersamento("01 " + Base64.getEncoder().encodeToString(
+        Pendenza p = pendenza();
+        p.setCausaleVersamento("01 " + Base64.getEncoder().encodeToString(
                 "Pagamento TARI 2026".getBytes(StandardCharsets.UTF_8)));
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getTitle()).isEqualTo("Pagamento TARI 2026");
     }
 
     @Test
-    void titleAssenteSeCausaleVersamentoAssente() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+    void titleEhLaDescrizioneDellaPosizioneSeLaCausaleEAssente() {
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
-        assertThat(notice.getTitle()).isNull();
+        assertThat(notice.getTitle()).isEqualTo("Posizione di test");
+    }
+
+    // --- scadenza ---
+
+    @Test
+    void dueDateEQuellaDellaPendenza() {
+        Pendenza p = pendenza();
+        p.setDataScadenzaAvviso(OffsetDateTime.of(2026, 9, 30, 12, 0, 0, 0, ZoneOffset.UTC));
+        p.getOpzionePagamento().setDataScadenza(LocalDate.of(2026, 12, 31));
+
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getFull().getDueDate()).isEqualTo(LocalDate.of(2026, 9, 30));
     }
 
     @Test
-    void secondLanguageRifiutataSenzaCausaleTradottaInProprieta() {
-        Versamento v = versamento();
+    void dueDateRipiegaSullaScadenzaDellOpzione() {
+        Pendenza p = pendenza();
+        p.getOpzionePagamento().setDataScadenza(LocalDate.of(2026, 12, 31));
 
-        assertThatThrownBy(() -> mapper.toPaymentNotice(v, LinguaSecondaria.EN))
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getFull().getDueDate()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    void dueDateAssenteSeNessunaScadenza() {
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
+
+        assertThat(notice.getFull().getDueDate()).isNull();
+    }
+
+    // --- opzioni con soglia temporale ---
+
+    @Test
+    void opzioneEntroProduceUnPagamentoConSogliaEntro() {
+        Pendenza p = pendenza();
+        p.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO);
+        p.getOpzionePagamento().setGiorni(5);
+
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getFull()).isNull();
+        assertThat(notice.getReducedPayments()).hasSize(1);
+        assertThat(notice.getReducedPayments().get(0).getThresholdType()).isEqualTo(ThresholdType.ENTRO);
+        assertThat(notice.getReducedPayments().get(0).getThresholdDays()).isEqualTo(5);
+        assertThat(notice.getReducedPayments().get(0).getNoticeNumber()).isEqualTo("001123456789012345");
+    }
+
+    @Test
+    void opzioneOltreProduceUnPagamentoConSogliaOltre() {
+        Pendenza p = pendenza();
+        p.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA_OLTRE);
+        p.getOpzionePagamento().setGiorni(30);
+
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getReducedPayments().get(0).getThresholdType()).isEqualTo(ThresholdType.OLTRE);
+        assertThat(notice.getReducedPayments().get(0).getThresholdDays()).isEqualTo(30);
+    }
+
+    @Test
+    void unaRataDiUnPianoRatealeStampaSoloLaSuaRata() {
+        Pendenza p = pendenza();
+        p.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.PIANO_RATEALE);
+        p.setNumeroRata(2);
+
+        PaymentNotice notice = notice(p, dominio(), null);
+
+        assertThat(notice.getFull().getNoticeNumber()).isEqualTo("001123456789012345");
+        assertThat(notice.getInstalments()).isEmpty();
+    }
+
+    // --- controlli preliminari ---
+
+    @Test
+    void anagrafcaDebitoreAssente() {
+        Pendenza p = pendenza();
+        assertThat(AvvisoPdfPayloadMapper.isAnagraficaDebitoreAssente(p)).isFalse();
+
+        debitore(p).setAnagrafica(" ");
+
+        assertThat(AvvisoPdfPayloadMapper.isAnagraficaDebitoreAssente(p)).isTrue();
+    }
+
+    @Test
+    void marcaDaBolloSeUnaVoceHaTipoHashEProvincia() {
+        Pendenza p = pendenza();
+        assertThat(AvvisoPdfPayloadMapper.isPendenzaMbt(p)).isFalse();
+
+        VocePendenza voce = new VocePendenza();
+        voce.setTipoBollo("01");
+        voce.setHashDocumento("aGFzaA==");
+        p.addVocePendenza(voce);
+        assertThat(AvvisoPdfPayloadMapper.isPendenzaMbt(p)).isFalse();
+
+        voce.setProvinciaResidenza("RM");
+        assertThat(AvvisoPdfPayloadMapper.isPendenzaMbt(p)).isTrue();
+    }
+
+    // --- bilinguismo e informativa: letti da Pendenza.proprieta (JSON) ---
+
+    @Test
+    void secondLanguageRifiutataSenzaCausaleTradottaInProprieta() {
+        Pendenza p = pendenza();
+        Dominio dominio = dominio();
+
+        assertThatThrownBy(() -> notice(p, dominio, LinguaSecondaria.EN))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("causale tradotta");
     }
 
     @Test
     void secondLanguageTitleLettaDaProprieta() {
-        Versamento v = versamento();
-        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
+        Pendenza p = pendenza();
+        p.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
+        PaymentNotice notice = notice(p, dominio(), LinguaSecondaria.EN);
 
         assertThat(notice.getSecondLanguage().getTitle()).isEqualTo("TARI payment 2026");
     }
 
     @Test
     void secondLanguageInformativaImportoAssenteSenzaProprieta() {
-        Versamento v = versamento();
-        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
+        Pendenza p = pendenza();
+        p.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
+        PaymentNotice notice = notice(p, dominio(), LinguaSecondaria.EN);
 
         assertThat(notice.getSecondLanguage().getInformativaImporto()).isNull();
     }
 
     @Test
     void secondLanguageInformativaImportoLettaDaProprieta() {
-        Versamento v = versamento();
-        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\", "
+        Pendenza p = pendenza();
+        p.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\", "
                 + "\"linguaSecondariaInformativaImportoAvviso\": \"Custom text\"}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, LinguaSecondaria.EN);
+        PaymentNotice notice = notice(p, dominio(), LinguaSecondaria.EN);
 
         assertThat(notice.getSecondLanguage().getInformativaImporto()).isEqualTo("Custom text");
     }
 
-    // --- informativaImporto: letta da Versamento.proprieta (JSON legacy) ---
-
     @Test
     void informativaImportoAssenteSenzaProprieta() {
-        PaymentNotice notice = mapper.toPaymentNotice(versamento(), null);
+        PaymentNotice notice = notice(pendenza(), dominio(), null);
 
         assertThat(notice.getInformativaImporto()).isNull();
     }
 
     @Test
     void informativaImportoLettaDaProprieta() {
-        Versamento v = versamento();
-        v.setProprieta("{\"informativaImportoAvviso\": \"Testo personalizzato\"}");
+        Pendenza p = pendenza();
+        p.setProprieta("{\"informativaImportoAvviso\": \"Testo personalizzato\"}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getInformativaImporto()).isEqualTo("Testo personalizzato");
     }
 
     @Test
     void informativaImportoVuotaOmetteLaNota() {
-        Versamento v = versamento();
-        v.setProprieta("{\"informativaImportoAvviso\": \"\"}");
+        Pendenza p = pendenza();
+        p.setProprieta("{\"informativaImportoAvviso\": \"\"}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getInformativaImporto()).isEmpty();
     }
 
-    /** Campi legacy non modellati (descrizioneImporto, ecc.) non devono far fallire il parsing. */
+    /** Campi non modellati (descrizioneImporto, ecc.) non devono far fallire il parsing. */
     @Test
     void informativaImportoIgnoraAltriCampiDiProprieta() {
-        Versamento v = versamento();
-        v.setProprieta("{\"linguaSecondaria\": \"eng\", \"informativaImportoAvviso\": \"Nota custom\", "
+        Pendenza p = pendenza();
+        p.setProprieta("{\"linguaSecondaria\": \"eng\", \"informativaImportoAvviso\": \"Nota custom\", "
                 + "\"descrizioneImporto\": [{\"voce\": \"x\"}]}");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getInformativaImporto()).isEqualTo("Nota custom");
     }
 
     @Test
     void informativaImportoAssenteConProprietaMalformata() {
-        Versamento v = versamento();
-        v.setProprieta("{non e' json valido");
+        Pendenza p = pendenza();
+        p.setProprieta("{non e' json valido");
 
-        PaymentNotice notice = mapper.toPaymentNotice(v, null);
+        PaymentNotice notice = notice(p, dominio(), null);
 
         assertThat(notice.getInformativaImporto()).isNull();
     }

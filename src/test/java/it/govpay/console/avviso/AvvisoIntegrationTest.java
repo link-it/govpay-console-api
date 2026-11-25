@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,12 +33,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.OutputStream;
 
 import it.govpay.console.entity.Applicazione;
-import it.govpay.console.entity.Documento;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.IbanAccredito;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.SingoloVersamento;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.TipoTributo;
 import it.govpay.console.entity.TipoVersamento;
@@ -46,10 +45,8 @@ import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.console.entity.Utenza;
 import it.govpay.console.entity.UtenzaDominio;
-import it.govpay.console.entity.Versamento;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DocumentoRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.IbanAccreditoRepository;
 import it.govpay.console.repository.TipoTributoRepository;
 import it.govpay.console.repository.TributoRepository;
@@ -61,8 +58,17 @@ import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UnitaOperativaRepository;
 import it.govpay.console.repository.UtenzaDominioRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 import it.govpay.common.auth.GovpayPasswordEncoder;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
+import it.govpay.pendenze.entity.Debitore;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.entity.VocePendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import it.govpay.pendenze.model.StatoVocePendenza;
+import it.govpay.pendenze.model.TipologiaOpzionePagamento;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import it.govpay.stampe.client.model.Languages;
 import it.govpay.stampe.client.model.PaymentNotice;
 import org.mockito.ArgumentCaptor;
@@ -90,23 +96,21 @@ class AvvisoIntegrationTest {
     @Autowired
     private OperatoreRepository operatoreRepository;
     @Autowired
-    private DominioRepository dominioRepository;
+    private ConsoleDominioRepository dominioRepository;
     @Autowired
     private StazioneRepository stazioneRepository;
     @Autowired
     private IntermediarioRepository intermediarioRepository;
     @Autowired
-    private ApplicazioneRepository applicazioneRepository;
+    private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired
     private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired
     private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
     @Autowired
     private UnitaOperativaRepository unitaOperativaRepository;
-    @Autowired
-    private VersamentoRepository versamentoRepository;
-    @Autowired
-    private DocumentoRepository documentoRepository;
+    @PersistenceContext
+    private EntityManager em;
     @Autowired
     private IbanAccreditoRepository ibanAccreditoRepository;
 
@@ -194,33 +198,32 @@ class AvvisoIntegrationTest {
         tipoVersamentoDominioRepository.save(tvd);
     }
 
-    private Versamento newPendenzaConAvviso(String idPendenza, String numeroAvviso) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("NON_ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setDebitoreIndirizzo("Via Roma");
-        v.setDebitoreCivico("1");
-        v.setDebitoreCap("00100");
-        v.setDebitoreLocalita("Roma");
-        v.setDebitoreProvincia("RM");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(false);
-        v.setTipo("DOVUTO");
-        v.setCausaleVersamento("TARI 2026 — saldo");
-        v.setIuvVersamento("1234567890123");
-        v.setNumeroAvviso(numeroAvviso);
-        v.setDominio(domA);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+    private Dati dati(String idPendenza, String numeroAvviso) {
+        return new Dati(app.getId(), domA.getId(), tv.getId(), tvd.getId(), null, idPendenza, numeroAvviso,
+                "RSSMRA80A01H501U", 100.0, StatoPendenza.NON_ESEGUITO, 0);
+    }
+
+    private Pendenza newPendenzaConAvviso(String idPendenza, String numeroAvviso) {
+        Pendenza p = PendenzaV3Fixtures.pendenza(em, dati(idPendenza, numeroAvviso));
+        p.setCausaleVersamento("TARI 2026 — saldo");
+        return p;
+    }
+
+    private VocePendenza aggiungiVoce(Pendenza p, Consumer<VocePendenza> personalizza) {
+        VocePendenza voce = new VocePendenza();
+        voce.setIdVocePendenza("VOCE-" + p.getIdPendenza());
+        voce.setIndice(1);
+        voce.setImporto(100.0);
+        voce.setDescrizione("Voce");
+        voce.setStato(StatoVocePendenza.NON_ESEGUITO);
+        personalizza.accept(voce);
+        p.addVocePendenza(voce);
+        em.persist(voce);
+        return voce;
+    }
+
+    private static Debitore debitore(Pendenza p) {
+        return p.getOpzionePagamento().getPdDebitore().getDebitore();
     }
 
     @Test
@@ -288,36 +291,27 @@ class AvvisoIntegrationTest {
     }
 
     /**
-     * V1 ({@code AvvisiDAO.java:180-184}): pendenza con documento → filename
-     * {@code <codDominio>_DOC_<codDocumento>.pdf}. La generazione PDF non
-     * cambia (singolo avviso della rata), cambia solo il nome del file.
-     *
-     * <p>Divergenza esplicita V2: aggiungiamo il suffisso {@code _<codRata>}
-     * per evitare collisioni quando si scaricano piu' rate dello stesso
-     * documento (bug noto di V1).
+     * Ogni rata di un'opzione ha il proprio numero avviso, quindi il proprio file: nessuna
+     * collisione quando si scaricano piu' rate della stessa posizione.
      */
     @Test
-    void returnsPdfWithDocFilenameWhenPendenzaBelongsToDocumento() throws Exception {
-        Documento doc = new Documento();
-        doc.setCodDocumento("DOC-2026-001");
-        documentoRepository.save(doc);
+    void ogniRataHaIlProprioNomeFile() throws Exception {
+        Pendenza prima = newPendenzaConAvviso("PEND-RATA-1", "012345678901234567");
+        PendenzaV3Fixtures.pendenzaNellaStessaPosizione(em, prima, dati("PEND-RATA-2", "012345678901234568"));
+        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
+                .when(stampeClient).streamPaymentNotice(any(), any());
 
-        Versamento v = newPendenzaConAvviso("PEND-DOC", "012345678901234567");
-        v.setDocumento(doc);
-        v.setCodRata("R02");
-        versamentoRepository.save(v);
-
-        byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
-        doAnswer(writePdf(fakePdf)).when(stampeClient).streamPaymentNotice(any(), any());
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-DOC/avviso")
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-RATA-2/avviso")
                         .accept(MediaType.APPLICATION_PDF)
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
                 .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"12345678901_DOC_DOC-2026-001_R02.pdf\""))
-                .andExpect(content().bytes(fakePdf));
+                        "attachment; filename=\"12345678901_012345678901234568.pdf\""));
+
+        ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
+        verify(stampeClient).streamPaymentNotice(captor.capture(), any());
+        assertThat(captor.getValue().getFull().getNoticeNumber()).isEqualTo("012345678901234568");
+        assertThat(captor.getValue().getInstalments()).isEmpty();
     }
 
     /**
@@ -327,18 +321,12 @@ class AvvisoIntegrationTest {
      */
     @Test
     void returns422ForMarcaDaBolloTelematica() throws Exception {
-        Versamento v = newPendenzaConAvviso("PEND-MBT", "012345678901234567");
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte("SV-MBT");
-        sv.setStatoSingoloVersamento("NON_ESEGUITO");
-        sv.setImportoSingoloVersamento(16.0);
-        sv.setIndiceDati(1);
-        sv.setVersamento(v);
-        sv.setHashDocumento("HASH-001");
-        sv.setProvinciaResidenza("RM");
-        sv.setTipoBollo("01");
-        v.getSingoliVersamenti().add(sv);
-        versamentoRepository.save(v);
+        Pendenza p = newPendenzaConAvviso("PEND-MBT", "012345678901234567");
+        aggiungiVoce(p, voce -> {
+            voce.setHashDocumento("HASH-001");
+            voce.setProvinciaResidenza("RM");
+            voce.setTipoBollo("01");
+        });
 
         mvc.perform(get("/pendenze/" + APP_COD + "/PEND-MBT/avviso")
                         .accept(MediaType.APPLICATION_PDF)
@@ -349,28 +337,19 @@ class AvvisoIntegrationTest {
     }
 
     /**
-     * V1 ({@code AvvisoPagamentoV2Utils.java:441-446}): se il primo
-     * SingoloVersamento ha un IBAN postale (di accredito o di appoggio), il
-     * payload PDF deve avere {@code postal=true}.
+     * Se la prima voce ha un IBAN postale (di accredito o di appoggio),
+     * il payload PDF deve avere {@code postal=true}.
      */
     @Test
-    void postalTrueWhenSingoloVersamentoHasIbanPostale() throws Exception {
+    void postalTrueWhenVoceHasIbanPostale() throws Exception {
         IbanAccredito ibanPostale = new IbanAccredito();
         ibanPostale.setPostale(true);
         ibanPostale.setCodIban("IT60X0542811101000000123456");
         ibanPostale.setDominio(domA);
         ibanAccreditoRepository.save(ibanPostale);
 
-        Versamento v = newPendenzaConAvviso("PEND-POST", "012345678901234567");
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte("SV-1");
-        sv.setStatoSingoloVersamento("NON_ESEGUITO");
-        sv.setImportoSingoloVersamento(100.0);
-        sv.setIndiceDati(1);
-        sv.setVersamento(v);
-        sv.setIbanAccredito(ibanPostale);
-        v.getSingoliVersamenti().add(sv);
-        versamentoRepository.save(v);
+        Pendenza p = newPendenzaConAvviso("PEND-POST", "012345678901234567");
+        aggiungiVoce(p, voce -> voce.setIdIbanAccredito(ibanPostale.getId()));
 
         doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
                 .when(stampeClient).streamPaymentNotice(any(), any());
@@ -392,7 +371,7 @@ class AvvisoIntegrationTest {
     /**
      * Pendenza a riferimento: {@code singoli_versamenti.id_iban_accredito} e'
      * nulla e l'IBAN postale va ereditato dal tipo entrata del dominio
-     * ({@code tributi}), come fa V1 in {@code SingoloVersamento.getIbanAccredito}.
+     * ({@code tributi}), come per ogni pendenza a riferimento.
      * E' il caso che in esercizio produceva il 422 da govpay-stampe.
      */
     @Test
@@ -414,17 +393,9 @@ class AvvisoIntegrationTest {
         tributo.setIbanAccredito(ibanPostale);
         tributoRepository.save(tributo);
 
-        Versamento v = newPendenzaConAvviso("PEND-RIF", "012345678901234568");
-        SingoloVersamento sv = new SingoloVersamento();
-        sv.setCodSingoloVersamentoEnte("SV-RIF");
-        sv.setStatoSingoloVersamento("NON_ESEGUITO");
-        sv.setImportoSingoloVersamento(100.0);
-        sv.setIndiceDati(1);
-        sv.setVersamento(v);
-        // Nessun iban sul singolo versamento: solo il riferimento al tipo entrata.
-        sv.setTributo(tributo);
-        v.getSingoliVersamenti().add(sv);
-        versamentoRepository.save(v);
+        Pendenza p = newPendenzaConAvviso("PEND-RIF", "012345678901234568");
+        // Nessun iban sulla voce: solo il riferimento al tipo entrata.
+        aggiungiVoce(p, voce -> voce.setIdTributo(tributo.getId()));
 
         doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
                 .when(stampeClient).streamPaymentNotice(any(), any());
@@ -439,31 +410,6 @@ class AvvisoIntegrationTest {
         assertThat(captor.getValue().getPostal()).isTrue();
         assertThat(captor.getValue().getFull().getIban().getIbanCode())
                 .isEqualTo("IT60X0542811101000000999999");
-    }
-
-    /**
-     * Pendenza in un documento ma senza codRata valorizzato: fallback al
-     * numeroAvviso (sempre univoco) per evitare ambiguita'.
-     */
-    @Test
-    void docFilenameFallsBackToNumeroAvvisoWhenCodRataIsNull() throws Exception {
-        Documento doc = new Documento();
-        doc.setCodDocumento("DOC-NORATA");
-        documentoRepository.save(doc);
-
-        Versamento v = newPendenzaConAvviso("PEND-NORATA", "012345678901234567");
-        v.setDocumento(doc);
-        versamentoRepository.save(v);
-
-        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
-                .when(stampeClient).streamPaymentNotice(any(), any());
-
-        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NORATA/avviso")
-                        .accept(MediaType.APPLICATION_PDF)
-                        .with(httpBasic(PRINCIPAL, PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"12345678901_DOC_DOC-NORATA_012345678901234567.pdf\""));
     }
 
     @Test
@@ -481,9 +427,8 @@ class AvvisoIntegrationTest {
 
     @Test
     void linguaSecondariaDePopulatesSecondLanguage() throws Exception {
-        Versamento v = newPendenzaConAvviso("PEND-DE", "012345678901234567");
-        v.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
-        versamentoRepository.save(v);
+        Pendenza p = newPendenzaConAvviso("PEND-DE", "012345678901234567");
+        p.setProprieta("{\"linguaSecondariaCausale\": \"TARI payment 2026\"}");
         doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
                 .when(stampeClient).streamPaymentNotice(any(), any());
 
@@ -524,6 +469,23 @@ class AvvisoIntegrationTest {
     }
 
     @Test
+    void pagamentoSitoDelDominioArrivaANellaStampaDellaPendenza() throws Exception {
+        domA.setPagamentoSito(Boolean.TRUE);
+        newPendenzaConAvviso("PEND-SITO", "012345678901234567");
+        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
+                .when(stampeClient).streamPaymentNotice(any(), any());
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SITO/avviso")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
+        verify(stampeClient).streamPaymentNotice(captor.capture(), any());
+        assertThat(captor.getValue().getCreditor().getPayOnWebsite()).isTrue();
+    }
+
+    @Test
     void linguaSecondariaNoneSkipsSecondLanguage() throws Exception {
         newPendenzaConAvviso("PEND-NONE", "012345678901234567");
         doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
@@ -554,6 +516,99 @@ class AvvisoIntegrationTest {
         ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
         verify(stampeClient).streamPaymentNotice(captor.capture(), any());
         assertThat(captor.getValue().getSecondLanguage()).isNull();
+    }
+
+    /** Nel modello v3 l'anagrafica del debitore e' facoltativa, ma govpay-stampe la richiede. */
+    @Test
+    void returns422SeIlDebitoreNonHaAnagrafica() throws Exception {
+        Pendenza p = newPendenzaConAvviso("PEND-SENZA-ANAG", "012345678901234567");
+        debitore(p).setAnagrafica(null);
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SENZA-ANAG/avviso")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentType("application/problem+json"));
+        verify(stampeClient, never()).streamPaymentNotice(any(), any());
+    }
+
+    /** Il debitore dell'avviso e' quello dell'opzione della pendenza, non il primo della posizione. */
+    @Test
+    void ilDebitoreDellAvvisoEQuelloDellaPendenza() throws Exception {
+        PendenzaV3Fixtures.pendenzaDelSecondoDebitore(em, dati("PEND-SECONDO", "012345678901234567"),
+                "VRDLGI90B02H501T", false);
+        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
+                .when(stampeClient).streamPaymentNotice(any(), any());
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SECONDO/avviso")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
+        verify(stampeClient).streamPaymentNotice(captor.capture(), any());
+        assertThat(captor.getValue().getDebtor().getFiscalCode()).isEqualTo("RSSMRA80A01H501U");
+    }
+
+    /** Un'opzione con soglia temporale stampa la sua pendenza come pagamento con soglia. */
+    @Test
+    void opzioneEntroStampaIlPagamentoConSoglia() throws Exception {
+        Pendenza p = newPendenzaConAvviso("PEND-ENTRO", "012345678901234567");
+        p.getOpzionePagamento().setTipologia(TipologiaOpzionePagamento.SOLUZIONE_UNICA_ENTRO);
+        p.getOpzionePagamento().setGiorni(5);
+        doAnswer(writePdf(new byte[]{'%', 'P', 'D', 'F'}))
+                .when(stampeClient).streamPaymentNotice(any(), any());
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-ENTRO/avviso")
+                        .accept(MediaType.APPLICATION_PDF)
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<PaymentNotice> captor = ArgumentCaptor.forClass(PaymentNotice.class);
+        verify(stampeClient).streamPaymentNotice(captor.capture(), any());
+        assertThat(captor.getValue().getReducedPayments()).hasSize(1);
+        assertThat(captor.getValue().getReducedPayments().get(0).getThresholdDays()).isEqualTo(5);
+    }
+
+    @Test
+    void jsonConScadenzaPassataEScaduto() throws Exception {
+        Pendenza p = newPendenzaConAvviso("PEND-SCAD", "012345678901234567");
+        p.setDataScadenzaAvviso(OffsetDateTime.now().minusDays(1));
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-SCAD/avviso").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stato", is("SCADUTO")));
+    }
+
+    @Test
+    void jsonDiPendenzaPagataEPagato() throws Exception {
+        Pendenza p = newPendenzaConAvviso("PEND-PAG", "012345678901234567");
+        p.setStato(StatoPendenza.ESEGUITO);
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-PAG/avviso").with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stato", is("PAGATO")));
+    }
+
+    @Test
+    void returns404SeLaPendenzaNonEVisibileAllOperatore() throws Exception {
+        newPendenzaConAvviso("PEND-NASCOSTA", "012345678901234567");
+        Utenza limitata = new Utenza();
+        limitata.setPrincipal("limitato");
+        limitata.setPrincipalOriginale("limitato");
+        limitata.setAbilitato(true);
+        limitata.setAutorizzazioneDominiStar(false);
+        limitata.setAutorizzazioneTipiVersStar(true);
+        limitata.setRuoli("OPERATORE");
+        limitata.setPassword(encoder.encode(PASSWORD));
+        utenzaRepository.save(limitata);
+        Operatore op = new Operatore();
+        op.setNome("Limitato");
+        op.setIdUtenza(limitata.getId());
+        operatoreRepository.save(op);
+
+        mvc.perform(get("/pendenze/" + APP_COD + "/PEND-NASCOSTA/avviso").with(httpBasic("limitato", PASSWORD)))
+                .andExpect(status().isNotFound());
     }
 
     // 503 (stampe non configurato) testato in AvvisoNotConfiguredTest con

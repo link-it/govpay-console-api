@@ -41,25 +41,32 @@ import it.govpay.console.entity.Applicazione;
 import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.Intermediario;
 import it.govpay.console.entity.Operatore;
-import it.govpay.console.entity.Rpt;
+import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.entity.Stazione;
 import it.govpay.console.entity.TipoVersamento;
 import it.govpay.console.entity.TipoVersamentoDominio;
 import it.govpay.console.entity.Utenza;
-import it.govpay.console.entity.Versamento;
+import it.govpay.pendenze.entity.Pendenza;
+import it.govpay.pendenze.model.StatoPendenza;
+import it.govpay.pendenze.repository.PosizioneDebitoriaRepository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import it.govpay.console.pendenza.PendenzaV3Fixtures;
+import it.govpay.console.pendenza.PendenzaV3Fixtures.Dati;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.AclRepository;
-import it.govpay.console.repository.ApplicazioneRepository;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleApplicazioneRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.GpAuditRepository;
 import it.govpay.console.repository.IntermediarioRepository;
 import it.govpay.console.repository.OperatoreRepository;
-import it.govpay.console.repository.RptRepository;
+import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.StazioneRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.repository.UtenzaRepository;
-import it.govpay.console.repository.VersamentoRepository;
 
 /**
  * {@code POST /ricevute} (issue #59 par. A-G): {@link PaForNodeClient}
@@ -83,12 +90,14 @@ class RicevutaUploadIntegrationTest {
     @Autowired private GovpayPasswordEncoder encoder;
     @Autowired private UtenzaRepository utenzaRepository;
     @Autowired private OperatoreRepository operatoreRepository;
-    @Autowired private DominioRepository dominioRepository;
-    @Autowired private ApplicazioneRepository applicazioneRepository;
+    @Autowired private ConsoleDominioRepository dominioRepository;
+    @Autowired private ConsoleApplicazioneRepository applicazioneRepository;
     @Autowired private TipoVersamentoRepository tipoVersamentoRepository;
     @Autowired private TipoVersamentoDominioRepository tipoVersamentoDominioRepository;
-    @Autowired private VersamentoRepository versamentoRepository;
-    @Autowired private RptRepository rptRepository;
+    @PersistenceContext private EntityManager em;
+    @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private PosizioneDebitoriaRepository posizioneDebitoriaRepository;
+    @Autowired private ConsoleRptRepository rptRepository;
     @Autowired private AclRepository aclRepository;
     @Autowired private StazioneRepository stazioneRepository;
     @Autowired private IntermediarioRepository intermediarioRepository;
@@ -152,9 +161,9 @@ class RicevutaUploadIntegrationTest {
         rptRepository.findAll().stream()
                 .filter(r -> DOM.equals(r.getCodDominio()))
                 .forEach(rptRepository::delete);
-        versamentoRepository.findAll().stream()
-                .filter(v -> dominio.getId().equals(v.getDominio().getId()))
-                .forEach(versamentoRepository::delete);
+        posizioneDebitoriaRepository.findAll().stream()
+                .filter(p -> dominio.getId().equals(p.getIdDominio()))
+                .forEach(posizioneDebitoriaRepository::delete);
         tipoVersamentoDominioRepository.delete(tvd);
         tipoVersamentoRepository.delete(tv);
         applicazioneRepository.delete(app);
@@ -289,7 +298,7 @@ class RicevutaUploadIntegrationTest {
 
     private void acquisisci(String iuv, String idRicevuta) {
         rptRepository.findByDominioAndIuv(DOM, iuv).ifPresent(rpt -> {
-            rpt.setCcp(idRicevuta);
+            rpt.setIur(idRicevuta);
             rpt.setXmlRt("<RT/>".getBytes(StandardCharsets.UTF_8));
             rpt.setDataMsgRicevuta(OffsetDateTime.now());
             rptRepository.save(rpt);
@@ -298,7 +307,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void xmlV2_2VieneInoltratoConPaSendRTV2ERitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-V22");
+        Pendenza v = newVersamento("PEND-V22");
         newRptSenzaRt(v, "IUV-V22", "CCP-V22");
         mockAcquisizioneOk("IUV-V22", "IUR-V22");
         String p = utenteScrittura("u-v22");
@@ -314,7 +323,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void xmlV2VieneInoltratoConPaSendRTNonPaSendRTV2() throws Exception {
-        Versamento v = newVersamento("PEND-V2");
+        Pendenza v = newVersamento("PEND-V2");
         newRptSenzaRt(v, "IUV-V2", "CCP-V2");
         mockAcquisizioneOk("IUV-V2", "IUR-V2");
         String p = utenteScrittura("u-v2");
@@ -328,7 +337,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void jsonVieneConvertitoEInviatoConPaSendRTV2Tipizzato() throws Exception {
-        Versamento v = newVersamento("PEND-JSON");
+        Pendenza v = newVersamento("PEND-JSON");
         newRptSenzaRt(v, "IUV-JSON", "CCP-JSON");
         mockAcquisizioneOk("IUV-JSON", "IUR-JSON");
         String p = utenteScrittura("u-json");
@@ -343,7 +352,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void multipartConCampoFileVieneRiconosciutoDalContenuto() throws Exception {
-        Versamento v = newVersamento("PEND-MP");
+        Pendenza v = newVersamento("PEND-MP");
         newRptSenzaRt(v, "IUV-MP", "CCP-MP");
         mockAcquisizioneOk("IUV-MP", "IUR-MP");
         String p = utenteScrittura("u-mp");
@@ -358,9 +367,9 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void ricevutaGiaAcquisitaRitorna409SenzaChiamareIlClient() throws Exception {
-        Versamento v = newVersamento("PEND-DUP");
+        Pendenza v = newVersamento("PEND-DUP");
         Rpt rpt = newRptSenzaRt(v, "IUV-DUP", "CCP-DUP");
-        rpt.setCcp("IUR-DUP");
+        rpt.setIur("IUR-DUP");
         rpt.setXmlRt("<RT/>".getBytes(StandardCharsets.UTF_8));
         rpt.setDataMsgRicevuta(OffsetDateTime.now());
         rptRepository.save(rpt);
@@ -375,7 +384,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void dominioNonVisibileRitorna403SenzaChiamareIlClient() throws Exception {
-        Versamento v = newVersamento("PEND-403");
+        Pendenza v = newVersamento("PEND-403");
         newRptSenzaRt(v, "IUV-403", "CCP-403");
         String p = utenteScritturaSenzaAccessoDominio("u-403");
 
@@ -470,7 +479,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void timeoutConRtAcquisitaNelFrattempoRitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-TMO201");
+        Pendenza v = newVersamento("PEND-TMO201");
         newRptSenzaRt(v, "IUV-TMO201", "CCP-TMO201");
         when(paForNodeClient.inviaRicevutaXml(any(), any())).thenAnswer(inv -> {
             acquisisci("IUV-TMO201", "IUR-TMO201");
@@ -484,7 +493,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void timeoutConRtAssenteRitorna504() throws Exception {
-        Versamento v = newVersamento("PEND-TMO504");
+        Pendenza v = newVersamento("PEND-TMO504");
         newRptSenzaRt(v, "IUV-TMO504", "CCP-TMO504");
         when(paForNodeClient.inviaRicevutaXml(any(), any()))
                 .thenThrow(new PaForNodeTransportException("timeout simulato", new java.io.IOException("timeout"), true));
@@ -496,7 +505,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void erroreTrasportoConRtAssenteRitorna502() throws Exception {
-        Versamento v = newVersamento("PEND-502");
+        Pendenza v = newVersamento("PEND-502");
         newRptSenzaRt(v, "IUV-502", "CCP-502");
         when(paForNodeClient.inviaRicevutaXml(any(), any()))
                 .thenThrow(new PaForNodeTransportException("errore simulato", new java.io.IOException("connessione rifiutata"), false));
@@ -508,7 +517,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void faultInBandRitorna422SenzaAcquisizione() throws Exception {
-        Versamento v = newVersamento("PEND-FAULT");
+        Pendenza v = newVersamento("PEND-FAULT");
         newRptSenzaRt(v, "IUV-FAULT", "CCP-FAULT");
         PaSendRTV2Response ko = new PaSendRTV2Response();
         ko.setOutcome(StOutcome.KO);
@@ -530,7 +539,7 @@ class RicevutaUploadIntegrationTest {
     void auditRegistratoSuSuccessoESuFallimento() throws Exception {
         long before = countAudit("RICEVUTA_CARICA");
 
-        Versamento v = newVersamento("PEND-AUDIT");
+        Pendenza v = newVersamento("PEND-AUDIT");
         newRptSenzaRt(v, "IUV-AUDIT", "CCP-AUDIT");
         mockAcquisizioneOk("IUV-AUDIT", "IUR-AUDIT");
         String p = utenteScrittura("u-audit");
@@ -618,7 +627,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void textXmlAliasVieneAccettatoERitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-TEXTXML");
+        Pendenza v = newVersamento("PEND-TEXTXML");
         newRptSenzaRt(v, "IUV900000001", "CCP-TEXTXML");
         mockAcquisizioneOk("IUV900000001", "RT900000001");
         String p = utenteScrittura("u-textxml");
@@ -631,7 +640,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void base64VieneDecodificatoERitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-B64");
+        Pendenza v = newVersamento("PEND-B64");
         newRptSenzaRt(v, "IUV900000001", "CCP-B64");
         mockAcquisizioneOk("IUV900000001", "RT900000001");
         String p = utenteScrittura("u-b64");
@@ -644,7 +653,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void bustaSoapVieneSbustataERitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-SOAP");
+        Pendenza v = newVersamento("PEND-SOAP");
         newRptSenzaRt(v, "IUV900000001", "CCP-SOAP");
         mockAcquisizioneOk("IUV900000001", "RT900000001");
         String p = utenteScrittura("u-soap");
@@ -697,7 +706,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void jsonBizeventsCompletoRitorna201EInvocaPaSendRTV2Tipizzato() throws Exception {
-        Versamento v = newVersamento("PEND-BIZ");
+        Pendenza v = newVersamento("PEND-BIZ");
         newRptSenzaRt(v, "IUV900000005", "CCP-BIZ");
         mockAcquisizioneOk("IUV900000005", "RT900000005");
         String p = utenteScrittura("u-biz");
@@ -775,7 +784,7 @@ class RicevutaUploadIntegrationTest {
 
     @Test
     void jsonMbtConAttachmentValorizzatoRitorna201() throws Exception {
-        Versamento v = newVersamento("PEND-MBT-OK");
+        Pendenza v = newVersamento("PEND-MBT-OK");
         newRptSenzaRt(v, "IUV900000010", "CCP-MBT-OK");
         mockAcquisizioneOk("IUV900000010", "RT900000010");
         String p = utenteScrittura("u-mbt-ok");
@@ -824,42 +833,36 @@ class RicevutaUploadIntegrationTest {
 
     // ----- fixture helpers -------------------------------------------------------------
 
-    private Versamento newVersamento(String idPendenza) {
-        Versamento v = new Versamento();
-        v.setCodVersamentoEnte(idPendenza);
-        v.setImportoTotale(100.0);
-        v.setImportoPagato(0.0);
-        v.setStatoVersamento("ESEGUITO");
-        v.setDataCreazione(OffsetDateTime.now());
-        v.setDataOraUltimoAggiornamento(OffsetDateTime.now());
-        v.setDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setDebitoreAnagrafica("Mario Rossi");
-        v.setDebitoreIndirizzo("Via Roma");
-        v.setDebitoreCivico("1");
-        v.setDebitoreCap("00100");
-        v.setDebitoreLocalita("Roma");
-        v.setDebitoreProvincia("RM");
-        v.setSrcDebitoreIdentificativo("RSSMRA80A01H501U");
-        v.setAnomalo(false);
-        v.setAck(true);
-        v.setTipo("DOVUTO");
-        v.setCausaleVersamento("TARI 2026");
-        v.setIuvVersamento(idPendenza);
-        v.setNumeroAvviso("012345678901234567");
-        v.setDominio(dominio);
-        v.setApplicazione(app);
-        v.setTipoVersamento(tv);
-        v.setTipoVersamentoDominio(tvd);
-        return versamentoRepository.save(v);
+    private Pendenza newVersamento(String idPendenza) {
+        return new TransactionTemplate(transactionManager).execute(stato -> {
+            Pendenza v = PendenzaV3Fixtures.pendenza(em, new Dati(app.getId(), dominio.getId(),
+                    tv.getId(), tvd.getId(), null, idPendenza, "012345678901234567", "RSSMRA80A01H501U", 100.0,
+                    StatoPendenza.ESEGUITO, 0));
+            v.setImportoPagato(0.0);
+            v.setDataCreazione(OffsetDateTime.now());
+            v.setDataUltimoAggiornamento(OffsetDateTime.now());
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setAnagrafica("Mario Rossi");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setIndirizzo("Via Roma");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setCivico("1");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setCap("00100");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setLocalita("Roma");
+            v.getOpzionePagamento().getPdDebitore().getDebitore().setProvincia("RM");
+            v.setCausaleVersamento("TARI 2026");
+            v.setIuv(idPendenza);
+            return v;
+        });
     }
 
-    private Rpt newRptSenzaRt(Versamento v, String iuv, String ccp) {
+    private Rpt newRptSenzaRt(Pendenza v, String iuv, String ccp) {
         Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta("MSG-RICHIESTA");
+        r.setDataAggiornamentoStato(java.time.OffsetDateTime.now());
         r.setIuv(iuv);
-        r.setCcp(ccp);
+        r.setIur(ccp);
         r.setCodDominio(DOM);
         r.setDataMsgRichiesta(OffsetDateTime.now());
-        r.setVersamento(v);
+        r.setIdVersamento(v.getId());
         r.setVersione("SANP_240");
         r.setStato("RT_MANCANTE");
         return rptRepository.save(r);

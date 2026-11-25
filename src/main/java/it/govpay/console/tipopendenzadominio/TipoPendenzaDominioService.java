@@ -31,7 +31,7 @@ import it.govpay.console.model.Pagination;
 import it.govpay.console.model.TipoPendenzaDominio;
 import it.govpay.console.model.TipoPendenzaDominioCreate;
 import it.govpay.console.model.TipoPendenzaDominioReplace;
-import it.govpay.console.repository.DominioRepository;
+import it.govpay.console.repository.ConsoleDominioRepository;
 import it.govpay.console.repository.TipoVersamentoDominioRepository;
 import it.govpay.console.repository.TipoVersamentoRepository;
 import it.govpay.console.security.AclAuthorizer;
@@ -70,7 +70,7 @@ public class TipoPendenzaDominioService {
     public static final String AZIONE_AUDIT_MODIFICA = "TIPO_PENDENZA_DOMINIO_MODIFICA";
 
     private final TipoVersamentoDominioRepository repository;
-    private final DominioRepository dominioRepository;
+    private final ConsoleDominioRepository dominioRepository;
     private final TipoVersamentoRepository tipoVersamentoRepository;
     private final TipoPendenzaDominioMapper mapper;
     private final RepresentationValidator representationValidator;
@@ -83,7 +83,7 @@ public class TipoPendenzaDominioService {
     private EntityManager entityManager;
 
     public TipoPendenzaDominioService(TipoVersamentoDominioRepository repository,
-                                      DominioRepository dominioRepository,
+                                      ConsoleDominioRepository dominioRepository,
                                       TipoVersamentoRepository tipoVersamentoRepository,
                                       TipoPendenzaDominioMapper mapper,
                                       RepresentationValidator representationValidator,
