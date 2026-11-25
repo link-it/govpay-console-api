@@ -12,7 +12,7 @@ import it.govpay.console.entity.RtRecupero;
 import it.govpay.console.model.AclServizio;
 import it.govpay.console.repository.ConsoleRptRepository;
 import it.govpay.console.repository.ConsoleRptRepository.RptConPendenza;
-import it.govpay.console.pendenza.PendenzaLettura;
+import it.govpay.console.ricevuta.RicevutaVisibilita;
 import it.govpay.console.repository.RtRecuperoRepository;
 import it.govpay.console.security.AclAuthorizer;
 import it.govpay.console.security.OperatoreCorrente;
@@ -37,17 +37,17 @@ public class RtRecuperoUpsertService {
     private final RtRecuperoRepository rtRecuperoRepository;
     private final AclAuthorizer aclAuthorizer;
 
-    private final PendenzaLettura pendenzaLettura;
+    private final RicevutaVisibilita ricevutaVisibilita;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public RtRecuperoUpsertService(ConsoleRptRepository rptRepository,
-                                   PendenzaLettura pendenzaLettura,
+                                   RicevutaVisibilita ricevutaVisibilita,
                                    RtRecuperoRepository rtRecuperoRepository,
                                    AclAuthorizer aclAuthorizer) {
         this.rptRepository = rptRepository;
-        this.pendenzaLettura = pendenzaLettura;
+        this.ricevutaVisibilita = ricevutaVisibilita;
         this.rtRecuperoRepository = rtRecuperoRepository;
         this.aclAuthorizer = aclAuthorizer;
     }
@@ -60,7 +60,7 @@ public class RtRecuperoUpsertService {
                 .orElseThrow(() -> new NotFoundException(
                         "Pagamento non trovato: idDominio=" + idDominio + ", iuv=" + iuv + "."));
         Rpt rpt = caricata.rpt();
-        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
+        if (!ricevutaVisibilita.isVisibile(caricata, operatore)) {
             throw new AccessDeniedException(
                     "L'operatore '" + operatore.principal() + "' non ha visibilità sul dominio '" + idDominio + "'.");
         }

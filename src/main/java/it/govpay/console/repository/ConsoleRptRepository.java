@@ -18,7 +18,8 @@ public interface ConsoleRptRepository extends JpaRepository<Rpt, Long>, JpaSpeci
 
     /**
      * RT insieme alla sua pendenza (con opzione e posizione, se presenti) e al codice
-     * dell'applicazione ({@code idA2A}), usati da mapper, PDF e visibilita'.
+     * dell'applicazione ({@code idA2A}), usati da mapper, PDF e visibilita'. Per una RT senza
+     * pendenza ({@code rpt.id_versamento} nullo) {@code pendenza} e {@code idA2A} sono nulli.
      */
     record RptConPendenza(Rpt rpt, Pendenza pendenza, String idA2A) {
     }
@@ -104,16 +105,19 @@ public interface ConsoleRptRepository extends JpaRepository<Rpt, Long>, JpaSpeci
 
     /**
      * Come {@link #findByKey(String, String, String)}, ma restituisce anche la pendenza della
-     * ricevuta, con opzione e posizione se presenti, e il codice dell'applicazione, in un'unica query.
+     * ricevuta, con opzione e posizione se presenti, e il codice dell'applicazione, in un'unica
+     * query. Include le ricevute senza pendenza; esclude quelle il cui {@code id_versamento}
+     * non porta a una pendenza con la sua applicazione.
      */
     @Query("""
             select r, p, a.codApplicazione from Rpt r
-              join Pendenza p on p.id = r.idVersamento
-              join Applicazione a on a.id = p.idApplicazione
+              left join Pendenza p on p.id = r.idVersamento
+              left join Applicazione a on a.id = p.idApplicazione
               left join fetch p.opzionePagamento o
               left join fetch o.pdDebitore d
               left join fetch d.posizioneDebitoria
-             where r.codDominio = :idDominio
+             where (r.idVersamento is null or a.id is not null)
+               and r.codDominio = :idDominio
                and r.iuv = :iuv
                and r.iur = :idRicevuta
                and r.xmlRt is not null
@@ -136,12 +140,13 @@ public interface ConsoleRptRepository extends JpaRepository<Rpt, Long>, JpaSpeci
      */
     @Query("""
             select r, p, a.codApplicazione from Rpt r
-              join Pendenza p on p.id = r.idVersamento
-              join Applicazione a on a.id = p.idApplicazione
+              left join Pendenza p on p.id = r.idVersamento
+              left join Applicazione a on a.id = p.idApplicazione
               left join fetch p.opzionePagamento o
               left join fetch o.pdDebitore d
               left join fetch d.posizioneDebitoria
-             where r.codDominio = :idDominio
+             where (r.idVersamento is null or a.id is not null)
+               and r.codDominio = :idDominio
                and r.iuv = :iuv
              order by r.dataMsgRichiesta desc
             """)

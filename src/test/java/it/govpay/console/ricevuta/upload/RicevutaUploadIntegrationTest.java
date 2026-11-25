@@ -321,6 +321,33 @@ class RicevutaUploadIntegrationTest {
         verify(paForNodeClient, never()).inviaRicevutaV2(any());
     }
 
+    /** Per uno IUV che GovPay non conosce, api-pagopa registra la ricevuta senza pendenza. */
+    @Test
+    void ricevutaPerUnoIuvSconosciutoRitorna201SenzaPendenza() throws Exception {
+        when(paForNodeClient.inviaRicevutaXml(any(), any())).thenAnswer(inv -> {
+            Rpt orfana = new Rpt();
+            orfana.setCodStazione("STAZIONE-TEST");
+            orfana.setCodMsgRichiesta("IUR-ORF");
+            orfana.setDataAggiornamentoStato(OffsetDateTime.now());
+            orfana.setIuv("IUV-ORF");
+            orfana.setIur("IUR-ORF");
+            orfana.setCodDominio(DOM);
+            orfana.setDataMsgRichiesta(OffsetDateTime.now());
+            orfana.setDataMsgRicevuta(OffsetDateTime.now());
+            orfana.setXmlRt("<RT/>".getBytes(StandardCharsets.UTF_8));
+            orfana.setVersione("SANP_240");
+            orfana.setStato("RT_ACCETTATA_PA");
+            rptRepository.save(orfana);
+            return null;
+        });
+        String p = utenteScrittura("u-orfana");
+
+        mvc.perform(uploadXml(xmlV22("IUV-ORF", "IUR-ORF"), p))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.iuv", Matchers.is("IUV-ORF")))
+                .andExpect(jsonPath("$.pendenza").doesNotExist());
+    }
+
     @Test
     void xmlV2VieneInoltratoConPaSendRTNonPaSendRTV2() throws Exception {
         Pendenza v = newVersamento("PEND-V2");

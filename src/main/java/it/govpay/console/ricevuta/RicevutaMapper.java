@@ -57,8 +57,9 @@ public class RicevutaMapper {
 
     /** Dettaglio canonico: i 9 metadati della summary + rpt/rt JSON + pendenza + _links. */
     /**
-     * @param pendenza pendenza della ricevuta
-     * @param idA2A    codice dell'applicazione della pendenza
+     * @param pendenza pendenza della ricevuta, {@code null} per una ricevuta senza pendenza:
+     *                 il dettaglio non riporta {@code pendenza} ne' il relativo link
+     * @param idA2A    codice dell'applicazione della pendenza, {@code null} se assente
      */
     public Ricevuta toRicevuta(Rpt rpt, Pendenza pendenza, String idA2A) {
         if (rpt == null) {
