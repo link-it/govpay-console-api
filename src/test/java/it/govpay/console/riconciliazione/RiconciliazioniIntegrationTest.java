@@ -345,6 +345,33 @@ class RiconciliazioniIntegrationTest {
     }
 
     @Test
+    void laRiscossioneDiUnaRicevutaSenzaPendenzaRimandaAllaRicevuta() throws Exception {
+        Rpt orfana = new Rpt();
+        orfana.setCodStazione("STAZIONE-TEST");
+        orfana.setCodMsgRichiesta("CCP-ORF");
+        orfana.setDataAggiornamentoStato(date(2026, 8, 23));
+        orfana.setIuv("IUV-ORF");
+        orfana.setIur("CCP-ORF");
+        orfana.setCodDominio(DOM_A);
+        orfana.setDataMsgRichiesta(date(2026, 8, 23));
+        orfana.setDataMsgRicevuta(date(2026, 8, 23));
+        orfana.setXmlRt("<RT/>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        orfana.setVersione("SANP_240");
+        orfana.setStato("RT_ACCETTATA_PA");
+        rptRepository.save(orfana);
+        Incasso incasso = newIncasso(domA, "RICORF", "ACQUISITO", null, "FLUSSO-ORF", null, 10.0,
+                date(2026, 8, 23), null);
+        newPagamento(incasso, DOM_A, "IUV-ORF", "IUR-ORF", 1, "ENTRATA", "PAGATO", 10.0, orfana.getId(), null);
+        String p = utenteDominiStar("u-orfana");
+
+        mvc.perform(get("/riconciliazioni/" + DOM_A + "/RICORF").with(httpBasic(p, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.riscossioni[0]._links.ricevuta.href",
+                        is("/ricevute/" + DOM_A + "/IUV-ORF/CCP-ORF")))
+                .andExpect(jsonPath("$.riscossioni[0]._links.pendenza").doesNotExist());
+    }
+
+    @Test
     void dettaglioConIdentificativoDiFlussoRaggiungibile() throws Exception {
         // I record registrati per flusso portano come identificativo l'idFlusso
         // assegnato dal PSP, con i trattini della data: il pattern alfanumerico sul

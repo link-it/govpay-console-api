@@ -91,8 +91,9 @@ public class RicevutaPdfPayloadMapper {
     }
 
     /**
-     * @param p pendenza della ricevuta
-     * @param d dominio della pendenza
+     * @param p pendenza della ricevuta, {@code null} per una ricevuta senza pendenza: l'oggetto
+     *          del pagamento e' allora la descrizione riportata nella RT
+     * @param d dominio della ricevuta
      */
     public Receipt toReceipt(Rpt rpt, Pendenza p, Dominio d) {
         DatiStoriciRicevuta dati = datiStoriciDi(rpt);
@@ -100,8 +101,7 @@ public class RicevutaPdfPayloadMapper {
         Receipt receipt = new Receipt();
         receipt.setCreditorLogo(creditorLogoOf(d));
         receipt.setPagopaLogo(pagopaLogoBase64);
-        receipt.setPaymentSubject(tronca(p != null && p.getCausaleVersamento() != null
-                ? CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()) : null, MAX_OGGETTO));
+        receipt.setPaymentSubject(tronca(p != null ? causaleDi(p) : oggettoDaRt(dati), MAX_OGGETTO));
         receipt.setOrganization(mapOrganization(d));
         receipt.setPayer(dati.payer());
         receipt.setPsp(tronca(pspOf(rpt), MAX_PSP));
@@ -115,6 +115,16 @@ public class RicevutaPdfPayloadMapper {
         receipt.setObjectVersion(mapVersione(rpt.getVersione()));
         receipt.setItems(dati.items());
         return receipt;
+    }
+
+    private static String causaleDi(Pendenza p) {
+        return p.getCausaleVersamento() != null
+                ? CausaleVersamentoDecoder.decodeSimple(p.getCausaleVersamento()) : null;
+    }
+
+    /** L'oggetto del pagamento e' obbligatorio per la stampa: senza descrizione nella RT vale {@code N/D}. */
+    private static String oggettoDaRt(DatiStoriciRicevuta dati) {
+        return StringUtils.hasText(dati.descrizione()) ? dati.descrizione() : "N/D";
     }
 
     private static String creditorLogoOf(Dominio d) {
@@ -210,7 +220,7 @@ public class RicevutaPdfPayloadMapper {
 
     /** Dati letti dall'XML storico (RT, e per SANP_230 anche RPT), non dalla pendenza corrente. */
     private record DatiStoriciRicevuta(String operationDate, String applicationDate, Payer payer,
-            List<ReceiptItem> items) {
+            List<ReceiptItem> items, String descrizione) {
     }
 
     private DatiStoriciRicevuta datiStoriciDi(Rpt rpt) {
@@ -231,8 +241,9 @@ public class RicevutaPdfPayloadMapper {
         RT rt = JaxbUtils.toRT(rpt.getXmlRt());
         String operationDate = formatDataOperazione(dataOperazioneSanp230(rpt));
         String applicationDate = formatDataApplicativa(rt.getDataOraMessaggioRicevuta());
+        // La RT di questo formato non ha una descrizione del pagamento.
         return new DatiStoriciRicevuta(operationDate, applicationDate,
-                payerDaSoggettoPagatore(rt.getSoggettoPagatore()), itemsDaRT(rt));
+                payerDaSoggettoPagatore(rt.getSoggettoPagatore()), itemsDaRT(rt), null);
     }
 
     /**
@@ -256,7 +267,7 @@ public class RicevutaPdfPayloadMapper {
         String operationDate = formatDataOperazione(receipt.getPaymentDateTime());
         String applicationDate = formatDataApplicativa(receipt.getApplicationDate());
         return new DatiStoriciRicevuta(operationDate, applicationDate,
-                payerDaSubject(receipt.getDebtor()), itemsDaCtReceipt(receipt));
+                payerDaSubject(receipt.getDebtor()), itemsDaCtReceipt(receipt), receipt.getDescription());
     }
 
     private DatiStoriciRicevuta datiStoriciDaCtReceiptV2(Rpt rpt) throws JAXBException {
@@ -264,7 +275,7 @@ public class RicevutaPdfPayloadMapper {
         String operationDate = formatDataOperazione(receipt.getPaymentDateTime());
         String applicationDate = formatDataApplicativa(receipt.getApplicationDate());
         return new DatiStoriciRicevuta(operationDate, applicationDate,
-                payerDaSubject(receipt.getDebtor()), itemsDaCtReceiptV2(receipt));
+                payerDaSubject(receipt.getDebtor()), itemsDaCtReceiptV2(receipt), receipt.getDescription());
     }
 
     private static Payer payerDaSoggettoPagatore(CtSoggettoPagatore soggetto) {

@@ -233,6 +233,42 @@ class RecuperoRicevutaIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void ricevutaSenzaPendenzaGiaAcquisitaRitorna409() throws Exception {
+        newRptSenzaPendenza("IUV-ORF409", "CCP-ORF409");
+
+        String p = utenteScrittura("u-409-orfana");
+        mvc.perform(recupero(DOM_A, "IUV-ORF409", "IUR-ORF409", p))
+                .andExpect(status().isConflict());
+
+        assertThat(rtRecuperoRepository.findByCodDominioAndIuvAndIur(DOM_A, "IUV-ORF409", "IUR-ORF409")).isEmpty();
+    }
+
+    @Test
+    void ricevutaSenzaPendenzaDiUnDominioNonVisibileRitorna403() throws Exception {
+        newRptSenzaPendenza("IUV-ORF403", "CCP-ORF403");
+
+        String p = utenteScritturaSoloDominio("u-403-orfana", domB);
+        mvc.perform(recupero(DOM_A, "IUV-ORF403", "IUR-ORF403", p))
+                .andExpect(status().isForbidden());
+    }
+
+    private void newRptSenzaPendenza(String iuv, String ccp) {
+        Rpt r = new Rpt();
+        r.setCodStazione("STAZIONE-TEST");
+        r.setCodMsgRichiesta(ccp);
+        r.setDataAggiornamentoStato(OffsetDateTime.now());
+        r.setIuv(iuv);
+        r.setIur(ccp);
+        r.setCodDominio(DOM_A);
+        r.setDataMsgRichiesta(OffsetDateTime.now());
+        r.setDataMsgRicevuta(OffsetDateTime.now());
+        r.setXmlRt("<RT/>".getBytes());
+        r.setVersione("SANP_240");
+        r.setStato("RT_ACCETTATA_PA");
+        rptRepository.save(r);
+    }
+
     // ----- validazione body ---------------------------------------------------------
 
     @Test

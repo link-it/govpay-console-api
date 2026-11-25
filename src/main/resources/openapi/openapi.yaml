@@ -432,6 +432,13 @@ paths:
         - `anagraficaDebitore` — ricerca testuale (contains, case-insensitive) su
           nome/ragione sociale del debitore, minimo 3 caratteri (vedi audit sotto).
 
+        Sono incluse le **ricevute senza pendenza** (pagamenti ricevuti per uno
+        IUV che GovPay non conosce). Le trovano i filtri sui dati della ricevuta
+        (`iuv`, `idDominio`, `idRicevuta`, le date) e `idA2A`, confrontato con
+        l'applicazione registrata sulla ricevuta, quando presente. I filtri sui
+        dati della pendenza, del debitore e `idUnitaOperativa` (`EC` compresa)
+        non le trovano.
+
         Tutti i filtri sono opzionali e in AND. `esitoRpp`, `idPagamentoRpp` e
         `retrocompatibilitaMessaggiPagoPAV1` di V1 non si portano per scelta di
         progetto (vedi issue #68): non sono filtri rimandati, non verranno mai
@@ -452,6 +459,9 @@ paths:
 
         ACL: il filtro per dominio/UO dell'operatore corrente viene applicato
         silenziosamente; un operatore senza visibilita' riceve lista vuota (mai 403).
+        Una ricevuta senza pendenza e' visibile a chi ha il suo dominio per intero
+        o la unita' operativa `EC` di quel dominio; il limite sui tipi pendenza
+        non si applica.
 
         **Paginazione**: due modalita' mutuamente esclusive.
         - **offset** (default): `?page=N&limit=L`; risposta con `pagination`.
@@ -755,6 +765,9 @@ paths:
         `(idDominio, iuv, idRicevuta)`. Il body include la conversione JSON di
         `rpt` e `rt` (anagrafica del soggetto pagatore annidata): ogni 200 viene
         tracciato in `gp_audit` (azione `RICEVUTA_VISUALIZZA`).
+
+        Per una ricevuta senza pendenza il dettaglio non riporta `pendenza` ne'
+        `_links.pendenza`, e `rpt` e' `null`.
 
         404 problem+json se la RT non esiste o se l'ACL dell'operatore non ne
         consente la visibilità (anti-leak). Il 404 non genera audit.
@@ -8444,7 +8457,9 @@ components:
 
     PendenzaRef:
       type: object
-      description: Riferimento minimale alla pendenza associata a una RT.
+      description: |
+        Riferimento minimale alla pendenza associata a una RT. Assente per una
+        ricevuta senza pendenza.
       required:
         - idA2A
         - idPendenza

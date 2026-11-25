@@ -57,7 +57,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * </ul>
  *
  * <p>ACL: 404 anti-leak su dominio non visibile o tipo versamento non autorizzato
- * (via {@link PendenzaVisibilita}).
+ * (via {@link RicevutaVisibilita}).
  *
  * <p>Per i rami binari (XML/PDF): come {@code /avviso}, scriviamo direttamente su
  * {@link HttpServletResponse} e restituiamo {@code null}; il controller risponde
@@ -86,6 +86,7 @@ public class RicevutaService {
     private final IncassoRepository incassoRepository;
     private final AclAuthorizer aclAuthorizer;
     private final VoceRicevutaMapper voceRicevutaMapper;
+    private final RicevutaVisibilita ricevutaVisibilita;
 
     public RicevutaService(ConsoleRptRepository rptRepository,
                            ConsolePendenzaRepository pendenzaRepository,
@@ -102,7 +103,9 @@ public class RicevutaService {
                            ConsoleRendicontazioneRepository rendicontazioneRepository,
                            IncassoRepository incassoRepository,
                            AclAuthorizer aclAuthorizer,
-                           VoceRicevutaMapper voceRicevutaMapper) {
+                           VoceRicevutaMapper voceRicevutaMapper,
+                           RicevutaVisibilita ricevutaVisibilita) {
+        this.ricevutaVisibilita = ricevutaVisibilita;
         this.rptRepository = rptRepository;
         this.pendenzaRepository = pendenzaRepository;
         this.pendenzaLettura = pendenzaLettura;
@@ -136,7 +139,7 @@ public class RicevutaService {
                         "Ricevuta non trovata: idDominio=" + idDominio + ", iuv=" + iuv
                                 + ", idRicevuta=" + idRicevuta));
         Rpt rpt = caricata.rpt();
-        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
+        if (!ricevutaVisibilita.isVisibile(caricata, operatore)) {
             log.debug("getRicevuta ACL nega l'accesso (404 anti-leak) idDominio={} iuv={} idRicevuta={}",
                     idDominio, iuv, idRicevuta);
             throw new NotFoundException(
@@ -277,7 +280,7 @@ public class RicevutaService {
         OperatoreCorrente operatore = currentOperatorService.get();
         RptConPendenza caricata = rptRepository.findConPendenzaByKey(idDominio, iuv, idRicevuta)
                 .orElseThrow(() -> new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta)));
-        if (!pendenzaLettura.isVisibile(caricata.pendenza(), operatore)) {
+        if (!ricevutaVisibilita.isVisibile(caricata, operatore)) {
             throw new NotFoundException(notFoundMessage(idDominio, iuv, idRicevuta));
         }
         return caricata;
@@ -311,7 +314,8 @@ public class RicevutaService {
 
     private void streamReceiptPdf(Rpt rpt, Pendenza pendenza, String filename, HttpServletResponse response) {
         Receipt payload = pdfPayloadMapper.toReceipt(rpt, pendenza,
-                dominioRepository.findById(pendenza.getIdDominio()).orElse(null));
+                (pendenza != null ? dominioRepository.findById(pendenza.getIdDominio())
+                        : dominioRepository.findByCodDominio(rpt.getCodDominio())).orElse(null));
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
         try {

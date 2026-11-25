@@ -1,3 +1,18 @@
+2026-11-25  Giuliano Pintori <pintori@link.it>
+
+	* [Ricevute] Issue #134 Le ricevute senza pendenza (rpt.id_versamento
+	nullo, pagamenti ricevuti per uno IUV che GovPay non conosce) compaiono in
+	lista e dettaglio, con rt, stampa PDF, recupero puntuale e riconciliazioni;
+	il caricamento di una di queste ricevute non risponde piu' 404. Le vede chi
+	ha il loro dominio per intero o la unita' operativa EC di quel dominio; il
+	limite sui tipi pendenza non si applica. Le trovano i filtri sui dati della
+	ricevuta e idA2A (rpt.id_applicazione); non quelli sulla pendenza, sul
+	debitore e idUnitaOperativa. Il dettaglio non riporta pendenza e il relativo
+	link; nessun campo nuovo nel contratto. La stampa prende l'oggetto del
+	pagamento dalla descrizione della RT.
+	I join di GET /ricevute verso la pendenza sono diventati esterni: il piano
+	di esecuzione va controllato con EXPLAIN su un database con dati reali.
+
 2026-11-24  Giuliano Pintori <pintori@link.it>
 
 	* [Pendenze] Issue #127 Lettura delle pendenze sul modello v3 di

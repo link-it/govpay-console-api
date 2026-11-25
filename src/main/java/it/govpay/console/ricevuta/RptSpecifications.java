@@ -13,6 +13,8 @@ import org.springframework.data.jpa.domain.Specification;
 
 import it.govpay.console.common.LikePatterns;
 import it.govpay.console.common.PendenzaPredicates;
+import it.govpay.console.entity.Applicazione;
+import it.govpay.console.entity.Dominio;
 import it.govpay.console.entity.PendenzaUoStorica;
 import it.govpay.console.entity.UnitaOperativa;
 import it.govpay.pendenze.entity.Pendenza;
@@ -20,6 +22,7 @@ import it.govpay.pendenze.entity.Rpt;
 import it.govpay.console.security.OperatoreCorrente;
 import it.govpay.console.security.PendenzaVisibilita;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -41,6 +44,11 @@ import jakarta.persistence.criteria.Root;
  * migrati) resta ricercabile; i filtri sul debitore non la trovano. La unita' operativa e' quella
  * della posizione e, per una pendenza senza opzione, quella storica ({@link PendenzaUoStorica}):
  * assente vale come quella {@code EC} del dominio.
+ *
+ * <p>Una ricevuta senza pendenza ({@code rpt.id_versamento} nullo) resta ricercabile sui dati
+ * della {@code rpt} e per {@code idA2A}, tramite {@code rpt.id_applicazione}; i filtri sui dati
+ * della pendenza, del debitore e della unita' operativa non la trovano. Una ricevuta il cui
+ * {@code id_versamento} non porta a una pendenza e' esclusa.
  */
 public final class RptSpecifications {
 
@@ -64,7 +72,7 @@ public final class RptSpecifications {
                 return (From<?, Pendenza>) join;
             }
         }
-        JpaEntityJoin<Rpt, Pendenza> join = ((JpaRoot<Rpt>) root).join(Pendenza.class, SqmJoinType.INNER);
+        JpaEntityJoin<Rpt, Pendenza> join = ((JpaRoot<Rpt>) root).join(Pendenza.class, SqmJoinType.LEFT);
         join.on(cb.equal(join.get("id"), root.get("idVersamento")));
         return join;
     }
@@ -78,7 +86,7 @@ public final class RptSpecifications {
             }
         }
         JpaEntityJoin<Rpt, PendenzaUoStorica> join = ((JpaRoot<Rpt>) root).join(PendenzaUoStorica.class,
-                SqmJoinType.INNER);
+                SqmJoinType.LEFT);
         join.on(cb.equal(join.get("id"), root.get("idVersamento")));
         return join;
     }
@@ -182,7 +190,13 @@ public final class RptSpecifications {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return (root, q, cb) -> PendenzaPredicates.idA2AExact(cb, q, pendenza(root, cb), value);
+        return (root, q, cb) -> {
+            Subquery<Long> sub = q.subquery(Long.class);
+            Root<Applicazione> applicazione = sub.from(Applicazione.class);
+            sub.select(applicazione.get("id")).where(cb.equal(applicazione.get("codApplicazione"), value));
+            return cb.or(PendenzaPredicates.idA2AExact(cb, q, pendenza(root, cb), value),
+                    cb.and(senzaPendenza(root, cb), root.<Long>get("idApplicazione").in(sub)));
+        };
     }
 
     /**
@@ -216,8 +230,11 @@ public final class RptSpecifications {
             sub.select(uo.get("id")).where(cb.equal(uo.get("codUo"), value));
             Expression<Long> idUo = uoEffettiva(root, cb);
             Predicate perCodice = idUo.in(sub);
-            // Senza unita' operativa la pendenza vale come quella EC.
-            return COD_UNITA_OPERATIVA_EC.equals(value) ? cb.or(perCodice, cb.isNull(idUo)) : perCodice;
+            // Senza unita' operativa la pendenza vale come quella EC; una ricevuta senza
+            // pendenza non ha unita' operativa e nessun valore del filtro la trova.
+            return COD_UNITA_OPERATIVA_EC.equals(value)
+                    ? cb.and(conPendenza(root, cb), cb.or(perCodice, cb.isNull(idUo)))
+                    : perCodice;
         };
     }
 
@@ -272,18 +289,51 @@ public final class RptSpecifications {
     }
 
     /**
-     * Limita le ricevute a quelle delle pendenze visibili all'operatore (regola di
-     * {@link PendenzaVisibilita}, single-source con le pendenze).
+     * Limita le ricevute a quelle visibili all'operatore, con le regole di
+     * {@link PendenzaVisibilita}: quelle con pendenza secondo la visibilita' della pendenza,
+     * quelle senza pendenza secondo il solo dominio della {@code rpt} (vedi
+     * {@link RicevutaVisibilita}). Va sempre applicata: esclude anche le ricevute il cui
+     * {@code id_versamento} non porta a una pendenza.
      *
      * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
      */
     public static Specification<Rpt> visibiliPerOperatore(OperatoreCorrente operatore,
                                                           Set<Long> dominiConUoEcVisibile) {
-        return (root, q, cb) -> PendenzaVisibilita.predicate(cb,
-                pendenza(root, cb).<Long>get("idDominio"),
-                uoEffettiva(root, cb),
-                pendenza(root, cb).<Long>get("idTipoVersamento"),
-                dominiConUoEcVisibile, operatore);
+        return (root, q, cb) -> {
+            Predicate diPendenzaVisibile = cb.and(conPendenza(root, cb),
+                    PendenzaVisibilita.predicate(cb,
+                            pendenza(root, cb).<Long>get("idDominio"),
+                            uoEffettiva(root, cb),
+                            pendenza(root, cb).<Long>get("idTipoVersamento"),
+                            dominiConUoEcVisibile, operatore));
+            return cb.or(diPendenzaVisibile,
+                    senzaPendenzaVisibile(root, q, cb, operatore, dominiConUoEcVisibile));
+        };
+    }
+
+    /** La ricevuta ha una pendenza, ed esiste. */
+    private static Predicate conPendenza(Root<Rpt> root, CriteriaBuilder cb) {
+        return cb.isNotNull(pendenza(root, cb).get("id"));
+    }
+
+    private static Predicate senzaPendenza(Root<Rpt> root, CriteriaBuilder cb) {
+        return cb.isNull(root.get("idVersamento"));
+    }
+
+    private static Predicate senzaPendenzaVisibile(Root<Rpt> root, CriteriaQuery<?> q, CriteriaBuilder cb,
+                                                   OperatoreCorrente operatore,
+                                                   Set<Long> dominiConUoEcVisibile) {
+        if (operatore.tuttiIDomini()) {
+            return senzaPendenza(root, cb);
+        }
+        Set<Long> domini = PendenzaVisibilita.dominiVisibiliSenzaUnitaOperativa(dominiConUoEcVisibile, operatore);
+        if (domini.isEmpty()) {
+            return cb.disjunction();
+        }
+        Subquery<String> codici = q.subquery(String.class);
+        Root<Dominio> dominio = codici.from(Dominio.class);
+        codici.select(dominio.get("codDominio")).where(dominio.get("id").in(domini));
+        return cb.and(senzaPendenza(root, cb), root.get("codDominio").in(codici));
     }
 
     /**

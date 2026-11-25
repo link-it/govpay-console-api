@@ -1,6 +1,7 @@
 package it.govpay.console.security;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -105,6 +106,24 @@ public final class PendenzaVisibilita {
                     && operatore.idTipiVersamentoVisibili().contains(idTipoVersamento);
         }
         return true;
+    }
+
+    /**
+     * Domini in cui un operatore non abilitato a tutti i domini vede cio' che non ha unita'
+     * operativa: quelli visibili per intero e quelli di cui ha la unita' operativa {@code EC}.
+     *
+     * @param dominiConUoEcVisibile domini di cui l'operatore ha la unita' operativa {@code EC}
+     */
+    public static Set<Long> dominiVisibiliSenzaUnitaOperativa(Set<Long> dominiConUoEcVisibile,
+                                                              OperatoreCorrente operatore) {
+        Set<Long> domini = new HashSet<>();
+        if (!isEmpty(operatore.idDominiInteri())) {
+            domini.addAll(operatore.idDominiInteri());
+        }
+        if (!isEmpty(operatore.idUoVisibili()) && !isEmpty(dominiConUoEcVisibile)) {
+            domini.addAll(dominiConUoEcVisibile);
+        }
+        return domini;
     }
 
     private static boolean isEmpty(Set<Long> set) {
