@@ -13935,7 +13935,7 @@ components:
       name: dataDa
       in: query
       required: false
-      description: Limite inferiore (incluso) sulla data di creazione della pendenza (ISO 8601 date).
+      description: Limite inferiore (incluso) sulla data di creazione della pendenza (ISO 8601 date). Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date
@@ -13944,7 +13944,7 @@ components:
       name: dataA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data di creazione della pendenza (ISO 8601 date).
+      description: Limite superiore (incluso) sulla data di creazione della pendenza (ISO 8601 date). Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date
@@ -14008,6 +14008,7 @@ components:
         (`data_msg_ricevuta`, ISO 8601 date). Non e' la data di pagamento
         (`pagamenti.data_pagamento`/`versamenti.data_pagamento`, un concetto
         diverso): e' il momento in cui la RT e' arrivata dal PSP.
+        Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date
@@ -14016,7 +14017,7 @@ components:
       name: dataRicevutaA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data di ricezione della ricevuta. Vedi `dataRicevutaDa`.
+      description: Limite superiore (incluso) sulla data di ricezione della ricevuta. Vedi `dataRicevutaDa`. Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date
@@ -14028,6 +14029,7 @@ components:
       description: |
         Limite inferiore (incluso) sulla data della richiesta di pagamento
         (`data_msg_richiesta`, ISO 8601 date), indipendente da `dataRicevutaDa`.
+        Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date
@@ -14036,7 +14038,7 @@ components:
       name: dataRichiestaA
       in: query
       required: false
-      description: Limite superiore (incluso) sulla data della richiesta di pagamento. Vedi `dataRichiestaDa`.
+      description: Limite superiore (incluso) sulla data della richiesta di pagamento. Vedi `dataRichiestaDa`. Il giorno e' inteso in ora `Europe/Rome`.
       schema:
         type: string
         format: date

@@ -2,7 +2,6 @@ package it.govpay.console.ricevuta;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 
@@ -11,6 +10,7 @@ import org.hibernate.query.criteria.JpaRoot;
 import org.hibernate.query.sqm.tree.SqmJoinType;
 import org.springframework.data.jpa.domain.Specification;
 
+import it.govpay.console.common.GiornoDatabase;
 import it.govpay.console.common.LikePatterns;
 import it.govpay.console.common.PendenzaPredicates;
 import it.govpay.console.entity.Applicazione;
@@ -150,7 +150,7 @@ public final class RptSpecifications {
         if (da == null) {
             return null;
         }
-        OffsetDateTime from = da.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime from = GiornoDatabase.inizio(da);
         return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get(FIELD_DATA_MSG_RICEVUTA), from);
     }
 
@@ -159,7 +159,7 @@ public final class RptSpecifications {
         if (a == null) {
             return null;
         }
-        OffsetDateTime toExclusive = a.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime toExclusive = GiornoDatabase.inizio(a.plusDays(1));
         return (root, q, cb) -> cb.lessThan(root.get(FIELD_DATA_MSG_RICEVUTA), toExclusive);
     }
 
@@ -173,7 +173,7 @@ public final class RptSpecifications {
         if (da == null) {
             return null;
         }
-        OffsetDateTime from = da.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime from = GiornoDatabase.inizio(da);
         return (root, q, cb) -> cb.greaterThanOrEqualTo(root.get(FIELD_DATA_MSG_RICHIESTA), from);
     }
 
@@ -182,7 +182,7 @@ public final class RptSpecifications {
         if (a == null) {
             return null;
         }
-        OffsetDateTime toExclusive = a.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime toExclusive = GiornoDatabase.inizio(a.plusDays(1));
         return (root, q, cb) -> cb.lessThan(root.get(FIELD_DATA_MSG_RICHIESTA), toExclusive);
     }
 

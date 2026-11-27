@@ -16,11 +16,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.Map;
 import java.util.function.Consumer;
 
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -483,6 +487,34 @@ class PendenzaControllerIntegrationTest {
                         .with(httpBasic(PRINCIPAL, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[*].idPendenza", contains("PEND-RANGE-DENTRO")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "2025-01-15", "2025-07-15" })
+    void filtroDataCreazioneSulGiornoInOraDiRoma(LocalDate giorno) throws Exception {
+        Dominio dom = dominioRepository.findByCodDominio("11111111111").orElseThrow();
+        Applicazione app = applicazioneRepository.findByCodApplicazione(APP_COD).orElseThrow();
+        TipoVersamento tv = tipoVersamentoRepository.findByCodTipoVersamento("TARI").orElseThrow();
+        TipoVersamentoDominio tvd = tipoVersamentoDominioRepository
+                .findByDominio_IdAndTipoVersamento_CodTipoVersamento(dom.getId(), "TARI").orElseThrow();
+        Map<String, OffsetDateTime> creazioni = Map.of(
+                "PEND-GIORNO-PRIMA", aRoma(giorno.minusDays(1), 23, 30),
+                "PEND-GIORNO-INIZIO", aRoma(giorno, 0, 30),
+                "PEND-GIORNO-FINE", aRoma(giorno, 23, 30),
+                "PEND-GIORNO-DOPO", aRoma(giorno.plusDays(1), 0, 30));
+        creazioni.forEach((idPendenza, creazione) -> creaPendenza(idPendenza, dom, app, tv, tvd, null,
+                "RSSMRA80A01H501U", null, 10.0, "NON_ESEGUITO", 0, null, p -> p.setDataCreazione(creazione)));
+
+        mvc.perform(get("/pendenze").param("idPendenza", "PEND-GIORNO")
+                        .param("dataDa", giorno.toString()).param("dataA", giorno.toString())
+                        .with(httpBasic(PRINCIPAL, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[*].idPendenza",
+                        containsInAnyOrder("PEND-GIORNO-INIZIO", "PEND-GIORNO-FINE")));
+    }
+
+    private static OffsetDateTime aRoma(LocalDate giorno, int ora, int minuti) {
+        return giorno.atTime(ora, minuti).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime();
     }
 
     @Test

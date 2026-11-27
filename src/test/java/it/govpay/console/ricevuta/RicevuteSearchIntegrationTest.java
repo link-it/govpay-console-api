@@ -11,11 +11,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -192,6 +198,30 @@ class RicevuteSearchIntegrationTest {
                         .with(httpBasic(p, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results", hasSize(0)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "2025-01-15", "2025-07-15" })
+    void filtriDataRicevutaERichiestaSulGiornoInOraDiRoma(LocalDate giorno) throws Exception {
+        String p = utenteDominiStar("u-giorno");
+        Map<String, OffsetDateTime> istanti = Map.of(
+                "GIORNOPRIMA", aRoma(giorno.minusDays(1), 23, 30),
+                "GIORNOINIZI", aRoma(giorno, 0, 30),
+                "GIORNOFINE0", aRoma(giorno, 23, 30),
+                "GIORNODOPO0", aRoma(giorno.plusDays(1), 0, 30));
+        istanti.forEach((iuv, istante) -> newRpt(domA, tvA, tvdA, iuv, "CCP-" + iuv, istante, istante, 10.0,
+                "SANP_240"));
+
+        for (String filtro : List.of("dataRicevuta", "dataRichiesta")) {
+            mvc.perform(get("/ricevute").param(filtro + "Da", giorno.toString())
+                            .param(filtro + "A", giorno.toString()).with(httpBasic(p, PASSWORD)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.results[*].iuv", containsInAnyOrder("GIORNOINIZI", "GIORNOFINE0")));
+        }
+    }
+
+    private static OffsetDateTime aRoma(LocalDate giorno, int ora, int minuti) {
+        return giorno.atTime(ora, minuti).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime();
     }
 
     @Test
