@@ -145,6 +145,8 @@ Proprietà di [govpay-common-auth](https://github.com/link-it/govpay-common-auth
 
 Le proprietà `spring.datasource.hikari.connection-*` (es. `connection-timeout`) vanno scritte come variabile d'ambiente **senza** il trattino basso dopo `CONNECTION`: `SPRING_DATASOURCE_HIKARI_CONNECTIONTIMEOUT`, non `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT`. Con il trattino basso Spring Boot cerca anche la proprietà `connection` del pool, apre una connessione prima di aver applicato la configurazione e l'avvio fallisce con `The configuration of the pool is sealed once started` sulla proprietà `transaction-isolation`.
 
+Le colonne con data e ora contengono l'ora `Europe/Rome` (vedi [Date sul database](https://github.com/link-it/govpay-common/blob/3.11.x/README.md#date-sul-database)): il fuso della JVM, nel container impostato con `TZ`, va lasciato a `Europe/Rome`. La data di registrazione delle riconciliazioni e quella delle richieste di recupero delle ricevute sono scritte con `CURRENT_TIMESTAMP`: su MySQL anche il server del database deve usare il fuso `Europe/Rome`.
+
 I driver JDBC non sono inclusi nel jar: vedi [Esecuzione](#esecuzione).
 
 ### Stampe e caricamenti
